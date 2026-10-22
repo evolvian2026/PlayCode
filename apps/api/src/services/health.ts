@@ -74,8 +74,8 @@ export async function customerHealth(db: DbOrTx, args: { partnerId: string | nul
       students: n,
       weeklyActive: wau,
       weeklyActivePct: n ? Math.round((wau / n) * 100) : 0,
-      /** Change in weekly active % against the same week a month ago, in points. */
-      trend: n ? Math.round((wau / n) * 100) - Math.round((prev / n) * 100) : 0,
+      /** Change in weekly active % against the same week a month ago, in points (null without activity then to compare with). */
+      trend: n && prev ? Math.round((wau / n) * 100) - Math.round((prev / n) * 100) : null,
       answersPerActive: wau ? Math.round(((maps.answers7.get(t.id) ?? 0) / wau) * 10) / 10 : 0,
       staffActive7: maps.staff7.get(t.id) ?? 0,
       assignments30: maps.assignments30.get(t.id) ?? 0,

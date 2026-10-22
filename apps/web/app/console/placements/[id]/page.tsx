@@ -47,7 +47,7 @@ function criteriaText(c: Detail["drive"]["criteria"]): string {
     c.units.length ? c.units.map((u) => u.name).join(", ") : "All branches",
     c.graduationYears?.length ? `${c.graduationYears.join(", ")} batch` : null,
     c.minCgpa != null ? `CGPA ${c.minCgpa}+` : null,
-    c.maxBacklogs != null ? (c.maxBacklogs === 0 ? "no backlogs" : `up to ${c.maxBacklogs} backlogs`) : null,
+    c.maxBacklogs != null ? (c.maxBacklogs === 0 ? "no backlogs" : `up to ${c.maxBacklogs} backlog${c.maxBacklogs === 1 ? "" : "s"}`) : null,
     c.min10th != null ? `class 10 ${c.min10th}%+` : null,
     c.min12th != null ? `class 12 ${c.min12th}%+` : null,
     c.allowPlaced ? "open to placed students" : "students without an offer",
@@ -95,7 +95,7 @@ export default function PlacementDrive() {
   const applicants = data.applicants.filter((a) => a.status !== "withdrawn").filter((a) => (filter === "all" ? true : filter === "in" ? a.status === "registered" || a.status === "shortlisted" : a.status === filter));
   const allSelected = applicants.length > 0 && applicants.every((a) => selected.includes(a.userId));
   const stage = (a: Detail["applicants"][number]) =>
-    a.status === "offered" ? `Offer · ${formatLpa(a.offerCtcRupees ?? drive.ctcRupees)}` : a.status === "rejected" ? `Not selected after ${a.roundsCleared ? drive.rounds[a.roundsCleared - 1] : "registration"}` : a.roundsCleared ? `Cleared ${drive.rounds[a.roundsCleared - 1]}` : "Registered";
+    a.status === "offered" ? `Offer · ${formatLpa(a.offerCtcRupees ?? drive.ctcRupees)}` : a.status === "rejected" ? `Not selected in ${drive.rounds[a.roundsCleared] ?? drive.rounds.at(-1)}` : a.roundsCleared ? `Cleared ${drive.rounds[a.roundsCleared - 1]}` : "Registered";
 
   return (
     <div className="stack" style={{ gap: 16 }}>
@@ -145,7 +145,7 @@ export default function PlacementDrive() {
       </div>
 
       <div className="card stack" style={{ padding: 0 }}>
-        <div className="spread wrap" style={{ padding: "12px 16px 0" }}>
+        <div className="stack" style={{ padding: "12px 16px 0", gap: 8 }}>
           <div className="row wrap">
             {(["all", "in", "offered", "rejected"] as const).map((f) => (
               <button key={f} className={`btn small ${filter === f ? "primary" : "ghost"}`} onClick={() => setFilter(f)}>

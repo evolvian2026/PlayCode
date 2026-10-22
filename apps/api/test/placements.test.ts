@@ -84,7 +84,7 @@ describe("placement drives", () => {
     const detail = (await t.get(tpo, `/console/placements/${driveId}`)).body;
     expect(detail.summary).toMatchObject({ eligible: res.body.notified, registered: 0, offers: 0 });
     const [note] = await db.select().from(notifications).where(eq(notifications.dedupeKey, `placement-open:${driveId}:${await userId("student@demo.edu")}`));
-    expect(note).toMatchObject({ title: "Wipro is hiring: Project Engineer", link: "/play/placements" });
+    expect(note).toMatchObject({ title: "Wipro is hiring: Project Engineer", link: "http://localhost:3000/play/placements" });
   });
 
   it("lets eligible students register, and tells the others why not", async () => {

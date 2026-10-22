@@ -16,7 +16,7 @@ interface Customer {
   students: number;
   weeklyActive: number;
   weeklyActivePct: number;
-  trend: number;
+  trend: number | null;
   answersPerActive: number;
   staffActive7: number;
   assignments30: number;
@@ -116,7 +116,7 @@ export default function CustomerHealth() {
                   </td>
                   <td>
                     {c.weeklyActivePct}%{" "}
-                    {c.trend !== 0 && (
+                    {c.trend !== null && c.trend !== 0 && (
                       <span className="small" style={{ color: c.trend > 0 ? "var(--good)" : "var(--bad)" }}>
                         {c.trend > 0 ? "+" : ""}
                         {c.trend}

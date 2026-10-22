@@ -15,6 +15,7 @@ const LABEL: Record<string, string> = {
   assignment_due: "Assignment",
   test_open: "Test",
   duel_invite: "Duel",
+  placement: "Placements",
 };
 
 export default function InboxPage() {
@@ -29,7 +30,7 @@ export default function InboxPage() {
       <h1>Messages</h1>
       {data.items.length === 0 && <div className="card">No messages yet.</div>}
       {data.items.map((n) => (
-        <a key={n.id} href={n.link ? new URL(n.link).pathname : "#"} className="card tight stack" style={{ gap: 4, color: "inherit", borderColor: n.read ? undefined : "var(--accent)" }}>
+        <a key={n.id} href={n.link ? new URL(n.link, window.location.origin).pathname : "#"} className="card tight stack" style={{ gap: 4, color: "inherit", borderColor: n.read ? undefined : "var(--accent)" }}>
           <div className="spread small">
             <span className="pill accent">{LABEL[n.template] ?? n.template}</span>
             <span className="muted">{timeAgo(n.createdAt)}</span>

@@ -100,7 +100,7 @@ export async function seedPlacements(args: {
       if (!checkEligibility(d.criteria, records.get(s.id)!, { inUnits, placed: placed.has(s.id) }).eligible) continue;
       // The demo student only tried Zoho, and is still looking.
       if (i === 0 && d.company !== "Zoho") continue;
-      if (rand() < 0.12) continue; // some eligible students skip a drive
+      if (i !== 0 && rand() < 0.12) continue; // some eligible students skip a drive
       const r = readiness.get(s.id)![d.type];
       const practice = days.get(s.id)!;
       // Each round is passed with a chance that grows with readiness and practice.

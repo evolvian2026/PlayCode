@@ -16,7 +16,7 @@ import { academicRecords, memberships, packs, placementApplications, placementDr
 import { audit } from "../lib/audit";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { readinessFor } from "./analytics";
-import { enqueue } from "./notifications";
+import { appLink, enqueue } from "./notifications";
 import { descendants, studentIdsInUnits, studentUnitIdsWithAncestors, tenantUnits } from "./scope";
 import { getTenant, tenantToday } from "./tenant";
 import { emitAndDeliver } from "./webhooks";
@@ -176,7 +176,7 @@ export async function createDrive(db: Db, args: NewDrive & { tenantId: string; a
       template: "placement" as const,
       title: `${args.company} is hiring: ${args.roleTitle}`,
       body: `${formatLpa(args.ctcRupees)}. You are eligible. Register by ${deadline}.`,
-      link: "/play/placements",
+      link: appLink("/play/placements"),
       dedupeKey: `placement-open:${drive!.id}:${userId}`,
       sentBy: actorId,
     })),
@@ -259,7 +259,8 @@ export async function driveDetail(db: Db, tenantId: string, id: string) {
     drive: { ...drive, criteria: { ...drive.criteria, units: drive.criteria.unitIds.map((u) => ({ id: u, name: unitName.get(u) ?? "" })) } },
     readinessProfile: profile,
     summary: {
-      eligible: eligible.length,
+      // Everyone who registered was eligible then, even if an offer elsewhere has since ruled them out.
+      eligible: new Set([...eligible, ...registered]).size,
       registered: registered.size,
       notRegistered: eligible.filter((id) => !registered.has(id)).length,
       perRound: drive.rounds.map((name, i) => ({ name, cleared: apps.filter((a) => active(a.status) && a.roundsCleared > i).length })),
@@ -311,7 +312,7 @@ export async function updateApplications(db: Db, args: { tenantId: string; actor
         template: "placement",
         title: `${drive.company}: you cleared ${drive.rounds[a.roundsCleared]}`,
         body: next ? `Next round: ${next}. Practise to be ready.` : "You have cleared every round. The result comes next.",
-        link: "/play/placements",
+        link: appLink("/play/placements"),
         dedupeKey: `placement-round:${drive.id}:${a.userId}:${a.roundsCleared + 1}`,
         sentBy: args.actorId,
       });
@@ -325,7 +326,7 @@ export async function updateApplications(db: Db, args: { tenantId: string; actor
         template: "placement",
         title: `Congratulations! ${drive.company} has made you an offer`,
         body: `${drive.roleTitle}, ${formatLpa(args.ctcRupees ?? drive.ctcRupees)}. The placement cell will share the next steps.`,
-        link: "/play/placements",
+        link: appLink("/play/placements"),
         dedupeKey: `placement-offer:${drive.id}:${a.userId}`,
         sentBy: args.actorId,
       });

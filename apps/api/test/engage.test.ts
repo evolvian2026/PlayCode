@@ -84,7 +84,11 @@ describe("nudges and notifications", () => {
     // Without WhatsApp configured, delivery is in-app only.
     expect(first.body.delivered.sent).toBe(0);
     const again = await t.post(tpo, "/admin/nudges/run", { ignoreQuietHours: true });
-    const totalAgain = (await t.get(tpo, "/console/nudges")).body.history.reduce((a: number, h: { total: number }) => a + h.total, 0);
+    // History also lists other messages (e.g. placement drives); count the automatic nudges.
+    const automatic = ["streak_at_risk", "assignment_due", "test_open"];
+    const totalAgain = (await t.get(tpo, "/console/nudges")).body.history
+      .filter((h: { template: string }) => automatic.includes(h.template))
+      .reduce((a: number, h: { total: number }) => a + h.total, 0);
     const totalFirst = Object.values(first.body.queued as Record<string, number>).reduce((a, b) => a + b, 0);
     expect(again.status).toBe(200);
     expect(totalAgain).toBe(totalFirst);

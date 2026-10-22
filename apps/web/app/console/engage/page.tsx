@@ -161,7 +161,7 @@ function Nudges() {
                 {history.data.history.map((h, i) => (
                   <tr key={i}>
                     <td className="small muted">{h.day}</td>
-                    <td>{h.template === "announcement" ? h.title : <span className="muted">{h.title.replace(/\d+-day/, "N-day")} (automatic)</span>}</td>
+                    <td>{h.template === "announcement" || h.template === "placement" ? h.title : <span className="muted">{h.title.replace(/\d+-day/, "N-day")} (automatic)</span>}</td>
                     <td className="small">{h.sentBy ?? "PlayCode"}</td>
                     <td>{h.total}</td>
                     <td>{h.read}</td>

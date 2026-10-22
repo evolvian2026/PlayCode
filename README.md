@@ -56,6 +56,13 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - AI drafting for coding and SQL problems: Claude writes the problem, tests, reference solutions in C, Java and Python and starter code; expected outputs come from running the Python solution, then every solution is run against every test before the author sees the draft. SQL drafts come with a schema, sample rows and a model query that must return rows.
 - Hindi: students can switch menus, buttons and messages to Hindi from their profile (questions and code stay in English, as in placement tests). The choice is saved on the account and remembered on the device for the sign-in page.
 
+**Phase 7 additions**
+- Campus placements (`/console/placements`): the placement cell imports academic records (CGPA, backlogs, class 10/12 marks, graduation year) and records each visiting company's drive with its eligibility rules, selection rounds, CTC and a mission to prepare with. Eligible students are told in the app (and on WhatsApp) and register from `/play/placements`; students who aren't eligible see exactly why. Staff move applicants through the rounds to offers in bulk, and students follow their progress. "Already placed" students are kept out of further drives unless a drive allows them (dream companies). Offers raise a `placement.offered` webhook.
+- Placement outcomes: placement rate, offers and CTC (median, average, highest) by department and company, and the outcome proof the sales plan calls for: placement rate by how regularly students practised in the 60 days before they first applied, and selection rate by readiness on the day they applied. Both are snapshotted at registration, so later practice doesn't rewrite the "before" picture. CSV export per student.
+- AI mock interviews (`/play/interview`): a short text interview with Claude as the interviewer, for service or product companies, leaning on the student's three weakest relevant skills. It follows up on vague answers, closes after at most eight answers, and writes a scorecard (problem solving, fundamentals, communication, code; strengths, improvements, skills to practise). Teachers see scores and transcripts for students in their scope (`/console/interviews`). One interview at a time, three a week, within the plan's AI allowance.
+- Online invoice payment: institution admins pay issued invoices through a Razorpay payment link. The invoice is marked paid from Razorpay's signed webhook or the signed browser callback, whichever arrives first.
+- Customer health (`/console/health`) for PlayCode staff and partners: per customer, students and seats, weekly active students and the trend against a month ago, answers per active student, staff using the console, assignments, AI tokens, licence end and overdue invoices, with a healthy / watch / at-risk call and its reasons. Partners see their own colleges.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -92,7 +99,7 @@ pnpm dev:web                            # http://localhost:3000
 ```
 
 The demo seed creates "Demo Institute of Technology" with 31 students and two
-weeks of simulated practice, on the Enterprise plan so every feature is on. Every account's password is `playcode123`.
+weeks of simulated practice, on the Enterprise plan so every feature is on. It includes a placement season (TCS, Infosys and Zoho drives with results; Accenture and Freshworks open now) and one finished mock interview for the demo student. Every account's password is `playcode123`.
 
 | Role | Email |
 | --- | --- |
@@ -163,6 +170,12 @@ Plans and billing: set the plan for each customer under Admin when creating or e
 
 Sign-in codes go by email when `SMTP_URL` is set and by WhatsApp when WhatsApp is configured and the account has a phone number; without either, the option is hidden. For WhatsApp, create an Authentication template named `playcode_login_code` with a copy-code button. Two-factor secrets are encrypted with `DATA_KEY`; recovery codes are stored hashed.
 
+Online payments (Razorpay): set `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`, and in the Razorpay dashboard add a webhook to `<API_PUBLIC_URL>/webhooks/razorpay` for the `payment_link.paid` event with a secret, set as `RAZORPAY_WEBHOOK_SECRET`. Razorpay returns payers to `<PUBLIC_APP_URL>/console/billing/paid`. A payment only settles an invoice when the amount matches the invoice total; other amounts are logged in the audit trail for follow-up. Without the keys, invoices show bank-transfer details only.
+
+Placements: academic records come from the placement cell's CSV (roll number or email, CGPA, backlogs, class 10 %, class 12 %, graduation year). A student's eligibility is checked when they register, against the record at that moment. The outcome comparison is a correlation, and the page says so: students who practise more may also be keener in other ways.
+
+Mock interviews use the same Claude setup as the other AI features and count against the plan's AI allowance. Each interview is about 10 requests (one per answer plus the opening question and the scorecard).
+
 Running several API instances: put them behind a load balancer (WebSocket upgrades must be allowed); they share Postgres for live events (each instance keeps one extra LISTEN connection), rate limits, webhook and grade outboxes and SAML request ids. Run the scheduled jobs from one place only. The code-execution queue limits concurrency per instance, so size `EXECUTION_CONCURRENCY` per instance against your Judge0 capacity. `REALTIME_FANOUT=off` keeps live events within one instance.
 
 Other operations:
@@ -177,6 +190,8 @@ Other operations:
 - **Leaderboards from PostgreSQL**, no Redis yet: group sizes are 30, so queries stay cheap. Add Redis with realtime duels.
 - **Password, sign-in code, OpenID Connect or SAML sign-in, with optional TOTP for staff**: imported students get a starting password from the import screen and can use sign-in codes from then on. Two-factor is for staff accounts; students are not asked for it.
 - **Tenant isolation in the API layer**: every query is scoped by tenant and org unit. PostgreSQL row-level security was considered and left out: it needs every request wrapped in a transaction that sets the tenant, which touches every route for little gain over the scoped queries and tests already in place.
+- **Mock interviews are text, not voice**: typed answers keep the cost and the setup low and work on any phone; voice could come later on the same transcript format.
+- **Placement outcomes are correlations**: the report compares practice and readiness before applying with results, which is the evidence colleges ask for, but it cannot separate practice from motivation.
 - **Hindi through a small dictionary** keyed on the English text, not a translation platform: untranslated strings fall back to English, so screens can be translated one at a time. The console stays in English.
 
 - **Postgres instead of Redis for cross-instance state**: live events, rate limits and outboxes all use Postgres, so there is one less service to run. At very high event volume, move the fan-out to Redis pub/sub behind the same `publish()`.
@@ -184,4 +199,4 @@ Other operations:
 
 - **Sessions are checked against the account and its device session on every request**, so disabling or erasing an account, or signing a device out, takes effect at once. This costs one indexed lookup per request.
 
-Not built yet: online payment collection for invoices, SAML single logout and encrypted assertions, PostgreSQL row-level security, languages other than English and Hindi, and native mobile apps (the web app is an installable PWA).
+Not built yet: automatic invoice reminders and Razorpay refunds, voice mock interviews, SAML single logout and encrypted assertions, PostgreSQL row-level security, languages other than English and Hindi, and native mobile apps (the web app is an installable PWA).
