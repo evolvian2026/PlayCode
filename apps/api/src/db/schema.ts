@@ -362,7 +362,7 @@ export const assessments = pgTable(
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     instructions: text("instructions").notNull().default(""),
-    proctorLevel: integer("proctor_level").$type<1 | 2>().notNull().default(1),
+    proctorLevel: integer("proctor_level").$type<1 | 2 | 3>().notNull().default(1),
     durationMinutes: integer("duration_minutes").notNull(),
     openAt: timestamp("open_at", { withTimezone: true }).notNull(),
     closeAt: timestamp("close_at", { withTimezone: true }).notNull(),
@@ -439,6 +439,9 @@ export const attemptSnapshots = pgTable(
     storageKey: text("storage_key").notNull(),
     contentType: text("content_type").notNull(),
     at: timestamp("at", { withTimezone: true }).notNull(),
+    /** Level 3: what the AI review saw. Null until reviewed. */
+    review: jsonb("review").$type<{ faces: number; phone: boolean; otherPerson: boolean; note: string } | { error: string }>(),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   },
   (t) => [index("attempt_snapshots_attempt_idx").on(t.attemptId, t.at)],
 );

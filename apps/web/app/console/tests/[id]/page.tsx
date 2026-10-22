@@ -27,7 +27,7 @@ interface MonitorRow {
 }
 
 interface Monitor {
-  assessment: { id: string; title: string; proctorLevel: 1 | 2; openAt: string; closeAt: string; durationMinutes: number; releasePolicy: string; resultsReleasedAt: string | null; sections: { title: string; pick: number; marks: number; negative: number }[] };
+  assessment: { id: string; title: string; proctorLevel: 1 | 2 | 3; openAt: string; closeAt: string; durationMinutes: number; releasePolicy: string; resultsReleasedAt: string | null; sections: { title: string; pick: number; marks: number; negative: number }[] };
   counts: { not_started: number; in_progress: number; submitted: number };
   students: MonitorRow[];
 }
@@ -50,7 +50,7 @@ interface AttemptDetail {
   score: number | null;
   maxScore: number | null;
   events: { type: string; detail: string | null; at: string }[];
-  snapshots: { id: string; at: string }[];
+  snapshots: { id: string; at: string; review: { faces: number; phone: boolean; otherPerson: boolean; note: string } | { error: string } | null }[];
   similarTo: { questionId: string; attemptId: string; similarityPct: number }[];
 }
 
@@ -63,7 +63,23 @@ const EVENT_LABELS: Record<string, string> = {
   device_changed: "Another device",
   multiple_faces: "Several faces",
   no_face: "No face",
+  phone_visible: "Phone visible",
+  other_person: "Someone else",
 };
+
+type SnapshotRow = AttemptDetail["snapshots"][number];
+
+/** What the level-3 AI review flagged on a snapshot, if anything. */
+function snapshotFlags(s: SnapshotRow): string[] {
+  const r = s.review;
+  if (!r || "error" in r) return [];
+  const flags: string[] = [];
+  if (r.faces === 0) flags.push("No face");
+  if (r.faces > 1) flags.push(`${r.faces} faces`);
+  if (r.phone) flags.push("Phone");
+  if (r.otherPerson && r.faces <= 1) flags.push("Someone else");
+  return flags;
+}
 
 const riskPill = (r: number) => <span className={`pill ${r >= 40 ? "bad" : r >= 15 ? "warn" : "good"}`}>{r}</span>;
 const STATUS: Record<MonitorRow["status"], [string, string]> = {
@@ -146,10 +162,17 @@ function AttemptPanel({ attemptId, onClose, onChanged }: { attemptId: string; on
         <div>
           <h3>Camera</h3>
           <div className="row wrap">
-            {data.snapshots.slice(-8).map((s) => (
-              <div key={s.id} className="small muted center">
+            {/* Every photo the AI review flagged, then the latest few. */}
+            {[...data.snapshots.filter((s) => snapshotFlags(s).length > 0), ...data.snapshots.slice(-8).filter((s) => snapshotFlags(s).length === 0)].map((s) => (
+              <div key={s.id} className="small muted center stack" style={{ gap: 4 }}>
                 <Snapshot attemptId={data.id} snapshotId={s.id} size={120} />
                 {new Date(s.at).toLocaleTimeString()}
+                {snapshotFlags(s).map((f) => (
+                  <span key={f} className="pill bad">
+                    {f}
+                  </span>
+                ))}
+                {s.review && !("error" in s.review) && s.review.note && <span style={{ maxWidth: 140 }}>{s.review.note}</span>}
               </div>
             ))}
           </div>
@@ -166,7 +189,7 @@ function AttemptPanel({ attemptId, onClose, onChanged }: { attemptId: string; on
                 <tr key={i}>
                   <td className="small muted">{new Date(e.at).toLocaleTimeString()}</td>
                   <td>{EVENT_LABELS[e.type] ?? e.type}</td>
-                  <td className="small muted">{e.detail}</td>
+                  <td className="small muted">{e.detail?.replace(/ \[[0-9a-f-]{36}\]$/, "")}</td>
                 </tr>
               ))}
             </tbody>
@@ -248,7 +271,7 @@ export default function TestMonitor() {
                     <th>Time left</th>
                     <th>Signals</th>
                     <th>Risk</th>
-                    {a.proctorLevel === 2 && <th>Camera</th>}
+                    {a.proctorLevel >= 2 && <th>Camera</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -274,7 +297,7 @@ export default function TestMonitor() {
                         {s.similarityPct >= 70 && <div style={{ color: "var(--bad)" }}>Code {s.similarityPct}% similar</div>}
                       </td>
                       <td>{s.attemptId ? riskPill(s.riskScore) : "-"}</td>
-                      {a.proctorLevel === 2 && <td>{s.latestSnapshot && s.attemptId ? <Snapshot attemptId={s.attemptId} snapshotId={s.latestSnapshot.id} size={56} /> : "-"}</td>}
+                      {a.proctorLevel >= 2 && <td>{s.latestSnapshot && s.attemptId ? <Snapshot attemptId={s.attemptId} snapshotId={s.latestSnapshot.id} size={56} /> : "-"}</td>}
                     </tr>
                   ))}
                 </tbody>

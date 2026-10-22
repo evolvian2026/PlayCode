@@ -25,7 +25,7 @@ const local = (d: Date) => {
 
 function NewDrive({ onDone }: { onDone: () => void }) {
   const skills = useApi<{ skills: { id: string; name: string; topicName: string }[] }>("/console/skills");
-  const [f, setF] = useState({ title: "", roleTitle: "", description: "", durationMinutes: 60, cutoffPct: 60, proctorLevel: 2 as 1 | 2 });
+  const [f, setF] = useState({ title: "", roleTitle: "", description: "", durationMinutes: 60, cutoffPct: 60, proctorLevel: 2 as 1 | 2 | 3 });
   const [openAt, setOpenAt] = useState(local(new Date()));
   const [closeAt, setCloseAt] = useState(local(new Date(Date.now() + 14 * 86_400_000)));
   const [aptitude, setAptitude] = useState<string[]>(["loops.for", "loops.while", "arrays.basics", "pseudocode.basics"]);
@@ -73,7 +73,8 @@ function NewDrive({ onDone }: { onDone: () => void }) {
         </div>
         <div>
           <label htmlFor="d-proc">Proctoring</label>
-          <select id="d-proc" value={f.proctorLevel} onChange={(e) => setF({ ...f, proctorLevel: Number(e.target.value) as 1 | 2 })}>
+          <select id="d-proc" value={f.proctorLevel} onChange={(e) => setF({ ...f, proctorLevel: Number(e.target.value) as 1 | 2 | 3 })}>
+            <option value={3}>Camera, one device and AI photo checks</option>
             <option value={2}>Camera and one device</option>
             <option value={1}>Light</option>
           </select>

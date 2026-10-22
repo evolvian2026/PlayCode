@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CODING_QUESTIONS } from "../src/content/coding";
 import { pool } from "../src/db/client";
+import { setAiProvider, type SnapshotReview } from "../src/lib/ai";
+import { settleSnapshotReviews } from "../src/services/snapshot-review";
 import { rightAnswer, setup, START, wrongAnswer, type TestApp } from "./helpers";
 
 let t: TestApp;
@@ -180,5 +182,47 @@ describe("proctored assessments", () => {
     });
     expect(bad.status).toBe(403);
     expect((await t.get(ece, `/console/assessments/${id}/monitor`)).status).toBe(403);
+  });
+
+  it("reviews level 3 webcam snapshots with AI and raises the risk score", async () => {
+    const reviews: SnapshotReview[] = [
+      { faces: 1, phone: false, otherPerson: false, note: "" },
+      { faces: 2, phone: true, otherPerson: false, note: "A second person is beside the student" },
+    ];
+    const seen: Buffer[] = [];
+    setAiProvider({
+      coachHint: async () => { throw new Error("not used"); },
+      draftQuestions: async () => { throw new Error("not used"); },
+      reviewSnapshot: async ({ image }) => {
+        seen.push(image);
+        return { value: reviews.shift()!, usage: { inputTokens: 1600, outputTokens: 80, cacheReadTokens: 300 } };
+      },
+    });
+    try {
+      at(0);
+      const id = await createTest({ title: "L3", proctorLevel: 3 });
+      const s5 = await student();
+      const attempt = (await t.post(s5, `/student/assessments/${id}/start`, { deviceId: "laptop-5555" })).body.id;
+      const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+      await t.post(s5, `/student/attempts/${attempt}/snapshot`, { image: png });
+      at(MIN);
+      await t.post(s5, `/student/attempts/${attempt}/snapshot`, { image: png });
+      await settleSnapshotReviews();
+      expect(seen).toHaveLength(2);
+      expect(seen[0]!.subarray(1, 4).toString()).toBe("PNG");
+
+      // The browser can't report camera findings itself.
+      await t.post(s5, `/student/attempts/${attempt}/events`, { events: [{ type: "no_face" }, { type: "tab_hidden" }] });
+
+      const detail = (await t.get(faculty, `/console/attempts/${attempt}`)).body;
+      const types = detail.events.map((e: { type: string }) => e.type).sort();
+      expect(types).toEqual(["multiple_faces", "phone_visible", "tab_hidden"]);
+      expect(detail.events.find((e: { type: string }) => e.type === "phone_visible").detail).toContain(`[${detail.snapshots[1].id}]`);
+      expect(detail.snapshots[0].review).toMatchObject({ faces: 1, phone: false });
+      expect(detail.snapshots[1].review).toMatchObject({ faces: 2, phone: true });
+      expect(detail.riskScore).toBe(27); // multiple_faces 20*0.5 + phone 25*0.5 + tab 8*0.5 = 26.5
+    } finally {
+      setAiProvider(undefined);
+    }
   });
 });

@@ -10,7 +10,7 @@ import { api, errorMessage, useApi } from "@/lib/api";
 interface TestRow {
   id: string;
   title: string;
-  proctorLevel: 1 | 2;
+  proctorLevel: 1 | 2 | 3;
   durationMinutes: number;
   openAt: string;
   closeAt: string;
@@ -44,7 +44,7 @@ function NewTest({ onDone }: { onDone: () => void }) {
   const [title, setTitle] = useState("");
   const [instructions, setInstructions] = useState("");
   const [duration, setDuration] = useState(45);
-  const [level, setLevel] = useState<1 | 2>(1);
+  const [level, setLevel] = useState<1 | 2 | 3>(1);
   const [release, setRelease] = useState<"manual" | "immediate">("manual");
   const [openAt, setOpenAt] = useState(local(new Date()));
   const [closeAt, setCloseAt] = useState(local(new Date(Date.now() + 3 * 3600_000)));
@@ -118,9 +118,10 @@ function NewTest({ onDone }: { onDone: () => void }) {
         </div>
         <div style={{ flex: 1, minWidth: 200 }}>
           <label htmlFor="t-level">Proctoring</label>
-          <select id="t-level" value={level} onChange={(e) => setLevel(Number(e.target.value) as 1 | 2)}>
+          <select id="t-level" value={level} onChange={(e) => setLevel(Number(e.target.value) as 1 | 2 | 3)}>
             <option value={1}>Light: tab and paste tracking</option>
             <option value={2}>Standard: + camera snapshots, one device</option>
+            <option value={3}>Strict: + AI checks every snapshot for faces and phones</option>
           </select>
         </div>
         <div style={{ flex: 1, minWidth: 200 }}>
@@ -261,7 +262,7 @@ export default function Tests() {
                   <td>
                     <b>{a.title}</b>
                     <div className="muted small">
-                      {a.questionCount} questions · {a.durationMinutes} min · {a.proctorLevel === 2 ? "camera" : "light"} proctoring
+                      {a.questionCount} questions · {a.durationMinutes} min · {["", "light", "camera", "camera + AI"][a.proctorLevel]} proctoring
                     </div>
                   </td>
                   <td className="small muted">

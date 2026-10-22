@@ -62,7 +62,7 @@ export async function driveRoutes(app: FastifyInstance) {
             durationMinutes: z.number().int().min(5).max(600),
             openAt: z.coerce.date(),
             closeAt: z.coerce.date(),
-            proctorLevel: z.union([z.literal(1), z.literal(2)]).default(2),
+            proctorLevel: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(2),
             cutoffPct: z.number().int().min(0).max(100).nullable().optional(),
             sections: z.array(sectionSchema).min(1).max(10),
           })

@@ -14,7 +14,7 @@ interface DriveInfo {
   company: string;
   branding: Branding;
   durationMinutes: number;
-  proctorLevel: 1 | 2;
+  proctorLevel: 1 | 2 | 3;
   openAt: string;
   closeAt: string;
   accepting: boolean;
@@ -74,7 +74,7 @@ export default function Apply() {
         {drive.description && <p style={{ margin: 0, whiteSpace: "pre-line" }}>{drive.description}</p>}
         <span className="muted small">
           Online test · {drive.durationMinutes} minutes · open until {formatDate(drive.closeAt)}
-          {drive.proctorLevel === 2 ? " · camera and full screen required" : ""}
+          {drive.proctorLevel >= 2 ? " · camera and full screen required" : ""}
         </span>
       </div>
       {!drive.accepting ? (
@@ -108,7 +108,7 @@ export default function Apply() {
             <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ width: "auto", marginTop: 3 }} />
             <span>
               I agree that {drive.company} and PlayCode may use my details and test results to assess my application, and that the test records tab switches
-              {drive.proctorLevel === 2 ? " and takes webcam photos" : ""}. I can ask for my data to be deleted at any time.
+              {drive.proctorLevel >= 3 ? " and takes webcam photos, which are checked automatically and reviewed by a person if flagged" : drive.proctorLevel >= 2 ? " and takes webcam photos" : ""}. I can ask for my data to be deleted at any time.
             </span>
           </label>
           {error && <ErrorBox message={error} />}

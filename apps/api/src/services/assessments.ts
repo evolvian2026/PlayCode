@@ -5,6 +5,7 @@ import {
   grade,
   hashString,
   INTEGRITY_EVENT_TYPES,
+  SERVER_EVENT_TYPES,
   needsExecution,
   riskScore,
   scoreAttempt,
@@ -29,6 +30,7 @@ import { checkRunRate, evaluate, tryRun } from "../execution";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { putObject } from "../lib/storage";
 import { toCoreQuestion, type StudentCtx } from "./practice";
+import { queueSnapshotReview } from "./snapshot-review";
 import { emitAndDeliver } from "./webhooks";
 import { descendants, studentIdsInUnits, studentUnitIdsWithAncestors, tenantUnits } from "./scope";
 
@@ -217,21 +219,29 @@ export async function runInAttempt(db: Db, ctx: StudentCtx, attemptId: string, i
   return tryRun(toCoreQuestion(q!), input.response);
 }
 
-async function recordEvents(db: DbOrTx, at: AttemptRow, events: { type: IntegrityEventType; detail?: string }[], now: Date) {
+/** Log integrity events and update the attempt's counts and risk score (row-locked: the browser and the camera review can report at once). */
+export async function recordEvents(db: Db, at: Pick<AttemptRow, "id">, events: { type: IntegrityEventType; detail?: string }[], now: Date) {
   if (events.length === 0) return;
-  await db.insert(integrityEvents).values(events.map((e) => ({ attemptId: at.id, type: e.type, detail: e.detail?.slice(0, 200) ?? null, at: now })));
-  const counts = { ...at.integrity };
-  for (const e of events) counts[e.type] = (counts[e.type] ?? 0) + 1;
-  await db
-    .update(assessmentAttempts)
-    .set({ integrity: counts, riskScore: riskScore(counts, at.maxSimilarity / 100) })
-    .where(eq(assessmentAttempts.id, at.id));
+  await db.transaction(async (tx) => {
+    const [row] = await tx.select().from(assessmentAttempts).where(eq(assessmentAttempts.id, at.id)).for("update");
+    if (!row) return;
+    await tx.insert(integrityEvents).values(events.map((e) => ({ attemptId: at.id, type: e.type, detail: e.detail?.slice(0, 200) ?? null, at: now })));
+    const counts = { ...row.integrity };
+    for (const e of events) counts[e.type] = (counts[e.type] ?? 0) + 1;
+    await tx
+      .update(assessmentAttempts)
+      .set({ integrity: counts, riskScore: riskScore(counts, row.maxSimilarity / 100) })
+      .where(eq(assessmentAttempts.id, at.id));
+  });
 }
 
 export async function logIntegrity(db: Db, ctx: StudentCtx, attemptId: string, events: { type: string; detail?: string }[]) {
   const at = await loadOwnAttempt(db, ctx, attemptId);
   if (at.status !== "in_progress") return { ok: true };
-  const valid = events.filter((e): e is { type: IntegrityEventType; detail?: string } => (INTEGRITY_EVENT_TYPES as readonly string[]).includes(e.type)).slice(0, 50);
+  // Camera findings and device changes come from the server, never from the browser.
+  const valid = events
+    .filter((e): e is { type: IntegrityEventType; detail?: string } => (INTEGRITY_EVENT_TYPES as readonly string[]).includes(e.type) && !SERVER_EVENT_TYPES.includes(e.type as IntegrityEventType))
+    .slice(0, 50);
   await recordEvents(db, at, valid, ctx.now);
   await db.update(assessmentAttempts).set({ lastSeenAt: ctx.now }).where(eq(assessmentAttempts.id, at.id));
   return { ok: true };
@@ -248,7 +258,9 @@ export async function saveSnapshot(db: Db, ctx: StudentCtx, attemptId: string, d
   if (data.length > MAX_SNAPSHOT_BYTES) throw badRequest("Snapshot is too large");
   const key = `snapshots/${at.tenantId}/${at.id}/${ctx.now.getTime()}-${randomUUID().slice(0, 8)}`;
   await putObject(key, data);
-  await db.insert(attemptSnapshots).values({ attemptId: at.id, storageKey: key, contentType: m[1]!, at: ctx.now });
+  const [snap] = await db.insert(attemptSnapshots).values({ attemptId: at.id, storageKey: key, contentType: m[1]!, at: ctx.now }).returning({ id: attemptSnapshots.id });
+  // Level 3: an AI review looks at the photo in the background; the student is not kept waiting.
+  if (a.proctorLevel >= 3) queueSnapshotReview(db, snap!.id, ctx.tenantId);
   return { ok: true };
 }
 
@@ -410,7 +422,7 @@ export async function attemptDetail(db: Db, tenantId: string, attemptId: string)
   if (!at) throw notFound("Attempt");
   const [user] = await db.select({ name: users.name, rollNo: users.rollNo }).from(users).where(eq(users.id, at.userId));
   const events = await db.select().from(integrityEvents).where(eq(integrityEvents.attemptId, at.id)).orderBy(asc(integrityEvents.at));
-  const snaps = await db.select({ id: attemptSnapshots.id, at: attemptSnapshots.at }).from(attemptSnapshots).where(eq(attemptSnapshots.attemptId, at.id)).orderBy(asc(attemptSnapshots.at));
+  const snaps = await db.select({ id: attemptSnapshots.id, at: attemptSnapshots.at, review: attemptSnapshots.review }).from(attemptSnapshots).where(eq(attemptSnapshots.attemptId, at.id)).orderBy(asc(attemptSnapshots.at));
   const pairs = await db
     .select()
     .from(plagiarismPairs)

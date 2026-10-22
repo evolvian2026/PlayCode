@@ -25,7 +25,7 @@ export interface NewDrive {
   durationMinutes: number;
   openAt: Date;
   closeAt: Date;
-  proctorLevel: 1 | 2;
+  proctorLevel: 1 | 2 | 3;
   cutoffPct?: number | null;
   sections: SectionInput[];
 }

@@ -11,8 +11,16 @@ export const INTEGRITY_EVENT_TYPES = [
   "multiple_faces",
   "no_face",
   "device_changed",
+  "phone_visible",
+  "other_person",
 ] as const;
 export type IntegrityEventType = (typeof INTEGRITY_EVENT_TYPES)[number];
+
+/** Signals only the server records (from reviewing webcam snapshots); the browser cannot report them. */
+export const SERVER_EVENT_TYPES: readonly IntegrityEventType[] = ["multiple_faces", "no_face", "phone_visible", "other_person", "device_changed"];
+
+/** 1: browser signals. 2: plus webcam snapshots and one-device lock. 3: plus AI review of every snapshot. */
+export type ProctorLevel = 1 | 2 | 3;
 
 const RISK_WEIGHTS: Record<IntegrityEventType, number> = {
   tab_hidden: 8,
@@ -23,6 +31,8 @@ const RISK_WEIGHTS: Record<IntegrityEventType, number> = {
   multiple_faces: 20,
   no_face: 10,
   device_changed: 25,
+  phone_visible: 25,
+  other_person: 20,
 };
 
 export function riskScore(counts: Partial<Record<IntegrityEventType, number>>, maxSimilarity = 0): number {

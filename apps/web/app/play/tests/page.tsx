@@ -32,7 +32,7 @@ export default function Tests() {
             <span className={`pill ${STATE[a.state][1]}`}>{STATE[a.state][0]}</span>
           </div>
           <div className="muted small">
-            {a.questionCount} questions · {a.durationMinutes} min · {a.proctorLevel === 2 ? "camera and full screen" : "full screen recommended"}
+            {a.questionCount} questions · {a.durationMinutes} min · {a.proctorLevel >= 2 ? "camera and full screen" : "full screen recommended"}
           </div>
           <div className="muted small">
             {formatDate(a.openAt)} to {formatDate(a.closeAt)}

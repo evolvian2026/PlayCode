@@ -13,7 +13,7 @@ import type { Evaluation, QuestionView, TestListItem } from "@/lib/types";
 
 interface AttemptView {
   id: string;
-  assessment: { id: string; title: string; instructions: string; proctorLevel: 1 | 2; durationMinutes: number; sections: { title: string; marks: number; negative: number }[] };
+  assessment: { id: string; title: string; instructions: string; proctorLevel: 1 | 2 | 3; durationMinutes: number; sections: { title: string; marks: number; negative: number }[] };
   status: "in_progress" | "submitted" | "auto_submitted";
   deadline: string;
   timeLeftMs: number;
@@ -216,7 +216,7 @@ export default function Exam() {
 
   const inProgress = view?.status === "in_progress";
   useIntegrity(view?.id ?? null, Boolean(inProgress));
-  const cameraProblem = useCamera(view?.id ?? null, Boolean(inProgress && view?.assessment.proctorLevel === 2));
+  const cameraProblem = useCamera(view?.id ?? null, Boolean(inProgress && view?.assessment.proctorLevel >= 2));
   const timeLeft = deadlineLocal - now;
 
   const submit = useCallback(async () => {
@@ -302,12 +302,13 @@ export default function Exam() {
             <li>The timer starts when you press Start and keeps running if you close the page.</li>
             <li>Your answers save automatically. You can change them until you submit.</li>
             <li>Switching tabs, leaving full screen and pasting are recorded for the proctor.</li>
-            {item.proctorLevel === 2 && <li>Your camera takes a photo every minute. This test can only be taken on one device.</li>}
+            {item.proctorLevel >= 2 && <li>Your camera takes a photo every minute. This test can only be taken on one device.</li>}
+            {item.proctorLevel >= 3 && <li>The photos are checked automatically for other people or a phone. A proctor reviews anything flagged; nothing is decided automatically.</li>}
           </ul>
         </div>
         {error && <ErrorBox message={error} />}
         <button className="btn primary big" disabled={busy || item.state === "upcoming"} onClick={start}>
-          {item.proctorLevel === 2 ? "I agree, start the test" : "Start the test"}
+          {item.proctorLevel >= 2 ? "I agree, start the test" : "Start the test"}
         </button>
       </div>
     );

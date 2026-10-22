@@ -36,7 +36,7 @@ const createSchema = z
   .object({
     title: z.string().min(1).max(120),
     instructions: z.string().max(4000).default(""),
-    proctorLevel: z.union([z.literal(1), z.literal(2)]).default(1),
+    proctorLevel: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(1),
     durationMinutes: z.number().int().min(5).max(600),
     openAt: z.coerce.date(),
     closeAt: z.coerce.date(),
