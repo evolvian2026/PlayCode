@@ -86,11 +86,11 @@ export async function studioRoutes(app: FastifyInstance) {
   // Check an unsaved question (the editor's "Check" button) or a saved one.
   app.post("/studio/check", async (req) => {
     bankOf(req);
-    rateLimit(`studio-check:${req.auth.userId}`, 30, 60_000);
+    await rateLimit(`studio-check:${req.auth.userId}`, 30, 60_000);
     return { check: await checkQuestion(parse(studioInput, req.body), app.now()) };
   });
   app.post("/studio/questions/:id/check", async (req) => {
-    rateLimit(`studio-check:${req.auth.userId}`, 30, 60_000);
+    await rateLimit(`studio-check:${req.auth.userId}`, 30, 60_000);
     return { check: await runCheck(db, bankOf(req), parse(idParam, req.params).id, app.now()) };
   });
 
@@ -113,7 +113,7 @@ export async function studioRoutes(app: FastifyInstance) {
       }),
       req.body,
     );
-    rateLimit(`studio-draft:${req.auth.userId}`, 10, 60 * 60_000);
+    await rateLimit(`studio-draft:${req.auth.userId}`, 10, 60 * 60_000);
     return { drafts: await draftWithAi(db, { ...input, tenantId: bank.tenantId, actorId: req.auth.userId, now: app.now() }) };
   });
 }

@@ -19,8 +19,8 @@ export interface TestApp {
 }
 
 export async function setup(): Promise<TestApp> {
-  resetRateLimits();
   await resetDatabase();
+  await resetRateLimits();
   await seedDemo(START);
   const clock = { now: new Date(START) };
   const app = await buildApp({ now: () => clock.now });

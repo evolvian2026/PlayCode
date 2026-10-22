@@ -191,7 +191,7 @@ export async function studentRoutes(app: FastifyInstance) {
   app.post("/sessions/:id/coach", async (req) => {
     const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
     const body = parse(z.object({ questionId: z.string(), draft: z.string().max(20_000).optional() }), req.body);
-    rateLimit(`coach:${req.auth.userId}`, 10, 60_000);
+    await rateLimit(`coach:${req.auth.userId}`, 10, 60_000);
     return coachHint(db, ctxOf(req), id, body);
   });
 

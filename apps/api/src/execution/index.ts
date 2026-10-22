@@ -1,6 +1,7 @@
 import { needsExecution, outputsMatch, resultSetsMatch, type CodeLanguage, type Question, type StudentResponse } from "@playcode/core";
 import { env } from "../env";
 import { HttpError, badRequest } from "../lib/errors";
+import { rateLimit } from "../lib/rate-limit";
 import { Judge0Runner } from "./judge0-runner";
 import { LocalRunner } from "./local-runner";
 import { ExecutionQueue, type Priority } from "./queue";
@@ -147,11 +148,7 @@ export async function tryRun(q: Question, response: StudentResponse): Promise<Ev
   throw badRequest("Only code and SQL questions can be run");
 }
 
-// Simple per-user limit for the Run button: 12 runs a minute.
-const runs = new Map<string, number[]>();
-export function checkRunRate(userId: string, now = Date.now()): void {
-  const recent = (runs.get(userId) ?? []).filter((t) => now - t < 60_000);
-  if (recent.length >= 12) throw new HttpError(429, "rate_limited", "Too many runs. Wait a few seconds and try again.");
-  recent.push(now);
-  runs.set(userId, recent);
+/** Per-user limit for the Run button: 12 runs a minute, across all API instances. */
+export function checkRunRate(userId: string, now = new Date()): Promise<void> {
+  return rateLimit(`run:${userId}`, 12, 60_000, now, "Too many runs");
 }

@@ -935,3 +935,16 @@ export const ltiDeepLinks = pgTable("lti_deep_links", {
   usedAt: timestamp("used_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
+
+// ---------- Shared state for running several API instances ----------
+
+/** Request counters per key and fixed window, shared by all API instances. */
+export const rateLimits = pgTable(
+  "rate_limits",
+  {
+    key: text("key").notNull(),
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.key, t.windowStart] }), index("rate_limits_window_idx").on(t.windowStart)],
+);

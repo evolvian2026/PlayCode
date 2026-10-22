@@ -215,7 +215,7 @@ export async function runInAttempt(db: Db, ctx: StudentCtx, attemptId: string, i
   assertWritable(at, ctx.now);
   if (!at.questions.some((q) => q.questionId === input.questionId)) throw badRequest("That question is not in your test");
   const [q] = await db.select().from(questions).where(eq(questions.id, input.questionId));
-  checkRunRate(ctx.userId, ctx.now.getTime());
+  await checkRunRate(ctx.userId, ctx.now);
   return tryRun(toCoreQuestion(q!), input.response);
 }
 

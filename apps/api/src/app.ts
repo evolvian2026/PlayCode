@@ -1,10 +1,13 @@
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
+import { eq } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
+import { db } from "./db/client";
+import { users } from "./db/schema";
 import { env } from "./env";
 import { verifyToken } from "./lib/auth";
 import { HttpError } from "./lib/errors";
-import { subscribe } from "./lib/realtime";
+import { startFanout, stopFanout, subscribe } from "./lib/realtime";
 import { adminRoutes } from "./routes/admin";
 import { assessmentConsoleRoutes } from "./routes/assessments-console";
 import { authRoutes } from "./routes/auth";
@@ -59,11 +62,17 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   // Live events (duels, proctoring). Browsers cannot set headers on a
   // WebSocket, so the token comes as a query parameter.
   await app.register(websocket);
+  if (env.REALTIME_FANOUT === "postgres") {
+    await startFanout();
+    app.addHook("onClose", async () => stopFanout());
+  }
   app.get("/ws", { websocket: true }, async (socket, req) => {
     const token = (req.query as { token?: string }).token;
     let userId: string;
     try {
       userId = (await verifyToken(token ?? "")).sub;
+      const [u] = await db.select({ status: users.status }).from(users).where(eq(users.id, userId));
+      if (u?.status !== "active") throw new Error("inactive");
     } catch {
       socket.close(4401, "unauthorized");
       return;

@@ -21,7 +21,7 @@ export async function samlRoutes(app: FastifyInstance) {
   });
 
   app.post("/auth/saml/:slug/acs", async (req, reply) => {
-    rateLimit(`saml:${req.ip}`, 60, 60_000);
+    await rateLimit(`saml:${req.ip}`, 60, 60_000);
     const { slug } = parse(slugParam, req.params);
     const appUrl = env.PUBLIC_APP_URL.replace(/\/$/, "");
     try {

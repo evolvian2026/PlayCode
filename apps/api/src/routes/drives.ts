@@ -39,7 +39,7 @@ export async function driveRoutes(app: FastifyInstance) {
       }),
       req.body,
     );
-    rateLimit(`apply:${req.ip}`, 20, 60 * 60_000);
+    await rateLimit(`apply:${req.ip}`, 20, 60 * 60_000);
     return applyToDrive(db, code, body, app.now());
   });
 

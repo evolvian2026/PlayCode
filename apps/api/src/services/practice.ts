@@ -278,7 +278,7 @@ export async function runCurrent(db: DbOrTx, ctx: StudentCtx, sessionId: string,
   if (s.finishedAt || s.questionIds[s.currentIndex] !== input.questionId) throw conflict("not_current", "That question is not the current one");
   const [q] = await db.select().from(questions).where(eq(questions.id, input.questionId));
   if (!q) throw notFound("Question");
-  checkRunRate(ctx.userId, ctx.now.getTime());
+  await checkRunRate(ctx.userId, ctx.now);
   return tryRun(toCoreQuestion(q), input.response);
 }
 

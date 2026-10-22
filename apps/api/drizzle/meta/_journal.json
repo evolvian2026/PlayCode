@@ -127,6 +127,13 @@
       "when": 1792679332099,
       "tag": "0017_lti_deep_linking",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792679693246,
+      "tag": "0018_rate_limits",
+      "breakpoints": true
     }
   ]
 }

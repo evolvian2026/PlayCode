@@ -29,7 +29,7 @@ export async function ltiRoutes(app: FastifyInstance) {
   const appUrl = () => env.PUBLIC_APP_URL.replace(/\/$/, "");
 
   const login = async (req: { query: unknown; body: unknown; ip: string }, reply: { redirect: (url: string) => unknown }) => {
-    rateLimit(`lti-login:${req.ip}`, 120, 60_000);
+    await rateLimit(`lti-login:${req.ip}`, 120, 60_000);
     const params = { ...(req.query as Record<string, string>), ...((req.body as Record<string, string>) ?? {}) };
     return reply.redirect(await startLaunch(db, params, app.now()));
   };
@@ -37,7 +37,7 @@ export async function ltiRoutes(app: FastifyInstance) {
   app.post("/lti/login", login);
 
   app.post("/lti/launch", async (req, reply) => {
-    rateLimit(`lti-launch:${req.ip}`, 120, 60_000);
+    await rateLimit(`lti-launch:${req.ip}`, 120, 60_000);
     try {
       const { token, next } = await finishLaunch(db, (req.body as Record<string, string>) ?? {}, app.now());
       // Same hand-off as single sign-on: the token travels in the fragment, never to a server.

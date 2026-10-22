@@ -57,7 +57,7 @@ export async function v1Routes(app: FastifyInstance) {
       body,
     );
     void grant_type;
-    rateLimit(`token:${client_id}`, 60, 60_000);
+    await rateLimit(`token:${client_id}`, 60, 60_000);
     const [client] = await db.select().from(apiClients).where(eq(apiClients.clientId, client_id));
     if (!client || client.revokedAt || !safeEqual(client.secretHash, sha256(client_secret))) {
       return reply.status(401).send({ error: "invalid_client" });
