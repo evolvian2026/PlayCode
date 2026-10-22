@@ -193,6 +193,8 @@ describe("proctored assessments", () => {
     setAiProvider({
       coachHint: async () => { throw new Error("not used"); },
       draftQuestions: async () => { throw new Error("not used"); },
+      draftCodingProblems: async () => { throw new Error("not used"); },
+      draftSqlProblems: async () => { throw new Error("not used"); },
       reviewSnapshot: async ({ image }) => {
         seen.push(image);
         return { value: reviews.shift()!, usage: { inputTokens: 1600, outputTokens: 80, cacheReadTokens: 300 } };

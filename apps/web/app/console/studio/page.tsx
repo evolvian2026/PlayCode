@@ -98,6 +98,7 @@ function AiDrafts({ info, skills }: { info: StudioInfo; skills: Skill[] }) {
             ))}
           </select>
         </div>
+        {type !== "write_code" && type !== "sql_query" && (
         <div>
           <label htmlFor="ai-lang">Language</label>
           <select id="ai-lang" value={language} onChange={(e) => setLanguage(e.target.value)}>
@@ -107,6 +108,7 @@ function AiDrafts({ info, skills }: { info: StudioInfo; skills: Skill[] }) {
             <option value="pseudocode">Pseudocode</option>
           </select>
         </div>
+        )}
         <div>
           <label htmlFor="ai-diff">Difficulty</label>
           <select id="ai-diff" value={difficulty} onChange={(e) => setDifficulty(Number(e.target.value) as 1 | 2 | 3)}>
@@ -126,7 +128,7 @@ function AiDrafts({ info, skills }: { info: StudioInfo; skills: Skill[] }) {
       </div>
       <input aria-label="Notes for the AI" placeholder="Notes (optional), e.g. use off-by-one errors, TCS NQT style" value={guidance} onChange={(e) => setGuidance(e.target.value)} maxLength={1000} />
       <button className="btn primary" style={{ alignSelf: "flex-start" }} disabled={busy || !skillId} onClick={draft}>
-        {busy ? "Drafting (this can take a minute)..." : "Draft questions"}
+        {busy ? (type === "write_code" ? "Drafting and running solutions (a few minutes)..." : "Drafting (this can take a minute)...") : "Draft questions"}
       </button>
       {error && <ErrorBox message={error} />}
       {drafts.map((d, i) => (
@@ -136,6 +138,19 @@ function AiDrafts({ info, skills }: { info: StudioInfo; skills: Skill[] }) {
             {d.check.ok ? <span className="pill good">Check passed</span> : <span className="pill bad">Needs fixing</span>}
           </div>
           {d.input.body.code && <CodeBlock code={d.input.body.code} />}
+          {d.input.answer.kind === "tests" && (
+            <div className="small">
+              {d.input.answer.tests.length} tests ({d.input.answer.tests.filter((x) => !x.hidden).length} shown to students) · solutions in{" "}
+              {Object.keys(d.input.solutions ?? {}).join(", ")} · expected outputs come from running the Python solution
+            </div>
+          )}
+          {d.input.answer.kind === "sql" && (
+            <>
+              <CodeBlock code={d.input.body.schema ?? ""} />
+              <div className="small">Model query:</div>
+              <CodeBlock code={d.input.answer.solution} />
+            </>
+          )}
           {d.input.body.options && (
             <ol className="small" style={{ margin: 0, paddingLeft: 18 }} type="a">
               {d.input.body.options.map((o) => (

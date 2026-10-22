@@ -57,6 +57,40 @@ export interface DraftInput {
   guidance?: string;
 }
 
+const perLanguage = (what: string) =>
+  z.object({
+    python: z.string().describe(`${what} in Python 3.`),
+    c: z.string().describe(`${what} in C (C11, stdio.h).`),
+    java: z.string().describe(`${what} in Java, in a public class Main.`),
+  });
+
+export const codingProblemSchema = z.object({
+  stem: z.string().describe("The problem statement, including the exact input and output format and any limits."),
+  testInputs: z.array(z.object({ input: z.string().describe("Exact stdin, lines separated by \\n."), hidden: z.boolean() })).describe("2 visible sample inputs, then 4 to 6 hidden inputs including edge cases."),
+  solutions: perLanguage("A correct, complete solution reading stdin and writing stdout"),
+  starterCode: perLanguage("Starter code that reads the input but leaves the logic to the student"),
+  explanation: z.string().describe("The approach in two to four sentences, with its time complexity."),
+  hints: z.array(z.string()).describe("Two hints, vaguer first, that never give the solution."),
+});
+export type DraftCodingProblem = z.infer<typeof codingProblemSchema>;
+
+export const sqlProblemSchema = z.object({
+  stem: z.string().describe("The task, naming the columns and order expected in the result."),
+  schema: z.string().describe("CREATE TABLE and INSERT statements (SQLite) with 5 to 15 rows per table, including rows that catch common mistakes."),
+  solution: z.string().describe("A correct SQLite query."),
+  ordered: z.boolean().describe("True only if the stem asks for a specific row order (ORDER BY)."),
+  explanation: z.string().describe("Why the query works, in two to four sentences."),
+  hints: z.array(z.string()).describe("Two hints, vaguer first, that never give the query."),
+});
+export type DraftSqlProblem = z.infer<typeof sqlProblemSchema>;
+
+export interface ProblemDraftInput {
+  skill: string;
+  difficulty: 1 | 2 | 3;
+  count: number;
+  guidance?: string;
+}
+
 export const snapshotReviewSchema = z.object({
   faces: z.number().int().describe("Number of human faces visible."),
   phone: z.boolean().describe("A mobile phone or similar device is visible."),
@@ -68,6 +102,8 @@ export type SnapshotReview = z.infer<typeof snapshotReviewSchema>;
 export interface AiProvider {
   coachHint(input: CoachHintInput): Promise<AiResult<string>>;
   draftQuestions(input: DraftInput): Promise<AiResult<DraftQuestion[]>>;
+  draftCodingProblems(input: ProblemDraftInput): Promise<AiResult<DraftCodingProblem[]>>;
+  draftSqlProblems(input: ProblemDraftInput): Promise<AiResult<DraftSqlProblem[]>>;
   reviewSnapshot(input: { image: Buffer; mediaType: "image/jpeg" | "image/png" | "image/webp" }): Promise<AiResult<SnapshotReview>>;
 }
 
@@ -156,6 +192,62 @@ class ClaudeProvider implements AiProvider {
     );
     if (res.stop_reason === "refusal" || !res.parsed_output) throw new AiUnavailableError("Could not draft questions for this request");
     return { value: res.parsed_output.questions, usage: usageOf(res.usage) };
+  }
+
+  // Coding problems carry three solutions and three starters each, so they stream (long output).
+  async draftCodingProblems(input: ProblemDraftInput) {
+    const message = await this.client.beta.messages
+      .stream(
+        {
+          ...this.common,
+          max_tokens: 64000,
+          output_config: { effort: "high", format: betaZodOutputFormat(z.object({ problems: z.array(codingProblemSchema) })) },
+          system: [{ type: "text", text: DRAFT_SYSTEM, cache_control: { type: "ephemeral" } }],
+          messages: [
+            {
+              role: "user",
+              content: [
+                `Write ${input.count} different stdin/stdout coding problems for placement tests.`,
+                `Skill: ${input.skill}. Difficulty: ${["", "easy", "medium", "hard"][input.difficulty]}.`,
+                "Inputs must be small enough to run in well under a second. Output must be deterministic, with no trailing spaces. The three solutions must print exactly the same thing.",
+                input.guidance ? `Author's notes: ${input.guidance}` : "",
+              ]
+                .filter(Boolean)
+                .join("\n"),
+            },
+          ],
+        },
+        { timeout: 600_000 },
+      )
+      .finalMessage();
+    if (message.stop_reason === "refusal" || !message.parsed_output) throw new AiUnavailableError("Could not draft problems for this request");
+    return { value: message.parsed_output.problems, usage: usageOf(message.usage) };
+  }
+
+  async draftSqlProblems(input: ProblemDraftInput) {
+    const res = await this.client.beta.messages.parse(
+      {
+        ...this.common,
+        max_tokens: 16000,
+        output_config: { effort: "high", format: betaZodOutputFormat(z.object({ problems: z.array(sqlProblemSchema) })) },
+        system: [{ type: "text", text: DRAFT_SYSTEM, cache_control: { type: "ephemeral" } }],
+        messages: [
+          {
+            role: "user",
+            content: [
+              `Write ${input.count} different SQL query problems for placement tests, runnable on SQLite.`,
+              `Skill: ${input.skill}. Difficulty: ${["", "easy", "medium", "hard"][input.difficulty]}.`,
+              input.guidance ? `Author's notes: ${input.guidance}` : "",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          },
+        ],
+      },
+      { timeout: 300_000 },
+    );
+    if (res.stop_reason === "refusal" || !res.parsed_output) throw new AiUnavailableError("Could not draft problems for this request");
+    return { value: res.parsed_output.problems, usage: usageOf(res.usage) };
   }
 
   async reviewSnapshot(input: { image: Buffer; mediaType: "image/jpeg" | "image/png" | "image/webp" }) {

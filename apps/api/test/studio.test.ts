@@ -25,6 +25,33 @@ const fake: AiProvider = {
   async reviewSnapshot() {
     throw new Error("not used");
   },
+  async draftCodingProblems() {
+    const sum = {
+      python: "a, b = map(int, input().split())\nprint(a + b)\n",
+      c: '#include <stdio.h>\nint main(void) {\n  long a, b;\n  scanf("%ld %ld", &a, &b);\n  printf("%ld\\n", a + b);\n  return 0;\n}\n',
+      java: "import java.util.*;\npublic class Main {\n  public static void main(String[] args) {\n    Scanner s = new Scanner(System.in);\n    long a = s.nextLong(), b = s.nextLong();\n    System.out.println(a + b);\n  }\n}\n",
+    };
+    const starter = { python: "a, b = map(int, input().split())\n", c: "#include <stdio.h>\nint main(void) {\n  return 0;\n}\n", java: "public class Main {\n  public static void main(String[] args) {\n  }\n}\n" };
+    const inputs = [{ input: "1 2\n", hidden: false }, { input: "5 7\n", hidden: false }, { input: "-3 3\n", hidden: true }, { input: "2000000000 2000000000\n", hidden: true }];
+    return {
+      value: [
+        { stem: "Read two integers and print their sum.", testInputs: inputs, solutions: sum, starterCode: starter, explanation: "Add them; use 64-bit integers.", hints: ["Read both numbers first."] },
+        // The C solution uses int, so it overflows on the last hidden test.
+        { stem: "Sum again", testInputs: inputs, solutions: { ...sum, c: sum.c.replace("long a, b", "int a, b").replace("%ld %ld", "%d %d").replace("%ld\\n", "%d\\n") }, starterCode: starter, explanation: "Add them.", hints: [] },
+      ],
+      usage: { inputTokens: 3000, outputTokens: 2500, cacheReadTokens: 0 },
+    };
+  },
+  async draftSqlProblems() {
+    const schema = "CREATE TABLE students (id INTEGER, name TEXT, cgpa REAL);\nINSERT INTO students VALUES (1, 'Asha', 8.9), (2, 'Ravi', 6.4), (3, 'Meera', 9.2);";
+    return {
+      value: [
+        { stem: "List the names of students with a CGPA above 8, alphabetically.", schema, solution: "SELECT name FROM students WHERE cgpa > 8 ORDER BY name", ordered: true, explanation: "Filter, then sort.", hints: ["WHERE filters rows."] },
+        { stem: "Students above 10 CGPA", schema, solution: "SELECT name FROM students WHERE cgpa > 10", ordered: false, explanation: "None qualify.", hints: [] },
+      ],
+      usage: { inputTokens: 1000, outputTokens: 400, cacheReadTokens: 0 },
+    };
+  },
 };
 
 const predict = (answer: string) => ({
@@ -125,7 +152,7 @@ describe("content studio", () => {
 
     const saved = await t.post(hod, "/console/studio/questions", good.input);
     expect(saved.body.question.origin).toBe("ai");
-    expect((await t.post(hod, "/console/studio/draft", { type: "write_code", skillId: "loops.for", language: "python", difficulty: 1 })).status).toBe(400);
+    expect((await t.post(hod, "/console/studio/draft", { type: "parsons", skillId: "loops.for", language: "python", difficulty: 1 })).status).toBe(400);
   });
 
   it("gives the platform content team the global bank", async () => {
@@ -134,5 +161,26 @@ describe("content studio", () => {
     const all = (await t.get(admin, "/console/studio/questions?status=live")).body.questions as { origin: string }[];
     expect(all.length).toBeGreaterThan(40);
     expect(all.every((q) => q.origin === "seed")).toBe(true);
+  });
+
+  it("drafts coding problems, deriving expected outputs by running the solution", async () => {
+    const res = await t.post(hod, "/console/studio/draft", { type: "write_code", skillId: "loops.for", language: "python", difficulty: 1, count: 2 });
+    expect(res.status).toBe(200);
+    const [good, overflow] = res.body.drafts;
+    expect(good.input.answer.tests.map((x: { output: string }) => x.output.trim())).toEqual(["3", "12", "0", "4000000000"]);
+    expect(good.input.body.languages).toEqual(["python", "c", "java"]);
+    expect(good.check).toMatchObject({ ok: true, problems: [] });
+    expect(overflow.check.ok).toBe(false);
+    expect(overflow.check.problems.join()).toContain("c solution fails test 4");
+    const saved = await t.post(hod, "/console/studio/questions", good.input);
+    expect((await t.post(hod, `/console/studio/questions/${saved.body.question.id}/status`, { status: "live" })).body.question.status).toBe("live");
+  });
+
+  it("drafts SQL problems and checks the model query returns rows", async () => {
+    const res = await t.post(hod, "/console/studio/draft", { type: "sql_query", skillId: "loops.for", language: "python", difficulty: 1, count: 2 });
+    const [good, empty] = res.body.drafts;
+    expect(good.check.ok).toBe(true);
+    expect(good.input.answer).toMatchObject({ kind: "sql", ordered: true });
+    expect(empty.check.problems[0]).toContain("returns no rows");
   });
 });

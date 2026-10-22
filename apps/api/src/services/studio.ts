@@ -14,7 +14,7 @@ import {
 import type { Db } from "../db/client";
 import { questions, skills, type QuestionCheck } from "../db/schema";
 import { evaluate, runProgram } from "../execution";
-import { aiProvider, AiUnavailableError, type DraftQuestion } from "../lib/ai";
+import { aiProvider, AiUnavailableError, type AiUsage, type DraftCodingProblem, type DraftQuestion, type DraftSqlProblem } from "../lib/ai";
 import { audit } from "../lib/audit";
 import { badRequest, conflict, HttpError, notFound } from "../lib/errors";
 import { recordAiUsage } from "./coach";
@@ -260,7 +260,7 @@ export async function setStatus(db: Db, bank: Bank, actorId: string, id: string,
 
 // ---------- AI drafting ----------
 
-export const DRAFTABLE: QuestionType[] = ["predict_output", "spot_bug", "complexity", "trace_variable", "pseudocode_mcq", "fill_blank", "which_snippet"];
+export const DRAFTABLE: QuestionType[] = ["predict_output", "spot_bug", "complexity", "trace_variable", "pseudocode_mcq", "fill_blank", "which_snippet", "write_code", "sql_query"];
 
 const TYPE_GUIDE: Partial<Record<QuestionType, string>> = {
   predict_output: "A complete program in `code`; the student types what it prints. Put the exact output in acceptedAnswers. No options.",
@@ -305,30 +305,91 @@ export async function draftWithAi(
     const allowed = await aiAllowed(db, args.tenantId, "ai_drafting", args.now);
     if (!allowed.ok) throw new HttpError(402, "plan_upgrade", allowed.reason);
   }
-  if (!DRAFTABLE.includes(args.type)) throw badRequest("AI can draft quick question types only. Write coding and SQL problems by hand.");
+  if (!DRAFTABLE.includes(args.type)) throw badRequest("AI can't draft this question type");
   const [skill] = await db.select().from(skills).where(eq(skills.id, args.skillId));
   if (!skill) throw badRequest("Unknown skill");
-  let res;
-  try {
-    res = await provider.draftQuestions({
-      skill: `${skill.topicName}: ${skill.name}`,
-      typeLabel: QUESTION_TYPE_LABELS[args.type],
-      typeGuide: TYPE_GUIDE[args.type]!,
-      language: args.language === "pseudocode" ? "pseudocode" : ({ c: "C", java: "Java", python: "Python 3" } as Record<string, string>)[args.language] ?? args.language,
-      difficulty: args.difficulty,
-      count: args.count,
-      guidance: args.guidance,
-    });
-  } catch (err) {
-    if (err instanceof AiUnavailableError) throw new HttpError(502, "ai_unavailable", err.message);
-    throw new HttpError(503, "ai_unavailable", "The AI service did not respond. Try again in a minute.");
+  const skillName = `${skill.topicName}: ${skill.name}`;
+  const ask = async <T>(call: () => Promise<{ value: T[]; usage: AiUsage }>) => {
+    try {
+      const res = await call();
+      await recordAiUsage(db, { tenantId: args.tenantId, userId: args.actorId, feature: "question_draft", usage: res.usage, now: args.now });
+      return res.value.slice(0, args.count);
+    } catch (err) {
+      if (err instanceof AiUnavailableError) throw new HttpError(502, "ai_unavailable", err.message);
+      throw new HttpError(503, "ai_unavailable", "The AI service did not respond. Try again in a minute.");
+    }
+  };
+  const meta = { skillId: args.skillId, difficulty: args.difficulty, guidance: args.guidance, count: args.count };
+
+  let inputs: StudioInput[];
+  if (args.type === "write_code") {
+    const problems = await ask(() => provider.draftCodingProblems({ skill: skillName, ...meta }));
+    inputs = await Promise.all(problems.map((p) => codingDraftToInput(p, meta)));
+  } else if (args.type === "sql_query") {
+    inputs = (await ask(() => provider.draftSqlProblems({ skill: skillName, ...meta }))).map((p) => sqlDraftToInput(p, meta));
+  } else {
+    const questions = await ask(() =>
+      provider.draftQuestions({
+        skill: skillName,
+        typeLabel: QUESTION_TYPE_LABELS[args.type],
+        typeGuide: TYPE_GUIDE[args.type]!,
+        language: args.language === "pseudocode" ? "pseudocode" : ({ c: "C", java: "Java", python: "Python 3" } as Record<string, string>)[args.language] ?? args.language,
+        difficulty: args.difficulty,
+        count: args.count,
+        guidance: args.guidance,
+      }),
+    );
+    inputs = questions.map((d) => draftToInput(d, args));
   }
-  await recordAiUsage(db, { tenantId: args.tenantId, userId: args.actorId, feature: "question_draft", usage: res.usage, now: args.now });
-  const drafts = [];
   // Check every draft (running the code where possible) so the author sees which ones hold up.
-  for (const d of res.value.slice(0, args.count)) {
-    const input = draftToInput(d, args);
-    drafts.push({ input, check: await checkQuestion(input, args.now) });
-  }
+  const drafts = [];
+  for (const input of inputs) drafts.push({ input, check: await checkQuestion(input, args.now) });
   return drafts;
+}
+
+const LANGS: CodeLanguage[] = ["python", "c", "java"];
+
+/**
+ * A drafted coding problem. The model's own expected outputs are not trusted:
+ * the Python solution is run on each test input to produce them, and the check
+ * then runs the C and Java solutions against those outputs.
+ */
+export async function codingDraftToInput(p: DraftCodingProblem, meta: { skillId: string; difficulty: 1 | 2 | 3 }): Promise<StudioInput> {
+  const inputs = p.testInputs.map((t) => t.input.replace(/\r\n/g, "\n"));
+  const outcomes = await runProgram("python", p.solutions.python, inputs);
+  const tests = p.testInputs.map((t, i) => ({
+    input: inputs[i]!,
+    // A failed run leaves the output empty, which the check reports as a failing reference solution.
+    output: outcomes[i]?.status === "ok" ? outcomes[i]!.stdout : "",
+    hidden: t.hidden,
+  }));
+  return {
+    type: "write_code",
+    skillId: meta.skillId,
+    difficulty: meta.difficulty,
+    body: { stem: p.stem, language: "python", languages: LANGS, starterCode: { python: p.starterCode.python, c: p.starterCode.c, java: p.starterCode.java } },
+    answer: { kind: "tests", tests, reference: { language: "python", source: p.solutions.python } },
+    explanation: p.explanation,
+    hints: p.hints,
+    tags: ["ai-drafted"],
+    solutions: { python: p.solutions.python, c: p.solutions.c, java: p.solutions.java },
+    checkMode: "manual",
+    origin: "ai",
+  };
+}
+
+export function sqlDraftToInput(p: DraftSqlProblem, meta: { skillId: string; difficulty: 1 | 2 | 3 }): StudioInput {
+  return {
+    type: "sql_query",
+    skillId: meta.skillId,
+    difficulty: meta.difficulty,
+    body: { stem: p.stem, language: "sql", schema: p.schema },
+    answer: { kind: "sql", solution: p.solution, ordered: p.ordered },
+    explanation: p.explanation,
+    hints: p.hints,
+    tags: ["ai-drafted"],
+    solutions: null,
+    checkMode: "manual",
+    origin: "ai",
+  };
 }

@@ -21,6 +21,12 @@ const fake: AiProvider = {
   async reviewSnapshot() {
     throw new Error("not used");
   },
+  async draftCodingProblems() {
+    throw new Error("not used");
+  },
+  async draftSqlProblems() {
+    throw new Error("not used");
+  },
 };
 
 beforeAll(async () => {

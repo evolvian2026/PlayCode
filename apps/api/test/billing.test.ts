@@ -14,6 +14,8 @@ const fakeAi: AiProvider = {
   coachHint: async () => ({ value: "Look at the loop bound.", usage: { inputTokens: 10, outputTokens: 5, cacheReadTokens: 0 } }),
   draftQuestions: async () => ({ value: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 } }),
   reviewSnapshot: async () => ({ value: { faces: 1, phone: false, otherPerson: false, note: "" }, usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 } }),
+  draftCodingProblems: async () => ({ value: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 } }),
+  draftSqlProblems: async () => ({ value: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 } }),
 };
 
 function pdfText(pdf: Buffer): string {
