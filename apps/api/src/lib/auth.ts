@@ -10,10 +10,12 @@ export interface TokenClaims {
   sub: string; // user id
   tenantId: string | null;
   roles: Role[];
+  /** The sign-in session (auth_sessions.id); revoking it signs this token out. */
+  sid: string;
 }
 
 export async function signToken(claims: TokenClaims, expiresIn = "12h"): Promise<string> {
-  return new SignJWT({ tenantId: claims.tenantId, roles: claims.roles })
+  return new SignJWT({ tenantId: claims.tenantId, roles: claims.roles, sid: claims.sid })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(claims.sub)
     .setIssuer(ISSUER)
@@ -24,9 +26,28 @@ export async function signToken(claims: TokenClaims, expiresIn = "12h"): Promise
 
 export async function verifyToken(token: string): Promise<TokenClaims> {
   const { payload } = await jwtVerify(token, secret, { issuer: ISSUER, algorithms: ["HS256"] });
-  // API client tokens are only valid on /v1.
-  if (payload.typ === "api") throw new Error("API tokens cannot be used here");
-  return { sub: payload.sub!, tenantId: (payload.tenantId as string | null) ?? null, roles: (payload.roles as Role[]) ?? [] };
+  // API client tokens (/v1) and half-finished two-factor sign-ins are not sessions.
+  if (payload.typ !== undefined) throw new Error("This token cannot be used here");
+  if (typeof payload.sid !== "string") throw new Error("Token has no session");
+  return { sub: payload.sub!, tenantId: (payload.tenantId as string | null) ?? null, roles: (payload.roles as Role[]) ?? [], sid: payload.sid };
+}
+
+/** Proof that the first factor (password or code) passed; exchanged for a session once the second factor checks out. */
+export async function signMfaToken(userId: string, method: string): Promise<string> {
+  return new SignJWT({ typ: "mfa", method })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(userId)
+    .setIssuer(ISSUER)
+    .setAudience("playcode-mfa")
+    .setIssuedAt()
+    .setExpirationTime("5m")
+    .sign(secret);
+}
+
+export async function verifyMfaToken(token: string): Promise<{ userId: string; method: string }> {
+  const { payload } = await jwtVerify(token, secret, { issuer: ISSUER, audience: "playcode-mfa", algorithms: ["HS256"] });
+  if (payload.typ !== "mfa") throw new Error("not a two-factor token");
+  return { userId: payload.sub!, method: String(payload.method) };
 }
 
 export interface ApiTokenClaims {

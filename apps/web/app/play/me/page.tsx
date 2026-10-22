@@ -6,6 +6,7 @@ import { DIVISION_LABELS } from "@playcode/core";
 import { signOut, useMe } from "@/components/Auth";
 import { Icon } from "@/components/Icon";
 import { PrivacyCard } from "@/components/PrivacyCard";
+import { DevicesCard } from "@/components/SecurityPanel";
 import { Bar, ErrorBox, Loading, masteryTone } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 
@@ -123,6 +124,8 @@ export default function MePage() {
       <WhatsAppSettings />
 
       <PrivacyCard />
+
+      <DevicesCard />
 
       <div className="card stack">
         <h2>Placement readiness</h2>

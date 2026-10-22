@@ -5,6 +5,7 @@ import {
   assessments,
   attemptSnapshots,
   auditLogs,
+  authSessions,
   certificates,
   coachHints,
   consents,
@@ -15,6 +16,7 @@ import {
   erasureRequests,
   integrityEvents,
   leagueMembers,
+  loginCodes,
   ltiAccounts,
   ltiScores,
   memberships,
@@ -202,6 +204,8 @@ export async function resolveErasure(
     await tx.delete(coachHints).where(eq(coachHints.userId, user.id));
     await tx.delete(ltiScores).where(eq(ltiScores.userId, user.id));
     await tx.delete(ltiAccounts).where(eq(ltiAccounts.userId, user.id));
+    await tx.delete(authSessions).where(eq(authSessions.userId, user.id));
+    await tx.delete(loginCodes).where(eq(loginCodes.userId, user.id));
     await tx.delete(certificates).where(eq(certificates.userId, user.id));
     await tx.delete(driveCandidates).where(eq(driveCandidates.userId, user.id));
     await tx.delete(playerProfiles).where(eq(playerProfiles.userId, user.id));
@@ -210,7 +214,7 @@ export async function resolveErasure(
     await tx.update(duels).set({ status: "cancelled" }).where(and(or(eq(duels.challengerId, user.id), eq(duels.opponentId, user.id)), inArray(duels.status, ["waiting", "active"])));
     await tx
       .update(users)
-      .set({ name: "Deleted user", email: `erased-${user.id}@erased.invalid`, rollNo: null, phone: null, notifyPrefs: {}, passwordHash: "!", status: "erased", lastActiveAt: null })
+      .set({ name: "Deleted user", email: `erased-${user.id}@erased.invalid`, rollNo: null, phone: null, notifyPrefs: {}, passwordHash: "!", status: "erased", lastActiveAt: null, totpSecretEnc: null, totpPendingEnc: null, recoveryCodes: [] })
       .where(eq(users.id, user.id));
     // Audit entries stay (they record who did what) but lose the email address.
     await tx.execute(sql`update ${auditLogs} set data = data - 'email' where data->>'email' = ${user.email}`);

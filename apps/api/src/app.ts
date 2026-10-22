@@ -8,6 +8,7 @@ import { env } from "./env";
 import { verifyToken } from "./lib/auth";
 import { HttpError } from "./lib/errors";
 import { startFanout, stopFanout, subscribe } from "./lib/realtime";
+import { accountRoutes } from "./routes/account";
 import { adminRoutes } from "./routes/admin";
 import { assessmentConsoleRoutes } from "./routes/assessments-console";
 import { authRoutes } from "./routes/auth";
@@ -103,5 +104,6 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(reportRoutes);
   await app.register(samlRoutes);
   await app.register(billingRoutes);
+  await app.register(accountRoutes);
   return app;
 }

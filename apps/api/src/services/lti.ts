@@ -11,6 +11,7 @@ import { badRequest, forbidden, notFound } from "../lib/errors";
 import { importStudents } from "./students";
 import { assertPublicUrl } from "./webhooks";
 import { hasFeature } from "./plan";
+import { issueSession } from "./sessions";
 
 // LTI 1.3 tool: an LMS (Moodle, Canvas, Blackboard, D2L) launches PlayCode
 // assignments from inside a course, signs the student in, and receives the
@@ -220,9 +221,7 @@ export async function finishLaunch(db: Db, form: { id_token?: string; state?: st
 }
 
 async function tokenFor(db: Db, userId: string) {
-  const [user] = await db.select().from(users).where(eq(users.id, userId));
-  const roles = [...new Set((await db.select({ role: memberships.role }).from(memberships).where(eq(memberships.userId, userId))).map((r) => r.role))];
-  return signToken({ sub: userId, tenantId: user!.tenantId, roles });
+  return issueSession(db, { userId, method: "lti" });
 }
 
 async function resolveUser(db: Db, platform: Platform, u: { sub: string; email: string | null; name: string | null; instructor: boolean; now: Date }) {

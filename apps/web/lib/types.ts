@@ -23,6 +23,7 @@ export interface Me {
   switched: boolean;
   permissions: string[];
   home: "console" | "play";
+  mfaSetupRequired?: boolean;
 }
 
 export interface ProfileSummary {

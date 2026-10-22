@@ -12,6 +12,8 @@ export interface AuthContext {
   userId: string;
   tenantId: string | null;
   roles: Role[];
+  /** The sign-in session behind the request (absent for jobs acting as a user). */
+  sessionId?: string;
 }
 
 export async function tenantUnits(db: DbOrTx, tenantId: string) {

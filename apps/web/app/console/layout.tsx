@@ -65,7 +65,9 @@ function Side() {
         );
       })}
       <div style={{ marginTop: "auto", padding: "16px 12px 0" }} className="small">
-        <div style={{ fontWeight: 600 }}>{me.user.name}</div>
+        <Link href="/console/account" style={{ fontWeight: 600, color: "inherit" }}>
+          {me.user.name}
+        </Link>
         <div className="muted">{me.user.roles.map((r) => ROLE_LABELS[r]).join(", ")}</div>
         <div className="muted">{me.tenant?.name}</div>
         <button className="btn small ghost" style={{ paddingLeft: 0, marginTop: 8 }} onClick={signOut}>

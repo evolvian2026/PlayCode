@@ -61,7 +61,7 @@ export function whatsappConfigured(): boolean {
  * approved in WhatsApp Manager under the same names (playcode_<template>),
  * with two body parameters: the title and the message.
  */
-async function sendWhatsApp(phone: string, template: string, params: string[], fetchImpl: typeof fetch = fetch): Promise<void> {
+export async function sendWhatsApp(phone: string, template: string, params: string[], fetchImpl: typeof fetch = fetch): Promise<void> {
   const res = await fetchImpl(`https://graph.facebook.com/v20.0/${env.WHATSAPP_PHONE_ID}/messages`, {
     method: "POST",
     headers: { authorization: `Bearer ${env.WHATSAPP_TOKEN}`, "content-type": "application/json" },

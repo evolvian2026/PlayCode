@@ -142,6 +142,35 @@ function SsoSettings() {
   );
 }
 
+function SecuritySettings() {
+  const { data, error, reload, setData } = useApi<{ requireStaffMfa: boolean; staff: number; staffWithTwoFactor: number }>("/console/security");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  if (error) return <ErrorBox message={error.message} onRetry={reload} />;
+  if (!data) return null;
+  async function toggle(requireStaffMfa: boolean) {
+    setSaveError(null);
+    try {
+      await api("/console/security", { method: "PUT", body: { requireStaffMfa } });
+      setData({ ...data!, requireStaffMfa });
+    } catch (e) {
+      setSaveError(errorMessage(e));
+    }
+  }
+  return (
+    <div className="card stack">
+      <h2 style={{ margin: 0 }}>Sign-in security</h2>
+      <p className="small muted" style={{ margin: 0 }}>
+        {data.staffWithTwoFactor} of {data.staff} staff use two-factor sign-in. Set it up for yourself from <a href="/console/account">your account</a>.
+      </p>
+      <label>
+        <input type="checkbox" checked={data.requireStaffMfa} onChange={(e) => toggle(e.target.checked)} style={{ width: "auto", marginRight: 6 }} />
+        Require two-factor sign-in for all staff (staff without it are asked to set it up before they can use the console; students are not affected)
+      </label>
+      {saveError && <ErrorBox message={saveError} />}
+    </div>
+  );
+}
+
 function AiSettings() {
   const { data, error, reload, setData } = useApi<{ configured: boolean; hints: boolean; proctoring: boolean }>("/console/ai");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -595,6 +624,7 @@ export default function Settings() {
           {loginLink}
         </code>
       </div>
+      <SecuritySettings />
       <AiSettings />
       <SsoSettings />
       <SamlSettings />

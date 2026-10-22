@@ -36,6 +36,8 @@ export const tenants = pgTable("tenants", {
 
 export interface TenantSettings {
   weekendsOptional?: boolean;
+  /** Staff must set up two-factor sign-in before using the console. */
+  requireStaffMfa?: boolean;
   nudges?: boolean;
   /** AI coach hints in practice (on by default when AI is configured). */
   aiHints?: boolean;
@@ -77,6 +79,12 @@ export const users = pgTable(
     phone: text("phone"),
     notifyPrefs: jsonb("notify_prefs").$type<{ whatsapp?: boolean }>().notNull().default({}),
     status: text("status").$type<"active" | "disabled" | "erased">().notNull().default("active"),
+    /** Two-factor sign-in (TOTP): the active secret, a secret being set up, and the last time step used (no replays). */
+    totpSecretEnc: text("totp_secret_enc"),
+    totpPendingEnc: text("totp_pending_enc"),
+    totpLastStep: integer("totp_last_step"),
+    /** SHA-256 hashes of unused recovery codes. */
+    recoveryCodes: jsonb("recovery_codes").$type<string[]>().notNull().default([]),
     lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
@@ -999,4 +1007,38 @@ export const invoices = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("invoices_tenant_period_uq").on(t.tenantId, t.period)],
+);
+
+// ---------- Sign-in sessions and one-time codes ----------
+
+/** One signed-in device or browser. Tokens carry its id, so it can be signed out remotely. */
+export const authSessions = pgTable(
+  "auth_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    method: text("method").$type<"password" | "otp" | "sso" | "saml" | "lti" | "apply">().notNull(),
+    userAgent: text("user_agent"),
+    ip: text("ip"),
+    createdAt: createdAt(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [index("auth_sessions_user_idx").on(t.userId, t.createdAt)],
+);
+
+/** Passwordless sign-in codes sent by email or WhatsApp (hashed; single use; few attempts). */
+export const loginCodes = pgTable(
+  "login_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash").notNull(),
+    channel: text("channel").$type<"email" | "whatsapp">().notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("login_codes_user_idx").on(t.userId, t.createdAt)],
 );

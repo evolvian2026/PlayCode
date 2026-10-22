@@ -42,17 +42,57 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(ssoError);
   const [busy, setBusy] = useState(false);
+  // password -> (optional) two-factor code; or email -> sign-in code -> (optional) two-factor code
+  const [step, setStep] = useState<"password" | "codeRequest" | "code" | "mfa">("password");
+  const [code, setCode] = useState("");
+  const [mfaToken, setMfaToken] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [channels, setChannels] = useState<{ email: boolean; whatsapp: boolean }>({ email: false, whatsapp: false });
+  useEffect(() => {
+    void api<{ email: boolean; whatsapp: boolean }>("/auth/otp/channels").then(setChannels).catch(() => {});
+  }, []);
 
-  async function signIn(e?: FormEvent, override?: { email: string; password: string }) {
-    e?.preventDefault();
+  type SignInResult = (Me & { token: string }) | { mfaRequired: true; mfaToken: string };
+
+  function finish(res: SignInResult) {
+    if ("mfaRequired" in res) {
+      setMfaToken(res.mfaToken);
+      setCode("");
+      setStep("mfa");
+      setBusy(false);
+      return;
+    }
+    setToken(res.token);
+    router.replace(res.home === "console" ? "/console" : "/play");
+  }
+
+  async function call(path: string, body: unknown) {
     setBusy(true);
     setError(null);
     try {
-      const res = await api<Me & { token: string }>("/auth/login", { body: override ?? { email, password } });
-      setToken(res.token);
-      router.replace(res.home === "console" ? "/console" : "/play");
+      finish(await api<SignInResult>(path, { body }));
     } catch (err) {
       setError(errorMessage(err));
+      setBusy(false);
+    }
+  }
+
+  async function signIn(e?: FormEvent, override?: { email: string; password: string }) {
+    e?.preventDefault();
+    await call("/auth/login", override ?? { email, password });
+  }
+
+  async function sendCode(channel: "email" | "whatsapp") {
+    setBusy(true);
+    setError(null);
+    try {
+      await api("/auth/otp/request", { body: { email, channel } });
+      setNotice(channel === "whatsapp" ? "If this email has an account with a phone number, a code is on its way to WhatsApp." : "If this email has an account, a code is on its way. Check your inbox.");
+      setCode("");
+      setStep("code");
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
       setBusy(false);
     }
   }
@@ -66,7 +106,7 @@ function LoginForm() {
           <div className="muted small">{brand ? brand.tenantName : "Level up your coding for placements"}</div>
         </div>
       </div>
-      {brand?.sso && (
+      {brand?.sso && step === "password" && (
         <div className="card stack" style={{ marginBottom: 16 }}>
           <a className="btn primary big" href={`${API_URL}/auth/sso/start?org=${encodeURIComponent(brand.slug)}`}>
             {SSO_LABEL[brand.sso.provider]}
@@ -76,20 +116,71 @@ function LoginForm() {
           </div>
         </div>
       )}
-      <form className="card stack" onSubmit={signIn}>
-        <div>
-          <label htmlFor="email">Email</label>
-          <input id="email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </div>
-        <div>
-          <label htmlFor="password">Password</label>
-          <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </div>
-        {error && <div className="error" role="alert">{error}</div>}
-        <button className="btn primary big" disabled={busy}>
-          {busy ? "Signing in..." : "Sign in"}
-        </button>
-      </form>
+      {step === "password" && (
+        <form className="card stack" onSubmit={signIn}>
+          <div>
+            <label htmlFor="email">Email</label>
+            <input id="email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </div>
+          <div>
+            <label htmlFor="password">Password</label>
+            <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </div>
+          {error && <div className="error" role="alert">{error}</div>}
+          <button className="btn primary big" disabled={busy}>
+            {busy ? "Signing in..." : "Sign in"}
+          </button>
+          {(channels.email || channels.whatsapp) && (
+            <button type="button" className="btn ghost small" onClick={() => { setError(null); setStep("codeRequest"); }}>
+              Forgot your password? Get a sign-in code instead
+            </button>
+          )}
+        </form>
+      )}
+      {step === "codeRequest" && (
+        <form className="card stack" onSubmit={(e) => { e.preventDefault(); void sendCode("email"); }}>
+          <div>
+            <label htmlFor="otp-email">Email</label>
+            <input id="otp-email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </div>
+          {error && <div className="error" role="alert">{error}</div>}
+          {channels.email && (
+            <button className="btn primary big" disabled={busy || !email}>
+              Email me a code
+            </button>
+          )}
+          {channels.whatsapp && (
+            <button type="button" className="btn big" disabled={busy || !email} onClick={() => sendCode("whatsapp")}>
+              Send the code to my WhatsApp
+            </button>
+          )}
+          <button type="button" className="btn ghost small" onClick={() => setStep("password")}>
+            Back to password sign-in
+          </button>
+        </form>
+      )}
+      {(step === "code" || step === "mfa") && (
+        <form
+          className="card stack"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void (step === "code" ? call("/auth/otp/verify", { email, code }) : call("/auth/login/2fa", { mfaToken, code }));
+          }}
+        >
+          {step === "code" ? notice && <div className="small muted">{notice}</div> : <div className="small muted">Open your authenticator app and enter the 6-digit code for PlayCode. Lost your phone? Use a recovery code.</div>}
+          <div>
+            <label htmlFor="code">{step === "code" ? "Sign-in code" : "Two-factor code"}</label>
+            <input id="code" inputMode={step === "code" ? "numeric" : "text"} autoComplete="one-time-code" maxLength={step === "code" ? 6 : 20} value={code} onChange={(e) => setCode(e.target.value.trim())} required autoFocus />
+          </div>
+          {error && <div className="error" role="alert">{error}</div>}
+          <button className="btn primary big" disabled={busy || code.length < 6}>
+            {busy ? "Checking..." : "Continue"}
+          </button>
+          <button type="button" className="btn ghost small" onClick={() => { setStep("password"); setError(null); }}>
+            Start again
+          </button>
+        </form>
+      )}
       {SHOW_DEMO && !brand && (
       <div className="card stack" style={{ marginTop: 16 }}>
         <div className="muted small">Demo accounts (password playcode123)</div>

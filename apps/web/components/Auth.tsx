@@ -14,7 +14,9 @@ export function useMe(): Me {
   return me;
 }
 
-export function signOut() {
+export async function signOut() {
+  // Revoke this device's session on the server too, so the token is dead even if it was copied.
+  await api("/auth/logout", { body: {} }).catch(() => {});
   setToken(null);
   window.location.href = "/login";
 }
@@ -41,7 +43,11 @@ export function AuthGate({ area, children }: { area: "play" | "console"; childre
         applyBranding(m.branding);
         if (area === "play" && !m.permissions.includes("practice.play")) router.replace("/console");
         else if (area === "console" && m.home !== "console") router.replace("/play");
-        else setMe(m);
+        else {
+          // Until required two-factor is set up, staff can only reach the security page.
+          if (area === "console" && m.mfaSetupRequired && window.location.pathname !== "/console/account") router.replace("/console/account");
+          setMe(m);
+        }
       })
       .catch(() => router.replace("/login"));
   }, [area, router]);

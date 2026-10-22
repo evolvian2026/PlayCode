@@ -11,6 +11,7 @@ import { badRequest, forbidden, HttpError, notFound } from "../lib/errors";
 import { importStudents } from "./students";
 import { assertPublicUrl } from "./webhooks";
 import { hasFeature } from "./plan";
+import { issueSession } from "./sessions";
 
 // OpenID Connect sign-in (Google Workspace, Microsoft Entra ID, or any OIDC
 // provider), authorization-code flow with PKCE. The login state (nonce, PKCE
@@ -167,7 +168,6 @@ export async function signInByEmail(
     [user] = await db.select().from(users).where(eq(users.id, created.created[0]!.id));
   }
   if (user!.status !== "active") throw forbidden("Your account is disabled");
-  const roles = [...new Set((await db.select({ role: memberships.role }).from(memberships).where(eq(memberships.userId, user!.id))).map((r) => r.role))];
   await audit(db, { tenantId: args.tenantId, actorId: user!.id, action: args.via, data: { email } });
-  return signToken({ sub: user!.id, tenantId: user!.tenantId, roles });
+  return issueSession(db, { userId: user!.id, method: args.via === "saml.login" ? "saml" : "sso" });
 }
