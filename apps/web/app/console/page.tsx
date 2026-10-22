@@ -38,10 +38,11 @@ const BANDS = [
 export default function Overview() {
   const me = useMe();
   const router = useRouter();
-  const isPartner = me.tenant?.type === "partner";
+  // Partners manage colleges and companies hire; neither starts on student analytics.
+  const landing = me.tenant?.type === "partner" ? "/console/partner" : me.tenant?.type === "company" ? "/console/drives" : null;
   useEffect(() => {
-    if (isPartner) router.replace("/console/partner");
-  }, [isPartner, router]);
+    if (landing) router.replace(landing);
+  }, [landing, router]);
   const [unitId, setUnitId] = useState("");
   const q = unitId ? `?unitId=${unitId}` : "";
   const eng = useApi<Engagement>(`/console/analytics/engagement${q}`);

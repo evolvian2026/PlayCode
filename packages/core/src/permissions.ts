@@ -20,6 +20,7 @@ export const PERMISSIONS = [
   "reports.export",
   "audit.view",
   "api.manage",
+  "drives.manage",
   "practice.play",
 ] as const;
 
@@ -34,6 +35,7 @@ export const ROLES = [
   "hod",
   "faculty",
   "proctor",
+  "recruiter",
   "student",
 ] as const;
 
@@ -48,6 +50,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   hod: "Head of Department",
   faculty: "Faculty / Trainer",
   proctor: "Proctor",
+  recruiter: "Recruiter",
   student: "Student",
 };
 
@@ -98,6 +101,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "audit.view",
     "leagues.manage",
     "api.manage",
+    "drives.manage",
   ],
   tpo: [
     "users.manage",
@@ -115,6 +119,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   hod: ["content.private.manage", "content.view", "assignments.manage", "assessments.manage", "assessments.proctor", "events.manage", "nudges.send", "analytics.department", "reports.export"],
   faculty: ["content.view", "assignments.manage", "assessments.manage", "assessments.proctor", "nudges.send", "analytics.own_units", "reports.export"],
   proctor: ["assessments.proctor", "analytics.own_units"],
+  recruiter: ["drives.manage", "assessments.manage", "assessments.proctor", "analytics.institution", "content.view", "reports.export"],
   student: ["practice.play"],
 };
 

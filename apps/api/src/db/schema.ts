@@ -520,7 +520,15 @@ export const apiClients = pgTable(
   (t) => [index("api_clients_tenant_idx").on(t.tenantId)],
 );
 
-export const WEBHOOK_EVENTS = ["assignment.completed", "assessment.submitted", "assessment.results_released", "certificate.issued", "user.created"] as const;
+export const WEBHOOK_EVENTS = [
+  "assignment.completed",
+  "assessment.submitted",
+  "assessment.results_released",
+  "certificate.issued",
+  "user.created",
+  "candidate.registered",
+  "candidate.status_changed",
+] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
 export const webhooks = pgTable(
@@ -555,4 +563,44 @@ export const webhookDeliveries = pgTable(
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   },
   (t) => [index("webhook_deliveries_due_idx").on(t.status, t.nextAttemptAt), index("webhook_deliveries_hook_idx").on(t.webhookId, t.createdAt)],
+);
+
+// ---------- Hiring drives ----------
+
+export const drives = pgTable(
+  "drives",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    roleTitle: text("role_title").notNull(),
+    description: text("description").notNull().default(""),
+    /** Candidates join this org unit, which the drive's assessment targets. */
+    orgUnitId: uuid("org_unit_id").notNull().references(() => orgUnits.id),
+    assessmentId: uuid("assessment_id").notNull().references(() => assessments.id),
+    /** Public apply link code. */
+    inviteCode: text("invite_code").notNull().unique(),
+    status: text("status").$type<"open" | "closed">().notNull().default("open"),
+    cutoffPct: integer("cutoff_pct"),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("drives_tenant_idx").on(t.tenantId)],
+);
+
+export type CandidateStatus = "applied" | "shortlisted" | "rejected" | "hired";
+
+export const driveCandidates = pgTable(
+  "drive_candidates",
+  {
+    driveId: uuid("drive_id").notNull().references(() => drives.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    source: text("source").$type<"link" | "imported">().notNull(),
+    status: text("status").$type<CandidateStatus>().notNull().default("applied"),
+    college: text("college"),
+    notes: text("notes"),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.driveId, t.userId] })],
 );

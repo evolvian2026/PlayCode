@@ -9,6 +9,8 @@ import {
 import { ALL_QUESTIONS as QUESTIONS, PACKS, SKILLS } from "../content";
 import { correctResponse, wrongResponse } from "../content/responses";
 import { hashPassword } from "../lib/auth";
+import { saveAnswer, startAttempt, submitOwn } from "../services/assessments";
+import { applyToDrive, createDrive } from "../services/drives";
 import { closeLeagueWeek } from "../services/leagues";
 import { answerQuestion, startSession, type StartInput } from "../services/practice";
 import { db, pool, type Db } from "./client";
@@ -233,6 +235,46 @@ export async function seedDemo(now = new Date()): Promise<void> {
   const [sunriseBatch] = await db.insert(orgUnits).values({ tenantId: sunrise!.id, name: "CSE 2027", kind: "batch", parentId: null }).returning();
   for (let i = 0; i < 4; i++) {
     await createUser(sunrise!.id, `${FIRST[(i + 11) % FIRST.length]} ${LAST[(i + 3) % LAST.length]}`, `sunrise.student${i + 1}@sunrise.edu`, passwordHash, [{ role: "student", orgUnitId: sunriseBatch!.id }], `SEC27${String(i + 1).padStart(3, "0")}`);
+  }
+
+  // A hiring company with one drive and a few candidates who took the test.
+  const [acme] = await db.insert(tenants).values({ name: "Acme Technologies", slug: "acme", type: "company", seats: 1000, branding: { appName: "Acme Careers", primaryColor: "#1d4ed8" } }).returning();
+  const hr = await createUser(acme!.id, "Neha Kapoor (HR)", "hr@acme.dev", passwordHash, [{ role: "inst_admin", orgUnitId: null }]);
+  await createUser(acme!.id, "Vikram Shah (Recruiter)", "recruiter@acme.dev", passwordHash, [{ role: "recruiter", orgUnitId: null }]);
+  const drive = await createDrive(db, {
+    tenantId: acme!.id,
+    actorId: hr.id,
+    title: "Campus hiring 2027",
+    roleTitle: "Graduate Engineer Trainee",
+    description: "One aptitude section and one coding problem. Use any language.",
+    durationMinutes: 60,
+    openAt: new Date(now.getTime() - 2 * 86_400_000),
+    closeAt: new Date(now.getTime() + 12 * 86_400_000),
+    proctorLevel: 1,
+    cutoffPct: 50,
+    sections: [
+      { title: "Aptitude for code", skillIds: ["loops.for", "loops.while", "arrays.basics", "pseudocode.basics"], pick: 6, marks: 1, negative: 0.25 },
+      { title: "Coding", skillIds: ["coding.basics"], pick: 1, marks: 10, negative: 0 },
+    ],
+    packQuestionIds: async () => [],
+  });
+  const byIdQ = new Map(QUESTIONS.map((q) => [q.id, q]));
+  for (const [i, c] of [
+    { name: "Ishaan Bose", email: "ishaan.bose@example.com", college: "Demo Institute of Technology", right: 1 },
+    { name: "Fatima Shaikh", email: "fatima.shaikh@example.com", college: "Sunrise Engineering College", right: 0.6 },
+    { name: "Gaurav Menon", email: "gaurav.menon@example.com", college: "City College", right: -1 },
+  ].entries()) {
+    const applied = await applyToDrive(db, drive.inviteCode, { name: c.name, email: c.email, password: DEMO_PASSWORD, college: c.college }, new Date(now.getTime() - 86_400_000 + i * 3600_000));
+    if (c.right < 0) continue; // applied but has not taken the test yet
+    const userId = (await db.select().from(users).where(eq(users.email, c.email)))[0]!.id;
+    const ctx = { userId, tenantId: acme!.id, now: new Date(now.getTime() - 20 * 3600_000 + i * 3600_000) };
+    const attempt = await startAttempt(db, ctx, applied.assessmentId, `seed-device-${i}`);
+    for (const [k, q] of attempt.questions.entries()) {
+      const seedQ = byIdQ.get(q.question.id)!;
+      const right = k / attempt.questions.length < c.right;
+      await saveAnswer(db, ctx, attempt.id, { questionId: q.question.id, response: right ? correctResponse(seedQ) : wrongResponse(seedQ) });
+    }
+    await submitOwn(db, { ...ctx, now: new Date(ctx.now.getTime() + 40 * 60_000) }, attempt.id);
   }
 
   console.log(`Seeded demo institution with ${students.length} students. Password for every account: ${DEMO_PASSWORD}`);

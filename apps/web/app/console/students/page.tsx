@@ -48,7 +48,10 @@ export default function Students() {
     const header = "name,email,roll_no,section,xp,level,streak,answers_7d,service_readiness,product_readiness";
     const lines = rows.map((s) =>
       [s.name, s.email, s.rollNo ?? "", s.unitName ?? "", s.xp, s.level, s.streak, s.answersLast7Days, s.readiness.service ?? 0, s.readiness.product ?? 0]
-        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .map((v) => {
+          const text = String(v);
+          return `"${(/^[=+\-@\t\r]/.test(text) ? `'${text}` : text).replace(/"/g, '""')}"`;
+        })
         .join(","),
     );
     const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv" });

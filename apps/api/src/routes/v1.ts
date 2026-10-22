@@ -7,6 +7,7 @@ import { API_TOKEN_TTL_S, signApiToken, verifyApiToken } from "../lib/auth";
 import { safeEqual, sha256 } from "../lib/crypto";
 import { forbidden, HttpError, notFound, unauthorized } from "../lib/errors";
 import { parse } from "../lib/http";
+import { rateLimit } from "../lib/rate-limit";
 import { readinessFor, studentDetail } from "../services/analytics";
 import { createAssignment } from "../services/assignments";
 import { sessionScore } from "../services/practice";
@@ -56,6 +57,7 @@ export async function v1Routes(app: FastifyInstance) {
       body,
     );
     void grant_type;
+    rateLimit(`token:${client_id}`, 60, 60_000);
     const [client] = await db.select().from(apiClients).where(eq(apiClients.clientId, client_id));
     if (!client || client.revokedAt || !safeEqual(client.secretHash, sha256(client_secret))) {
       return reply.status(401).send({ error: "invalid_client" });

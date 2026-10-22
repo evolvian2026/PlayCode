@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { ALL_QUESTIONS as QUESTIONS } from "../src/content";
 import { correctResponse, wrongResponse } from "../src/content/responses";
 import { buildApp } from "../src/app";
+import { resetRateLimits } from "../src/lib/rate-limit";
 import { resetDatabase } from "../src/db/reset";
 import { DEMO_PASSWORD, seedDemo } from "../src/db/seed";
 import type { StudentResponse } from "@playcode/core";
@@ -18,6 +19,7 @@ export interface TestApp {
 }
 
 export async function setup(): Promise<TestApp> {
+  resetRateLimits();
   await resetDatabase();
   await seedDemo(START);
   const clock = { now: new Date(START) };

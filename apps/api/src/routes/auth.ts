@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "../db/client";
 import { memberships, tenants, users } from "../db/schema";
 import { audit } from "../lib/audit";
+import { rateLimit } from "../lib/rate-limit";
 import { checkPassword, signToken } from "../lib/auth";
 import { forbidden, notFound, unauthorized } from "../lib/errors";
 import { effectiveBranding } from "../services/branding";
@@ -51,6 +52,9 @@ async function canSwitch(userId: string, roles: Role[], homeTenantId: string | n
 export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/login", async (req) => {
     const body = parse(z.object({ email: z.string().email(), password: z.string().min(1) }), req.body);
+    // Slow down password guessing: per account and per address.
+    rateLimit(`login:${body.email.toLowerCase()}`, 10, 10 * 60_000);
+    rateLimit(`login-ip:${req.ip}`, 100, 10 * 60_000);
     const [user] = await db.select().from(users).where(eq(users.email, body.email.toLowerCase().trim()));
     // Same message for unknown email and wrong password.
     if (!user || user.status !== "active" || !(await checkPassword(body.password, user.passwordHash))) {

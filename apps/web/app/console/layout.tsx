@@ -13,6 +13,7 @@ const NAV = [
   { href: "/console/students", label: "Students", icon: "users", perm: null },
   { href: "/console/assignments", label: "Assignments", icon: "clipboard", perm: "assignments.manage" },
   { href: "/console/tests", label: "Tests", icon: "flag", perm: "assessments.proctor" },
+  { href: "/console/drives", label: "Hiring drives", icon: "users", perm: "drives.manage" },
   { href: "/console/engage", label: "Engagement", icon: "megaphone", perm: null },
   { href: "/console/batches", label: "Batches", icon: "layers", perm: null },
   { href: "/console/content", label: "Question bank", icon: "book", perm: "content.view" },

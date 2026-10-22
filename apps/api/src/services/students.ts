@@ -7,7 +7,7 @@ import { audit } from "../lib/audit";
 import { hashPassword } from "../lib/auth";
 import { badRequest } from "../lib/errors";
 import { getTenant } from "./tenant";
-import { emitAndDeliver } from "./webhooks";
+import { deliverDue, emitEvent } from "./webhooks";
 
 export interface StudentRow {
   name: string;
@@ -33,6 +33,7 @@ export async function importStudents(db: Db, args: { tenantId: string; actorId: 
     throw badRequest(`This import needs ${toCreate.length} seats but only ${Math.max(0, tenant.seats - used)} are left on your licence`);
   }
   const created: (StudentRow & { id: string; password: string })[] = [];
+  let queued = 0;
   await db.transaction(async (tx) => {
     for (const r of toCreate) {
       const password = args.defaultPassword ?? randomBytes(6).toString("base64url");
@@ -42,10 +43,12 @@ export async function importStudents(db: Db, args: { tenantId: string; actorId: 
         .returning();
       await tx.insert(memberships).values({ userId: user!.id, tenantId, orgUnitId: args.unitId, role: "student" });
       created.push({ ...r, email: r.email.toLowerCase(), id: user!.id, password });
+      // Written in the same transaction, so the event exists exactly when the account does.
+      queued += await emitEvent(tx, tenantId, "user.created", { userId: user!.id, name: r.name, email: r.email.toLowerCase(), rollNo: r.rollNo, unitId: args.unitId }, args.now);
     }
     await audit(tx, { tenantId, actorId: args.actorId, action: "students.import", target: args.unitId, data: { created: created.length } });
   });
-  for (const c of created) emitAndDeliver(db, tenantId, "user.created", { userId: c.id, name: c.name, email: c.email, rollNo: c.rollNo, unitId: args.unitId }, args.now);
+  if (queued) void deliverDue(db, args.now ?? new Date()).catch(() => {});
   return {
     created,
     skipped: rows.filter((r) => existing.has(r.email.toLowerCase())).map((r) => ({ email: r.email, reason: "already registered" })),

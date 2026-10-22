@@ -108,6 +108,8 @@ describe("public API", () => {
     const created = await t.post(api, "/v1/users", { unit_id: unitA, students: [{ name: "Api Student", email: "api.student@demo.edu", roll_no: "API1" }], default_password: "student-pass-1" });
     expect(created.body.created).toHaveLength(1);
     await deliverDue(db, t.clock.now);
+    // A background run may have claimed it first; wait for it to arrive.
+    for (let i = 0; i < 40 && !received.some((r) => r.headers["x-playcode-event"] === "user.created"); i++) await new Promise((r) => setTimeout(r, 50));
     const evt = received.find((r) => r.headers["x-playcode-event"] === "user.created");
     expect(evt).toBeTruthy();
     const [tPart, vPart] = String(evt!.headers["x-playcode-signature"]).split(",");
