@@ -110,15 +110,15 @@ export function renderReportPdf(r: ReportData, opts: { compress?: boolean } = {}
     ["Students", String(e.totalStudents)],
     ["Active this week", `${e.activeLast7Days} (${e.weeklyActivePct}%)`],
     ["Answers this week", String(e.answersLast7Days)],
-    ["Answers per active student", String(e.answersPerActiveStudent)],
+    ["Answers per active learner", String(e.answersPerActiveStudent)],
   ];
   const boxW = width / 4;
   const top = doc.y + 16;
   kpis.forEach(([label, value], i) => {
     const x = 48 + i * boxW;
     doc.roundedRect(x, top, boxW - 8, 58, 6).lineWidth(0.8).strokeColor("#e4e2ee").stroke();
-    doc.font("Helvetica").fontSize(8.5).fillColor(muted).text(label, x + 10, top + 10, { width: boxW - 28 });
-    doc.font("Helvetica-Bold").fontSize(16).fillColor(ink).text(value, x + 10, top + 30, { width: boxW - 28 });
+    doc.font("Helvetica").fontSize(8.5).fillColor(muted).text(label, x + 10, top + 10, { width: boxW - 20, lineBreak: false, ellipsis: true });
+    doc.font("Helvetica-Bold").fontSize(16).fillColor(ink).text(value, x + 10, top + 34, { width: boxW - 28 });
   });
   doc.x = 48;
   doc.y = top + 70;

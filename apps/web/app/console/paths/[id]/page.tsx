@@ -21,8 +21,8 @@ interface Detail {
 
 function Cell({ s }: { s: StepProgress }) {
   if (s.state === "done") return <span className="pill good">Done</span>;
-  const text = s.value === null ? "-" : `${s.value}%`;
-  return <span className={s.overdue ? "pill bad" : s.state === "locked" ? "muted small" : "pill"}>{s.overdue ? `${text} late` : text}</span>;
+  const text = s.value === null ? (s.overdue ? "Not started" : "-") : `${s.value}%`;
+  return <span className={s.overdue ? "pill bad" : s.state === "locked" ? "muted small" : "pill"}>{s.overdue ? `${text}, late` : text}</span>;
 }
 
 export default function PathDetail() {

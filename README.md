@@ -6,7 +6,7 @@ the bug, reorder the lines and more), wrapped in XP, streaks, hearts, leagues
 and missions. Colleges get assignments, analytics and a readiness score per
 student.
 
-This covers Phases 1 to 3 of the product and architecture spec, plus Phase 4, which closes the roadmap items they left open.
+This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which closes the roadmap items they left open) and Phase 5 (enterprise readiness and scale).
 
 ## What is in this build
 
@@ -39,6 +39,13 @@ This covers Phases 1 to 3 of the product and architecture spec, plus Phase 4, wh
 - AI drafting in the studio: Claude drafts quick question types (predict the output, spot the bug, complexity, trace, pseudocode, fill the blank, which snippet) for a chosen skill, language and difficulty; each draft is checked by running it before the author reviews and publishes.
 - Proctoring level 3: every webcam snapshot is reviewed by AI for no face, more than one face, a phone or a second person. Findings become integrity events with the photo as evidence and raise the risk score; proctors see flagged photos first. Nothing is decided automatically.
 - LTI 1.3: Moodle, Canvas or any LTI 1.3 LMS launches PlayCode assignments from inside a course (students are signed in and, optionally, created in a chosen batch), and the score goes to the course gradebook through Assignment and Grade Services. Teachers connect each course activity to an assignment from the console.
+
+**Phase 5 additions**
+- Learning paths: ordered skills to master and missions to pass, with deadlines, for a batch (placement tracks) or a company team (onboarding and upskilling). Progress comes from normal practice, steps can unlock in order, managers see a progress grid with who is behind (CSV export), and finishing a path earns a verifiable certificate and a `path.completed` webhook.
+- Weekly PDF reports: activity, readiness, weakest skills, assignments, learning paths and students who need help, in the institution's branding. Download any time, or subscribe to get it by email on a chosen day and hour.
+- SAML 2.0 single sign-on alongside OpenID Connect, for ADFS, Shibboleth, Okta and similar identity providers (metadata import, published SP metadata, signed assertions required).
+- LTI deep linking: teachers pick PlayCode assignments from inside Moodle or Canvas; each becomes a course activity with a gradebook column.
+- Several API instances can run behind a load balancer: live events reach browsers on any instance (Postgres LISTEN/NOTIFY) and rate limits are shared (Postgres counters).
 
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
@@ -115,7 +122,7 @@ Scheduled jobs (run them from cron or your scheduler):
 | Job | When | Command |
 | --- | --- | --- |
 | Close league week | Mondays after midnight, tenant time | `pnpm --filter @playcode/api league:close` |
-| Nudges, notification delivery, missed snapshot reviews | Hourly (streak reminders only fire 6-9 pm local time) | `pnpm --filter @playcode/api nudges:run` |
+| Nudges, notification delivery, missed snapshot reviews, weekly report emails | Hourly (streak reminders only fire 6-9 pm local time) | `pnpm --filter @playcode/api nudges:run` |
 | Webhook and LMS grade retries | Every minute | `pnpm --filter @playcode/api webhooks:deliver` |
 
 Webhooks are sent straight away when an event happens; the job retries failures
@@ -137,7 +144,13 @@ Data erasure: approving a deletion request removes the student's practice histor
 
 AI features: set `ANTHROPIC_API_KEY` on the API. They use Claude Opus 5.5 (`AI_MODEL` in `apps/api/src/lib/ai.ts`) with server-side refusal fallback; without a key the coach, AI drafting and snapshot review are simply hidden. `AI_ENABLED=false` switches them off for the whole server, and each institution can turn the coach and the snapshot review off under Settings. Token use is recorded per institution in the `ai_usage` table. Snapshot review is the costly one: a strict test takes a photo a minute, so a 60-minute test means about 60 reviews per student.
 
-LMS (LTI 1.3): the institution admin registers the LMS under Settings (Moodle and Canvas URLs are filled in from presets) and gives the LMS admin the tool's login, launch and JWKS URLs shown there. In the LMS, enable "Assignment and Grade Services", share name and email, and open the tool in a new window (browsers block sign-in storage inside cross-site iframes). A teacher's first launch of a new activity asks which assignment it opens; alternatively set the custom parameter `assignment_id=<id>`. Students launching must be in a batch the assignment targets. PlayCode supports resource-link launches; deep linking (choosing content from the LMS) is not built.
+LMS (LTI 1.3): the institution admin registers the LMS under Settings (Moodle and Canvas URLs are filled in from presets) and gives the LMS admin the tool's login, launch and JWKS URLs shown there. In the LMS, enable "Assignment and Grade Services", share name and email, and open the tool in a new window (browsers block sign-in storage inside cross-site iframes). A teacher's first launch of a new activity asks which assignment it opens; alternatively set the custom parameter `assignment_id=<id>`. Students launching must be in a batch the assignment targets. Teachers can also add activities from the LMS's content picker (deep linking): they choose assignments in PlayCode and the LMS creates the activities and gradebook columns.
+
+SAML: under Settings, paste the identity provider's metadata (or enter its entity ID, redirect SSO URL and signing certificate) and give the IdP admin PlayCode's SP metadata URL shown there. Assertions must be signed; the email comes from the NameID (email format) or a named attribute. When SAML is on, the sign-in button uses it instead of OpenID Connect.
+
+Email: set `SMTP_URL` (for example `smtps://user:pass@smtp.example.com:465`) and `MAIL_FROM` for the weekly report emails. Without it, reports can still be downloaded.
+
+Running several API instances: put them behind a load balancer (WebSocket upgrades must be allowed); they share Postgres for live events (each instance keeps one extra LISTEN connection), rate limits, webhook and grade outboxes and SAML request ids. Run the scheduled jobs from one place only. The code-execution queue limits concurrency per instance, so size `EXECUTION_CONCURRENCY` per instance against your Judge0 capacity. `REALTIME_FANOUT=off` keeps live events within one instance.
 
 Other operations:
 
@@ -149,12 +162,12 @@ Other operations:
 
 - **Fastify instead of NestJS**: lighter for a modular monolith of this size; modules live in `apps/api/src/routes` and `services`.
 - **Leaderboards from PostgreSQL**, no Redis yet: group sizes are 30, so queries stay cheap. Add Redis with realtime duels.
-- **Email and password sign-in, plus OpenID Connect SSO**: SAML and OTP are not built. Imported students get a starting password from the import screen.
+- **Email and password sign-in, plus OpenID Connect and SAML SSO**: OTP sign-in is not built. Imported students get a starting password from the import screen.
 - **Tenant isolation in the API layer**: every query is scoped by tenant and org unit. PostgreSQL row-level security is the next hardening step.
 
-- **Single API instance assumed for live features**: the WebSocket hub and the execution queue are in-process. Running several API instances needs Redis pub/sub and a shared job queue (BullMQ/SQS).
+- **Postgres instead of Redis for cross-instance state**: live events, rate limits and outboxes all use Postgres, so there is one less service to run. At very high event volume, move the fan-out to Redis pub/sub behind the same `publish()`.
 - **Camera checks are snapshots, reviewed by AI at level 3**: there is no continuous video or in-browser face tracking.
 
 - **Sessions are checked against the account on every request**, so disabling or erasing an account signs it out at once. This costs one primary-key lookup per request.
 
-Not built yet: SAML, LTI deep linking, corporate learning and development (L&D) paths, scheduled PDF reports, and AI drafting of coding and SQL problems (these are written by hand in the studio).
+Not built yet: OTP sign-in, SAML single logout and encrypted assertions, PostgreSQL row-level security, AI drafting of coding and SQL problems (written by hand in the studio), and native mobile apps (the web app is an installable PWA).
