@@ -8,12 +8,16 @@ import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
 import { startAndOpen } from "@/lib/start";
 import type { StudentPath, StudentPathStep } from "@/lib/types";
+import { useLocale, useT } from "@/lib/i18n";
 
-const due = (s: StudentPathStep) => (s.dueAt ? new Date(s.dueAt).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : null);
+const due = (s: StudentPathStep, locale: string) => (s.dueAt ? new Date(s.dueAt).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" }) : null);
 
 function StepRow({ step, onStart, busy }: { step: StudentPathStep; onStart: () => void; busy: boolean }) {
-  const goal = step.kind === "skill" ? `Reach ${step.target}% mastery` : `Score ${step.target}% or more`;
-  const progress = step.value === null ? "not started" : step.kind === "skill" ? `${step.value}% now` : `best ${step.value}%`;
+  const t = useT();
+  const locale = useLocale();
+  const goal = t(step.kind === "skill" ? "Reach {n}% mastery" : "Score {n}% or more", { n: step.target });
+  const progress = step.value === null ? t("not started") : t(step.kind === "skill" ? "{n}% now" : "best {n}%", { n: step.value });
+  const date = due(step, locale);
   return (
     <div className="row" style={{ alignItems: "flex-start", opacity: step.state === "locked" ? 0.55 : 1 }}>
       <span className={`path-dot ${step.state}`} aria-hidden>
@@ -22,27 +26,28 @@ function StepRow({ step, onStart, busy }: { step: StudentPathStep; onStart: () =
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 600 }}>{step.title}</div>
         <div className="small muted">
-          {step.kind === "pack" ? "Mission · " : ""}
+          {step.kind === "pack" ? t("Mission · ") : ""}
           {goal} · {progress}
-          {due(step) && (
+          {date && (
             <span style={{ color: step.overdue ? "var(--bad)" : undefined }}>
               {" "}
-              · {step.overdue ? "was due" : "due"} {due(step)}
+              · {t(step.overdue ? "was due {date}" : "due {date}", { date })}
             </span>
           )}
         </div>
       </div>
       {(step.state === "current" || step.state === "open") && (
         <button className="btn primary small" disabled={busy} onClick={onStart}>
-          {step.value === null ? "Start" : "Practise"}
+          {t(step.value === null ? "Start" : "Practise")}
         </button>
       )}
-      {step.state === "locked" && <span className="small muted">Locked</span>}
+      {step.state === "locked" && <span className="small muted">{t("Locked")}</span>}
     </div>
   );
 }
 
 export default function Paths() {
+  const t = useT();
   const router = useRouter();
   const { data, error, loading, reload } = useApi<{ paths: StudentPath[] }>("/student/paths");
   const [busy, setBusy] = useState(false);
@@ -58,9 +63,9 @@ export default function Paths() {
   if (error || !data) return <ErrorBox message={error?.message ?? "Could not load"} onRetry={reload} />;
   return (
     <div className="stack">
-      <h1>Learning paths</h1>
+      <h1>{t("Learning paths")}</h1>
       {startError && <ErrorBox message={startError} />}
-      {data.paths.length === 0 && <div className="card muted">No learning paths yet. Your teachers or managers set them up.</div>}
+      {data.paths.length === 0 && <div className="card muted">{t("No learning paths yet. Your teachers or managers set them up.")}</div>}
       {data.paths.map((p) => (
         <div key={p.id} className="card stack">
           <div className="spread">
@@ -73,7 +78,7 @@ export default function Paths() {
           <Bar value={(p.done / p.steps.length) * 100} tone="good" />
           {p.certificate && (
             <Link className="pill good" href={`/verify/${p.certificate}`} style={{ alignSelf: "flex-start" }}>
-              <Icon name="award" size={14} /> Completed: view certificate
+              <Icon name="award" size={14} /> {t("Completed: view certificate")}
             </Link>
           )}
           <div className="stack" style={{ gap: 12 }}>

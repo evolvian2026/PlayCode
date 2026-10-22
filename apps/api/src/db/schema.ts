@@ -78,6 +78,8 @@ export const users = pgTable(
     /** E.164 phone number for WhatsApp nudges (optional). */
     phone: text("phone"),
     notifyPrefs: jsonb("notify_prefs").$type<{ whatsapp?: boolean }>().notNull().default({}),
+    /** Interface language: "en" or "hi". */
+    locale: text("locale").$type<"en" | "hi">().notNull().default("en"),
     status: text("status").$type<"active" | "disabled" | "erased">().notNull().default("active"),
     /** Two-factor sign-in (TOTP): the active secret, a secret being set up, and the last time step used (no replays). */
     totpSecretEnc: text("totp_secret_enc"),

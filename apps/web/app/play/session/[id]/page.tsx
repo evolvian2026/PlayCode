@@ -10,6 +10,7 @@ import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { usePlayer } from "@/lib/player-state";
 import type { AnswerResult, Evaluation, SessionView } from "@/lib/types";
+import { useT } from "@/lib/i18n";
 
 // Code drafts survive a reload or an accidental exit.
 const draftKey = (sessionId: string, questionId: string) => `playcode.draft.${sessionId}.${questionId}`;
@@ -33,6 +34,7 @@ function saveDraft(sessionId: string, questionId: string, d: Draft | null) {
 const DIFFICULTY = ["", "Easy", "Medium", "Hard"];
 
 function Summary({ session, onHome, certificate, paths }: { session: SessionView; onHome: () => void; certificate: string | null; paths: { title: string; code: string }[] }) {
+  const t = useT();
   const pct = session.total ? Math.round((session.correctCount / session.total) * 100) : 0;
   const passed = session.passed;
   return (
@@ -40,44 +42,45 @@ function Summary({ session, onHome, certificate, paths }: { session: SessionView
       <div className="hero-emoji" aria-hidden="true">
         <Icon name={passed === false ? "refresh" : "trophy"} size={64} className={passed === false ? "" : "stat-xp"} />
       </div>
-      <h1>{passed === true ? "Mission cleared!" : passed === false ? "Not this time" : "Set complete"}</h1>
+      <h1>{t(passed === true ? "Mission cleared!" : passed === false ? "Not this time" : "Set complete")}</h1>
       <p className="muted">{session.title}</p>
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <div className="card">
           <div className="kpi">
             {session.correctCount}/{session.total}
           </div>
-          <div className="muted small">correct ({pct}%)</div>
+          <div className="muted small">{t("correct ({pct}%)", { pct })}</div>
         </div>
         <div className="card">
           <div className="kpi stat-xp">+{session.xpEarned}</div>
-          <div className="muted small">XP earned</div>
+          <div className="muted small">{t("XP earned")}</div>
         </div>
       </div>
       {session.passMark !== null && (
         <p className="muted">
-          Pass mark {session.passMark}%. {passed ? "You can retry any time to improve your best score." : "Review your mistakes, then try again."}
+          {t("Pass mark {n}%.", { n: session.passMark })} {t(passed ? "You can retry any time to improve your best score." : "Review your mistakes, then try again.")}
         </p>
       )}
-      {session.answered < session.total && <p className="muted">You ran out of hearts. Review a mistake to earn one back.</p>}
+      {session.answered < session.total && <p className="muted">{t("You ran out of hearts. Review a mistake to earn one back.")}</p>}
       {paths.map((p) => (
         <Link key={p.code} href={`/verify/${p.code}`} className="btn big" style={{ borderColor: "var(--good)" }}>
-          <Icon name="award" /> Path complete: {p.title}. View certificate
+          <Icon name="award" /> {t("Path complete: {title}. View certificate", { title: p.title })}
         </Link>
       ))}
       {certificate && (
         <Link href={`/verify/${certificate}`} className="btn big" style={{ borderColor: "var(--accent)" }}>
-          <Icon name="award" /> View your certificate
+          <Icon name="award" /> {t("View your certificate")}
         </Link>
       )}
       <button className="btn primary big" onClick={onHome}>
-        Continue
+        {t("Continue")}
       </button>
     </div>
   );
 }
 
 export default function SessionPlayer() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { setProfile, profile } = usePlayer();
@@ -214,7 +217,7 @@ export default function SessionPlayer() {
         </div>
       )}
       <div className="row">
-        <button className="btn ghost small" onClick={exit} aria-label="Leave session">
+        <button className="btn ghost small" onClick={exit} aria-label={t("Leave session")}>
           <Icon name="x" />
         </button>
         <div style={{ flex: 1 }}>
@@ -228,9 +231,9 @@ export default function SessionPlayer() {
       </div>
 
       <div className="row wrap" style={{ gap: 6 }}>
-        <span className="pill accent">{question.typeLabel}</span>
+        <span className="pill accent">{t(question.typeLabel)}</span>
         <span className="pill">{question.body.language === "pseudocode" ? "Pseudocode" : question.body.language.toUpperCase()}</span>
-        <span className="pill">{DIFFICULTY[question.difficulty]}</span>
+        <span className="pill">{t(DIFFICULTY[question.difficulty]!)}</span>
         <span className="muted small" style={{ marginLeft: "auto" }}>
           {session.answered + 1} / {session.total}
         </span>
@@ -243,13 +246,13 @@ export default function SessionPlayer() {
 
       <QuestionInput question={question} draft={draft} onChange={updateDraft} onSubmit={submit} answer={result?.answer ?? null} />
 
-      {runResult && !result && <EvaluationView evaluation={runResult} title={runResult.kind === "code" ? "Sample tests" : "Your query's result"} />}
+      {runResult && !result && <EvaluationView evaluation={runResult} title={t(runResult.kind === "code" ? "Sample tests" : "Your query's result")} />}
 
       {hints.map((h, i) => (
         <div key={i} className="card tight row" style={{ background: h.coach ? "var(--accent-soft)" : "var(--warn-soft)", borderColor: "transparent", alignItems: "flex-start" }}>
           <Icon name={h.coach ? "spark" : "bulb"} className={h.coach ? "" : "stat-xp"} />
           <span style={{ whiteSpace: "pre-line" }}>
-            {h.coach && <strong>Coach: </strong>}
+            {h.coach && <strong>{t("Coach:")} </strong>}
             {h.text.split("`").map((part, j) => (j % 2 ? <code key={j} className="inline-code">{part}</code> : part))}
           </span>
         </div>
@@ -261,14 +264,14 @@ export default function SessionPlayer() {
         <div className={`feedback stack ${result.correct ? "right" : "wrong"}`} role="status" aria-live="polite">
           <div className="spread">
             <h2 style={{ margin: 0, color: result.correct ? "var(--good)" : "var(--bad)" }}>
-              <Icon name={result.correct ? "check" : "x"} /> {result.correct ? "Correct!" : "Not quite"}
+              <Icon name={result.correct ? "check" : "x"} /> {t(result.correct ? "Correct!" : "Not quite")}
             </h2>
             {result.xp > 0 && <span className="pill" style={{ color: "var(--xp)" }}>+{result.xp} XP</span>}
           </div>
-          {result.evaluation && <EvaluationView evaluation={result.evaluation} title={result.evaluation.kind === "code" ? "All tests" : "Your query's result"} />}
+          {result.evaluation && <EvaluationView evaluation={result.evaluation} title={t(result.evaluation.kind === "code" ? "All tests" : "Your query's result")} />}
           {!result.correct && (
             <div>
-              <div className="small muted">{executes ? "Model solution" : "Correct answer"}</div>
+              <div className="small muted">{t(executes ? "Model solution" : "Correct answer")}</div>
               <pre>{result.correctAnswer}</pre>
             </div>
           )}
@@ -283,35 +286,35 @@ export default function SessionPlayer() {
             </div>
           )}
           <button className="btn primary big" onClick={next} autoFocus>
-            {result.session.finished ? "See results" : "Continue"}
+            {t(result.session.finished ? "See results" : "Continue")}
           </button>
         </div>
       ) : (
         <div className="stack">
           {executes && (
             <button className="btn big" disabled={!response || running || busy} onClick={run}>
-              {running ? "Running..." : draft.kind === "code" ? "Run sample tests" : "Run query"}
+              {t(running ? "Running..." : draft.kind === "code" ? "Run sample tests" : "Run query")}
             </button>
           )}
           <button className="btn primary big" disabled={!response || busy || running} onClick={submit}>
-            {busy ? (executes ? "Running all tests..." : "Checking...") : executes ? "Submit" : "Check"}
+            {t(busy ? (executes ? "Running all tests..." : "Checking...") : executes ? "Submit" : "Check")}
           </button>
           <div className="row wrap" style={{ justifyContent: "center", gap: 4 }}>
             {hintsLeft > 0 && (
               <button className="btn ghost small" onClick={hint}>
-                <Icon name="bulb" size={16} /> Use a hint (costs some XP)
+                <Icon name="bulb" size={16} /> {t("Use a hint (costs some XP)")}
               </button>
             )}
             {coach.data?.available && coachLeft > 0 && (
               <button className="btn ghost small" onClick={askCoach} disabled={coaching}>
-                <Icon name="spark" size={16} /> {coaching ? "Coach is thinking..." : executes ? "Ask the coach about my code" : "Ask the AI coach (costs some XP)"}
+                <Icon name="spark" size={16} /> {t(coaching ? "Coach is thinking..." : executes ? "Ask the coach about my code" : "Ask the AI coach (costs some XP)")}
               </button>
             )}
           </div>
         </div>
       )}
       <Link href="/play" className="small muted center">
-        Save and exit
+        {t("Save and exit")}
       </Link>
     </div>
   );

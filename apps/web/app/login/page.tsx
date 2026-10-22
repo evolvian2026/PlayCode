@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { api, API_URL, errorMessage, setToken } from "@/lib/api";
 import { applyBranding, logoSrc } from "@/lib/branding";
+import { storedLocale, translate, type Locale } from "@/lib/i18n";
 import type { Me, PublicBranding, SsoProvider } from "@/lib/types";
 
 // Quick sign-in buttons for the seeded demo. Set NEXT_PUBLIC_DEMO_LOGINS=false in real deployments.
@@ -29,6 +30,14 @@ function LoginForm() {
   const org = params.get("org");
   const ssoError = params.get("sso_error");
   const [brand, setBrand] = useState<PublicBranding | null>(null);
+  // The language picked on this device before; read after mount so the server render matches.
+  const [locale, setLocale] = useState<Locale>("en");
+  useEffect(() => {
+    const l = storedLocale();
+    setLocale(l);
+    document.documentElement.lang = l;
+  }, []);
+  const t = (text: string) => translate(locale, text);
   useEffect(() => {
     if (!org) return;
     api<PublicBranding>(`/public/branding/${encodeURIComponent(org)}`)
@@ -87,7 +96,7 @@ function LoginForm() {
     setError(null);
     try {
       await api("/auth/otp/request", { body: { email, channel } });
-      setNotice(channel === "whatsapp" ? "If this email has an account with a phone number, a code is on its way to WhatsApp." : "If this email has an account, a code is on its way. Check your inbox.");
+      setNotice(t(channel === "whatsapp" ? "If this email has an account with a phone number, a code is on its way to WhatsApp." : "If this email has an account, a code is on its way. Check your inbox."));
       setCode("");
       setStep("code");
     } catch (err) {
@@ -103,36 +112,36 @@ function LoginForm() {
         <img src={logoSrc(brand)} alt="" width={40} height={40} style={{ objectFit: "contain" }} />
         <div>
           <h1 style={{ margin: 0 }}>{brand?.appName ?? "PlayCode"}</h1>
-          <div className="muted small">{brand ? brand.tenantName : "Level up your coding for placements"}</div>
+          <div className="muted small">{brand ? brand.tenantName : t("Level up your coding for placements")}</div>
         </div>
       </div>
       {brand?.sso && step === "password" && (
         <div className="card stack" style={{ marginBottom: 16 }}>
           <a className="btn primary big" href={`${API_URL}/auth/sso/start?org=${encodeURIComponent(brand.slug)}`}>
-            {SSO_LABEL[brand.sso.provider]}
+            {t(SSO_LABEL[brand.sso.provider])}
           </a>
           <div className="muted small" style={{ textAlign: "center" }}>
-            or sign in with your PlayCode password below
+            {t("or sign in with your PlayCode password below")}
           </div>
         </div>
       )}
       {step === "password" && (
         <form className="card stack" onSubmit={signIn}>
           <div>
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">{t("Email")}</label>
             <input id="email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </div>
           <div>
-            <label htmlFor="password">Password</label>
+            <label htmlFor="password">{t("Password")}</label>
             <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
           {error && <div className="error" role="alert">{error}</div>}
           <button className="btn primary big" disabled={busy}>
-            {busy ? "Signing in..." : "Sign in"}
+            {busy ? t("Signing in...") : t("Sign in")}
           </button>
           {(channels.email || channels.whatsapp) && (
             <button type="button" className="btn ghost small" onClick={() => { setError(null); setStep("codeRequest"); }}>
-              Forgot your password? Get a sign-in code instead
+              {t("Forgot your password? Get a sign-in code instead")}
             </button>
           )}
         </form>
@@ -140,22 +149,22 @@ function LoginForm() {
       {step === "codeRequest" && (
         <form className="card stack" onSubmit={(e) => { e.preventDefault(); void sendCode("email"); }}>
           <div>
-            <label htmlFor="otp-email">Email</label>
+            <label htmlFor="otp-email">{t("Email")}</label>
             <input id="otp-email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </div>
           {error && <div className="error" role="alert">{error}</div>}
           {channels.email && (
             <button className="btn primary big" disabled={busy || !email}>
-              Email me a code
+              {t("Email me a code")}
             </button>
           )}
           {channels.whatsapp && (
             <button type="button" className="btn big" disabled={busy || !email} onClick={() => sendCode("whatsapp")}>
-              Send the code to my WhatsApp
+              {t("Send the code to my WhatsApp")}
             </button>
           )}
           <button type="button" className="btn ghost small" onClick={() => setStep("password")}>
-            Back to password sign-in
+            {t("Back to password sign-in")}
           </button>
         </form>
       )}
@@ -167,17 +176,17 @@ function LoginForm() {
             void (step === "code" ? call("/auth/otp/verify", { email, code }) : call("/auth/login/2fa", { mfaToken, code }));
           }}
         >
-          {step === "code" ? notice && <div className="small muted">{notice}</div> : <div className="small muted">Open your authenticator app and enter the 6-digit code for PlayCode. Lost your phone? Use a recovery code.</div>}
+          {step === "code" ? notice && <div className="small muted">{notice}</div> : <div className="small muted">{t("Open your authenticator app and enter the 6-digit code for PlayCode. Lost your phone? Use a recovery code.")}</div>}
           <div>
-            <label htmlFor="code">{step === "code" ? "Sign-in code" : "Two-factor code"}</label>
+            <label htmlFor="code">{t(step === "code" ? "Sign-in code" : "Two-factor code")}</label>
             <input id="code" inputMode={step === "code" ? "numeric" : "text"} autoComplete="one-time-code" maxLength={step === "code" ? 6 : 20} value={code} onChange={(e) => setCode(e.target.value.trim())} required autoFocus />
           </div>
           {error && <div className="error" role="alert">{error}</div>}
           <button className="btn primary big" disabled={busy || code.length < 6}>
-            {busy ? "Checking..." : "Continue"}
+            {busy ? t("Checking...") : t("Continue")}
           </button>
           <button type="button" className="btn ghost small" onClick={() => { setStep("password"); setError(null); }}>
-            Start again
+            {t("Start again")}
           </button>
         </form>
       )}

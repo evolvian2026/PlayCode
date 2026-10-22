@@ -139,18 +139,19 @@ export async function engageRoutes(app: FastifyInstance) {
   app.get("/student/notifications", { preHandler: requirePermission("practice.play") }, async (req) => inbox(db, req.auth.userId));
   app.post("/student/notifications/read", { preHandler: requirePermission("practice.play") }, async (req) => markRead(db, req.auth.userId, app.now()));
   app.get("/student/settings", { preHandler: requirePermission("practice.play") }, async (req) => {
-    const [u] = await db.select({ phone: users.phone, prefs: users.notifyPrefs }).from(users).where(eq(users.id, req.auth.userId));
-    return { phone: u?.phone ?? null, whatsapp: u?.prefs.whatsapp !== false };
+    const [u] = await db.select({ phone: users.phone, prefs: users.notifyPrefs, locale: users.locale }).from(users).where(eq(users.id, req.auth.userId));
+    return { phone: u?.phone ?? null, whatsapp: u?.prefs.whatsapp !== false, locale: u?.locale ?? "en" };
   });
   app.put("/student/settings", { preHandler: requirePermission("practice.play") }, async (req) => {
-    const body = parse(z.object({ phone: z.string().regex(/^\+?\d[\d\s-]{8,16}$/).nullable().optional(), whatsapp: z.boolean().optional() }), req.body);
+    const body = parse(z.object({ phone: z.string().regex(/^\+?\d[\d\s-]{8,16}$/).nullable().optional(), whatsapp: z.boolean().optional(), locale: z.enum(["en", "hi"]).optional() }), req.body);
     const set: Partial<typeof users.$inferInsert> = {};
     if (body.phone !== undefined) set.phone = body.phone ? body.phone.replace(/[^\d+]/g, "") : null;
     if (body.whatsapp !== undefined) set.notifyPrefs = { whatsapp: body.whatsapp };
+    if (body.locale) set.locale = body.locale;
     if (Object.keys(set).length) await db.update(users).set(set).where(eq(users.id, req.auth.userId));
     if (body.whatsapp !== undefined) await recordConsent(db, { tenantId: req.auth.tenantId, userId: req.auth.userId, purpose: "whatsapp", granted: body.whatsapp, source: "settings", now: app.now() });
-    const [u] = await db.select({ phone: users.phone, prefs: users.notifyPrefs }).from(users).where(eq(users.id, req.auth.userId));
-    return { phone: u?.phone ?? null, whatsapp: u?.prefs.whatsapp !== false };
+    const [u] = await db.select({ phone: users.phone, prefs: users.notifyPrefs, locale: users.locale }).from(users).where(eq(users.id, req.auth.userId));
+    return { phone: u?.phone ?? null, whatsapp: u?.prefs.whatsapp !== false, locale: u?.locale ?? "en" };
   });
 
   // ---------- Admin ----------

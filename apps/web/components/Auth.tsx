@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { api, getToken, setToken } from "@/lib/api";
 import { applyBranding } from "@/lib/branding";
 import type { Me } from "@/lib/types";
+import { LocaleProvider } from "@/lib/i18n";
 
 const MeContext = createContext<Me | null>(null);
 
@@ -53,5 +54,10 @@ export function AuthGate({ area, children }: { area: "play" | "console"; childre
   }, [area, router]);
 
   if (!me) return <p className="muted center" style={{ paddingTop: 80 }}>Loading...</p>;
-  return <MeContext.Provider value={me}>{children}</MeContext.Provider>;
+  // The student app follows the account's language; the console stays in English.
+  return (
+    <MeContext.Provider value={me}>
+      <LocaleProvider locale={area === "play" ? (me.user.locale ?? "en") : "en"}>{children}</LocaleProvider>
+    </MeContext.Provider>
+  );
 }

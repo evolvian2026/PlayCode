@@ -9,13 +9,16 @@ import { PrivacyCard } from "@/components/PrivacyCard";
 import { DevicesCard } from "@/components/SecurityPanel";
 import { Bar, ErrorBox, Loading, masteryTone } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
+import { LOCALES, storeLocale, useLocale, useT, type Locale } from "@/lib/i18n";
+import type { StudentDetail } from "@/lib/types";
 
 function Certificates() {
+  const t = useT();
   const { data } = useApi<{ certificates: { code: string; title: string; scorePct: number; issuedAt: string; revokedAt: string | null }[] }>("/student/certificates");
   if (!data?.certificates.length) return null;
   return (
     <div className="card stack">
-      <h2 style={{ margin: 0 }}>Certificates</h2>
+      <h2 style={{ margin: 0 }}>{t("Certificates")}</h2>
       {data.certificates.map((c) => (
         <div key={c.code} className="spread">
           <div>
@@ -25,18 +28,46 @@ function Certificates() {
             </div>
           </div>
           <Link href={`/verify/${c.code}`} className="btn small">
-            View
+            {t("View")}
           </Link>
         </div>
       ))}
       <p className="muted small" style={{ margin: 0 }}>
-        Share the link with recruiters: it shows the certificate and proves it is genuine.
+        {t("Share the link with recruiters: it shows the certificate and proves it is genuine.")}
       </p>
     </div>
   );
 }
 
+function LanguageCard() {
+  const t = useT();
+  const locale = useLocale();
+  const [busy, setBusy] = useState(false);
+  async function choose(next: Locale) {
+    setBusy(true);
+    await api("/student/settings", { method: "PUT", body: { locale: next } }).catch(() => {});
+    storeLocale(next);
+    window.location.reload();
+  }
+  return (
+    <div className="card stack">
+      <h2 style={{ margin: 0 }}>{t("Language")} / Language</h2>
+      <p className="muted small" style={{ margin: 0 }}>
+        {t("Choose the language for menus and buttons. Questions and code stay in English, as in placement tests.")}
+      </p>
+      <div className="row">
+        {LOCALES.map((l) => (
+          <button key={l.id} className={`btn small ${l.id === locale ? "primary" : ""}`} disabled={busy || l.id === locale} onClick={() => choose(l.id)} lang={l.id}>
+            {l.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function WhatsAppSettings() {
+  const t = useT();
   const [phone, setPhone] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
@@ -51,35 +82,35 @@ function WhatsAppSettings() {
       const r = await api<{ phone: string | null; whatsapp: boolean }>("/student/settings", { method: "PUT", body: next });
       setPhone(r.phone ?? "");
       setEnabled(r.whatsapp);
-      setMsg("Saved");
+      setMsg(t("Saved"));
     } catch (e) {
       setMsg(errorMessage(e));
     }
   }
   return (
     <div className="card stack">
-      <h2 style={{ margin: 0 }}>Reminders</h2>
+      <h2 style={{ margin: 0 }}>{t("Reminders")}</h2>
       <p className="muted small" style={{ margin: 0 }}>
-        Streak, assignment and test reminders always appear in Messages. Add a number to get them on WhatsApp too.
+        {t("Streak, assignment and test reminders always appear in Messages. Add a number to get them on WhatsApp too.")}
       </p>
       <div className="row">
         <input aria-label="WhatsApp number" placeholder="+91 98765 43210" value={phone} onChange={(e) => setPhone(e.target.value)} />
         <button className="btn small" onClick={() => save({ phone: phone.trim() || null })}>
-          Save
+          {t("Save")}
         </button>
       </div>
       <label className="row" style={{ fontWeight: 500, gap: 8 }}>
         <input type="checkbox" checked={enabled} onChange={(e) => save({ whatsapp: e.target.checked })} style={{ width: "auto" }} />
-        Send me WhatsApp reminders
+        {t("Send me WhatsApp reminders")}
       </label>
       {msg && <span className="small muted">{msg}</span>}
     </div>
   );
 }
-import type { StudentDetail } from "@/lib/types";
 
 export default function MePage() {
   const me = useMe();
+  const tr = useT();
   const { data, error, loading, reload } = useApi<StudentDetail>("/student/profile");
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? "Could not load"} onRetry={reload} />;
@@ -99,8 +130,8 @@ export default function MePage() {
             {data.user.rollNo ?? data.user.email} · {me.tenant?.name}
           </div>
         </div>
-        <button className="btn small ghost" onClick={signOut} aria-label="Sign out">
-          <Icon name="logout" /> Sign out
+        <button className="btn small ghost" onClick={signOut} aria-label={tr("Sign out")}>
+          <Icon name="logout" /> {tr("Sign out")}
         </button>
       </div>
 
@@ -111,15 +142,17 @@ export default function MePage() {
         </div>
         <div className="card tight center">
           <div className="kpi stat-streak">{data.streak}</div>
-          <div className="muted small">day streak (best {data.longestStreak})</div>
+          <div className="muted small">{tr("day streak (best {n})", { n: data.longestStreak })}</div>
         </div>
         <div className="card tight center">
           <div className="kpi">{data.correctAnswers}</div>
-          <div className="muted small">correct answers</div>
+          <div className="muted small">{tr("correct answers")}</div>
         </div>
       </div>
 
       <Certificates />
+
+      <LanguageCard />
 
       <WhatsAppSettings />
 
@@ -128,7 +161,7 @@ export default function MePage() {
       <DevicesCard />
 
       <div className="card stack">
-        <h2>Placement readiness</h2>
+        <h2>{tr("Placement readiness")}</h2>
         {data.readiness.map((r) => (
           <div key={r.id}>
             <div className="spread small">
@@ -139,17 +172,17 @@ export default function MePage() {
           </div>
         ))}
         <p className="muted small" style={{ margin: 0 }}>
-          Based on your mastery of the topics each kind of company tests. Skills you have not practised in a month count for less.
+          {tr("Based on your mastery of the topics each kind of company tests. Skills you have not practised in a month count for less.")}
         </p>
       </div>
 
       <div className="card stack">
         <div className="spread">
-          <h2 style={{ margin: 0 }}>Badges</h2>
-          <span className="muted small">{DIVISION_LABELS[data.division]} division</span>
+          <h2 style={{ margin: 0 }}>{tr("Badges")}</h2>
+          <span className="muted small">{tr("{division} division", { division: DIVISION_LABELS[data.division] })}</span>
         </div>
         {data.badges.length === 0 ? (
-          <p className="muted">Answer your first question to earn a badge.</p>
+          <p className="muted">{tr("Answer your first question to earn a badge.")}</p>
         ) : (
           <div className="row wrap">
             {data.badges.map((b) => (
@@ -163,10 +196,10 @@ export default function MePage() {
 
       <div className="card stack">
         <div className="spread">
-          <h2 style={{ margin: 0 }}>Skills</h2>
+          <h2 style={{ margin: 0 }}>{tr("Skills")}</h2>
           <span className="row small">
-            <Link href="/play/tests">Tests</Link>
-            <Link href="/play/mistakes">Mistake notebook ({data.openMistakes})</Link>
+            <Link href="/play/tests">{tr("Tests")}</Link>
+            <Link href="/play/mistakes">{tr("Mistake notebook ({n})", { n: data.openMistakes })}</Link>
           </span>
         </div>
         {[...topics.values()].map((t) => (
@@ -178,7 +211,7 @@ export default function MePage() {
               <div key={s.skillId}>
                 <div className="spread small">
                   <span>{s.name}</span>
-                  <span className="muted">{s.attempts ? `${s.mastery}% · ${s.accuracyPct}% right` : "not started"}</span>
+                  <span className="muted">{s.attempts ? tr("{mastery}% · {acc}% right", { mastery: s.mastery, acc: s.accuracyPct ?? 0 }) : tr("not started")}</span>
                 </div>
                 <Bar value={s.mastery} tone={masteryTone(s.mastery)} />
               </div>

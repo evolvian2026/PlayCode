@@ -4,6 +4,7 @@ import { useState } from "react";
 import { signOut } from "@/components/Auth";
 import { ErrorBox } from "@/components/ui";
 import { api, errorMessage, fetchObjectUrl, useApi } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 
 interface PrivacyState {
   noticeVersion: string;
@@ -20,6 +21,7 @@ const PURPOSE: Record<PrivacyState["history"][number]["purpose"], string> = {
 
 /** Consent, a copy of your data, and deletion: the rights a data principal has under the DPDP Act. */
 export function PrivacyCard() {
+  const t = useT();
   const { data, error, reload, setData } = useApi<PrivacyState>("/privacy");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export function PrivacyCard() {
 
   return (
     <div className="card stack">
-      <h2 style={{ margin: 0 }}>Privacy and your data</h2>
+      <h2 style={{ margin: 0 }}>{t("Privacy and your data")}</h2>
       {!data.noticeAccepted && (
         <div className="stack" style={{ gap: 8, padding: 12, borderRadius: 10, background: "var(--accent-soft)" }}>
           <div className="small">
@@ -71,7 +73,7 @@ export function PrivacyCard() {
       )}
       <div className="row wrap">
         <button className="btn small" disabled={busy} onClick={download}>
-          Download my data
+          {t("Download my data")}
         </button>
         {data.canRequestErasure && !pending && (
           <button className="btn small ghost" disabled={busy} onClick={() => setAsking(true)}>

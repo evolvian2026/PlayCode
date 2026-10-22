@@ -17,7 +17,7 @@ export interface PublicBranding extends Branding {
 }
 
 export interface Me {
-  user: { id: string; name: string; email: string; rollNo: string | null; tenantId: string | null; roles: Role[] };
+  user: { id: string; name: string; email: string; rollNo: string | null; tenantId: string | null; roles: Role[]; locale?: "en" | "hi" };
   tenant: { id: string; name: string; plan: string; type: "institution" | "partner" | "company"; slug: string } | null;
   branding: Branding | null;
   switched: boolean;

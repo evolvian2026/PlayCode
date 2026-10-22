@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { ErrorBox } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 
 interface Session {
   id: string;
@@ -26,6 +27,7 @@ function device(ua: string | null): string {
 }
 
 export function DevicesCard() {
+  const t = useT();
   const { data, error, reload } = useApi<{ sessions: Session[] }>("/auth/sessions");
   const [busy, setBusy] = useState(false);
   if (error) return <ErrorBox message={error.message} onRetry={reload} />;
@@ -40,10 +42,10 @@ export function DevicesCard() {
   return (
     <div className="card stack">
       <div className="spread">
-        <h2 style={{ margin: 0 }}>Signed-in devices</h2>
+        <h2 style={{ margin: 0 }}>{t("Signed-in devices")}</h2>
         {others > 0 && (
           <button className="btn small" disabled={busy} onClick={() => act("/auth/sessions/revoke-others")}>
-            Sign out other devices
+            {t("Sign out other devices")}
           </button>
         )}
       </div>
@@ -51,7 +53,7 @@ export function DevicesCard() {
         <div key={s.id} className="spread" style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
           <div>
             <div style={{ fontWeight: 600 }}>
-              {device(s.userAgent)} {s.current && <span className="pill good">This device</span>}
+              {device(s.userAgent)} {s.current && <span className="pill good">{t("This device")}</span>}
             </div>
             <div className="small muted">
               {METHOD[s.method] ?? s.method} · signed in {new Date(s.createdAt).toLocaleString()} · last active {new Date(s.lastSeenAt).toLocaleString()}

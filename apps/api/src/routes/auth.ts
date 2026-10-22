@@ -32,7 +32,7 @@ export async function loadIdentity(userId: string, activeTenantId?: string | nul
     user,
     roles,
     body: {
-      user: { id: user.id, name: user.name, email: user.email, rollNo: user.rollNo, tenantId: user.tenantId, roles },
+      user: { id: user.id, name: user.name, email: user.email, rollNo: user.rollNo, tenantId: user.tenantId, roles, locale: user.locale },
       tenant: tenant ? { id: tenant.id, name: tenant.name, plan: tenant.plan, type: tenant.type, slug: tenant.slug } : null,
       branding: tenant ? await effectiveBranding(db, tenant) : null,
       switched: Boolean(tenant && tenant.id !== user.tenantId),

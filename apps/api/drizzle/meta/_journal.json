@@ -148,6 +148,13 @@
       "when": 1792681574974,
       "tag": "0020_sign_in",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792682881982,
+      "tag": "0021_locale",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,7 @@ import { useApi } from "@/lib/api";
 import type { EventItem } from "@/components/Events";
 import { startAndOpen, type StartInput } from "@/lib/start";
 import type { ProfileSummary, StudentPath } from "@/lib/types";
+import { useT, type Translate } from "@/lib/i18n";
 
 interface Home {
   tenant: { name: string };
@@ -24,15 +25,17 @@ interface Home {
   suggestedSkill: { id: string; name: string; topicName: string } | null;
 }
 
-function dueIn(iso: string): string {
+/** "in 5 h", "in 2 d": how long until a deadline. */
+function timeLeft(iso: string, t: Translate): string {
   const h = Math.round((new Date(iso).getTime() - Date.now()) / 3_600_000);
-  if (h < 1) return "due within the hour";
-  if (h < 24) return `due in ${h} h`;
-  return `due in ${Math.round(h / 24)} d`;
+  if (h < 1) return t("within the hour");
+  if (h < 24) return t("in {n} h", { n: h });
+  return t("in {n} d", { n: Math.round(h / 24) });
 }
 
 export default function PlayHome() {
   const me = useMe();
+  const t = useT();
   const router = useRouter();
   const { data, error, loading, reload } = useApi<Home>("/student/home");
   const paths = useApi<{ paths: StudentPath[] }>("/student/paths");
@@ -54,26 +57,22 @@ export default function PlayHome() {
   return (
     <div className="stack">
       <div>
-        <h1>Hi {me.user.name.split(" ")[0]}</h1>
-        <p className="muted">
-          Level {p.level} {p.title} · {p.needed - p.current} XP to level {p.level + 1}
-        </p>
+        <h1>{t("Hi {name}", { name: me.user.name.split(" ")[0]! })}</h1>
+        <p className="muted">{t("Level {level} {title} · {n} XP to level {next}", { level: p.level, title: p.title, n: p.needed - p.current, next: p.level + 1 })}</p>
         <Bar value={(p.current / Math.max(1, p.needed)) * 100} />
       </div>
 
       {p.streak.atRisk && (
         <div className="card row" style={{ background: "var(--warn-soft)", borderColor: "transparent" }}>
           <Icon name="flame" className="stat-streak" />
-          <span>
-            Answer one question today to keep your <b>{p.streak.days}-day streak</b>.
-          </span>
+          <span>{t("Answer one question today to keep your {n}-day streak.", { n: p.streak.days })}</span>
         </div>
       )}
       {startError && <ErrorBox message={startError} />}
       {data.duelInvites > 0 && (
         <button className="card spread" style={{ background: "var(--accent-soft)", borderColor: "transparent", font: "inherit", color: "inherit", cursor: "pointer" }} onClick={() => router.push("/play/duels")}>
           <span className="row">
-            <Icon name="bolt" /> <b>{data.duelInvites === 1 ? "A classmate challenged you to a duel" : `${data.duelInvites} duel challenges waiting`}</b>
+            <Icon name="bolt" /> <b>{data.duelInvites === 1 ? t("A classmate challenged you to a duel") : t("{n} duel challenges waiting", { n: data.duelInvites })}</b>
           </span>
           <Icon name="arrow" />
         </button>
@@ -82,18 +81,16 @@ export default function PlayHome() {
       <div className="card accent stack">
         <div className="spread">
           <div>
-            <h2 style={{ margin: 0 }}>Daily challenge</h2>
-            <div className="muted small">5 questions · same for everyone at {data.tenant.name}</div>
+            <h2 style={{ margin: 0 }}>{t("Daily challenge")}</h2>
+            <div className="muted small">{t("5 questions · same for everyone at {org}", { org: data.tenant.name })}</div>
           </div>
           <Icon name="bolt" size={32} />
         </div>
         {data.daily.finished ? (
-          <p style={{ margin: 0, fontWeight: 600 }}>
-            Done for today: {data.daily.correctCount}/{data.daily.total} correct. Come back tomorrow.
-          </p>
+          <p style={{ margin: 0, fontWeight: 600 }}>{t("Done for today: {correct}/{total} correct. Come back tomorrow.", { correct: data.daily.correctCount, total: data.daily.total })}</p>
         ) : (
           <button className="btn big" disabled={busy} onClick={() => start({ kind: "daily" })} style={{ color: "var(--accent)" }}>
-            {data.daily.started ? "Continue" : "Start"} daily challenge
+            {t(data.daily.started ? "Continue daily challenge" : "Start daily challenge")}
           </button>
         )}
       </div>
@@ -101,9 +98,11 @@ export default function PlayHome() {
       {liveEvent && (
         <button className="card spread" style={{ font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }} onClick={() => router.push("/play/league")}>
           <span>
-            <span className="pill good">Live event</span> <b>{liveEvent.title}</b>
+            <span className="pill good">{t("Live event")}</span> <b>{liveEvent.title}</b>
             <div className="muted small">
-              {liveEvent.myTeam ? `${liveEvent.myTeam.name} is #${liveEvent.myTeam.rank} of ${liveEvent.leaderboard.length}. Every XP you earn counts for your team.` : "Earn XP for your team."}
+              {liveEvent.myTeam
+                ? t("{team} is #{rank} of {count}. Every XP you earn counts for your team.", { team: liveEvent.myTeam.name, rank: liveEvent.myTeam.rank, count: liveEvent.leaderboard.length })
+                : t("Earn XP for your team.")}
             </div>
           </span>
           <Icon name="arrow" />
@@ -112,17 +111,17 @@ export default function PlayHome() {
 
       {data.tests.length > 0 && (
         <div className="card stack" style={{ borderColor: "var(--accent)" }}>
-          <h2>Tests open now</h2>
-          {data.tests.map((t) => (
-            <div key={t.id} className="spread">
+          <h2>{t("Tests open now")}</h2>
+          {data.tests.map((test) => (
+            <div key={test.id} className="spread">
               <div>
-                <div style={{ fontWeight: 600 }}>{t.title}</div>
+                <div style={{ fontWeight: 600 }}>{test.title}</div>
                 <div className="muted small">
-                  {t.durationMinutes} min · closes {dueIn(t.closeAt).replace("due ", "")}
+                  {t("{min} min · closes {when}", { min: test.durationMinutes, when: timeLeft(test.closeAt, t) })}
                 </div>
               </div>
-              <button className="btn primary small" onClick={() => router.push(`/play/tests/${t.id}`)}>
-                {t.state === "in_progress" ? "Resume" : "Open"}
+              <button className="btn primary small" onClick={() => router.push(`/play/tests/${test.id}`)}>
+                {t(test.state === "in_progress" ? "Resume" : "Open")}
               </button>
             </div>
           ))}
@@ -139,18 +138,18 @@ export default function PlayHome() {
               <div className="spread">
                 <h2 style={{ margin: 0 }}>{path.title}</h2>
                 <Link href="/play/paths" className="small">
-                  {path.done}/{path.steps.length} steps
+                  {t("{done}/{total} steps", { done: path.done, total: path.steps.length })}
                 </Link>
               </div>
               <Bar value={(path.done / path.steps.length) * 100} tone="good" />
               {next && (
                 <div className="spread">
                   <div className="small">
-                    Next: <b>{next.title}</b>
-                    {next.overdue && <span style={{ color: "var(--bad)" }}> · overdue</span>}
+                    {t("Next:")} <b>{next.title}</b>
+                    {next.overdue && <span style={{ color: "var(--bad)" }}> · {t("overdue")}</span>}
                   </div>
                   <button className="btn primary small" disabled={busy} onClick={() => start(next.kind === "skill" ? { kind: "skill", skillId: next.ref } : { kind: "pack", packId: next.ref })}>
-                    Continue
+                    {t("Continue")}
                   </button>
                 </div>
               )}
@@ -160,17 +159,17 @@ export default function PlayHome() {
 
       {data.assignments.length > 0 && (
         <div className="card stack">
-          <h2>Assigned to you</h2>
+          <h2>{t("Assigned to you")}</h2>
           {data.assignments.map((a) => (
             <div key={a.id} className="spread">
               <div>
                 <div style={{ fontWeight: 600 }}>{a.title}</div>
                 <div className="muted small">
-                  {a.questionCount} questions · {dueIn(a.closeAt)}
+                  {t("{n} questions · {due}", { n: a.questionCount, due: t("due {when}", { when: timeLeft(a.closeAt, t) }) })}
                 </div>
               </div>
               <button className="btn primary small" disabled={busy} onClick={() => start({ kind: "assignment", assignmentId: a.id })}>
-                {a.status === "in_progress" ? "Continue" : "Start"}
+                {t(a.status === "in_progress" ? "Continue" : "Start")}
               </button>
             </div>
           ))}
@@ -180,30 +179,30 @@ export default function PlayHome() {
       {data.suggestedSkill && (
         <div className="card spread">
           <div>
-            <div className="muted small">Suggested next</div>
+            <div className="muted small">{t("Suggested next")}</div>
             <div style={{ fontWeight: 700 }}>{data.suggestedSkill.name}</div>
             <div className="muted small">{data.suggestedSkill.topicName}</div>
           </div>
           <button className="btn primary" disabled={busy || p.hearts === 0} onClick={() => start({ kind: "skill", skillId: data.suggestedSkill!.id })}>
-            Practise
+            {t("Practise")}
           </button>
         </div>
       )}
 
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <button className="card tight stack" style={{ textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit" }} onClick={() => router.push("/play/league")}>
-          <span className="muted small">{DIVISION_LABELS[data.league.division]} league</span>
+          <span className="muted small">{t("{division} league", { division: DIVISION_LABELS[data.league.division] })}</span>
           <span className="kpi">{data.league.rank ? `#${data.league.rank}` : "-"}</span>
-          <span className="muted small">{data.league.rank ? `of ${data.league.groupSize} · ${data.league.weeklyXp} XP this week` : "Earn XP to join this week"}</span>
+          <span className="muted small">{data.league.rank ? t("of {size} · {xp} XP this week", { size: data.league.groupSize, xp: data.league.weeklyXp }) : t("Earn XP to join this week")}</span>
         </button>
         <button
           className="card tight stack"
           style={{ textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit" }}
           onClick={() => (data.openMistakes ? start({ kind: "mistakes" }) : router.push("/play/mistakes"))}
         >
-          <span className="muted small">Mistakes to review</span>
+          <span className="muted small">{t("Mistakes to review")}</span>
           <span className="kpi">{data.openMistakes}</span>
-          <span className="muted small">{data.openMistakes ? "Fix one to earn a heart" : "All clear"}</span>
+          <span className="muted small">{t(data.openMistakes ? "Fix one to earn a heart" : "All clear")}</span>
         </button>
       </div>
     </div>
