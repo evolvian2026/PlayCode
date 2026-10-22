@@ -576,3 +576,53 @@ input {
   font-weight: 600;
   box-shadow: var(--shadow);
 }
+
+/* ---------- Code editor ---------- */
+.code-editor {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.code-editor .cm-editor {
+  font-variant-ligatures: none;
+}
+.code-editor .cm-editor.cm-focused {
+  outline: 3px solid var(--accent-soft);
+}
+.test-row {
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  font-size: 0.88rem;
+}
+.test-row pre {
+  margin: 2px 0 0;
+  font-family: var(--mono);
+  white-space: pre-wrap;
+  font-size: 0.82rem;
+}
+.test-row.pass {
+  background: var(--good-soft);
+}
+.test-row.fail {
+  background: var(--bad-soft);
+}
+.result-table {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+}
+.result-table td,
+.result-table th {
+  padding: 6px 8px;
+}
+/* Coding questions get room for the editor on larger screens. */
+.play-shell:has(.code-editor) {
+  max-width: 900px;
+}
+.inline-code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--surface-2);
+  padding: 1px 6px;
+  border-radius: 6px;
+}

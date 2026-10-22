@@ -175,6 +175,8 @@ export const responses = pgTable(
     xp: integer("xp").notNull(),
     timeMs: integer("time_ms").notNull(),
     hintsUsed: integer("hints_used").notNull().default(0),
+    /** Code and SQL: test results summary from the execution service. */
+    result: jsonb("result").$type<Record<string, unknown>>(),
     createdAt: createdAt(),
   },
   (t) => [

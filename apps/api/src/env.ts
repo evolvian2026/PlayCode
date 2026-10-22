@@ -6,6 +6,15 @@ const schema = z.object({
   PORT: z.coerce.number().default(4000),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
   NODE_ENV: z.string().default("development"),
+  EXECUTION_BACKEND: z.enum(["local", "judge0"]).default("local"),
+  EXECUTION_ALLOW_LOCAL: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
+  EXECUTION_CONCURRENCY: z.coerce.number().int().min(1).default(4),
+  JUDGE0_URL: z.string().url().optional(),
+  JUDGE0_TOKEN: z.string().optional(),
+  JUDGE0_LANGUAGE_IDS: z.string().optional(),
 });
 
 export const env = schema.parse(process.env);

@@ -12,6 +12,8 @@ export const QUESTION_TYPES = [
   "trace_variable",
   "reverse_mode",
   "pseudocode_mcq",
+  "write_code",
+  "sql_query",
 ] as const;
 
 export type QuestionType = (typeof QUESTION_TYPES)[number];
@@ -26,9 +28,17 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   trace_variable: "Trace the variable",
   reverse_mode: "Reverse mode",
   pseudocode_mcq: "Pseudocode",
+  write_code: "Write code",
+  sql_query: "SQL query",
 };
 
-export type Language = "c" | "java" | "python" | "pseudocode";
+/** Question types that need the code-execution service to grade. */
+export const EXECUTION_TYPES: readonly QuestionType[] = ["write_code", "sql_query"];
+
+export type CodeLanguage = "c" | "java" | "python";
+export type Language = CodeLanguage | "pseudocode" | "sql";
+
+export const CODE_LANGUAGE_LABELS: Record<CodeLanguage, string> = { c: "C", java: "Java", python: "Python" };
 
 export type Difficulty = 1 | 2 | 3;
 
@@ -56,6 +66,21 @@ export interface QuestionBody {
   inputHint?: string;
   /** Reverse mode: example input/output pairs. */
   examples?: { input: string; output: string }[];
+  /** Write code: languages the student may use, and the starting code for each. */
+  languages?: CodeLanguage[];
+  starterCode?: Partial<Record<CodeLanguage, string>>;
+  /** Write code: visible tests (filled in from the answer by toStudentView). */
+  sampleTests?: { input: string; output: string }[];
+  /** SQL: the tables (DDL and rows) the query runs against. */
+  schema?: string;
+}
+
+export interface TestCase {
+  input: string;
+  output: string;
+  /** Hidden tests are never sent to the student. */
+  hidden: boolean;
+  weight?: number;
 }
 
 export type Answer =
@@ -64,13 +89,19 @@ export type Answer =
   /** Spot the bug: 1-based line numbers of the faulty line(s). */
   | { kind: "lines"; lines: number[] }
   /** Parsons: one or more valid orders of line ids; distractors are left out. */
-  | { kind: "order"; orders: string[][] };
+  | { kind: "order"; orders: string[][] }
+  /** Write code: stdin/stdout tests, plus a model solution shown after answering. */
+  | { kind: "tests"; tests: TestCase[]; reference?: { language: CodeLanguage; source: string } }
+  /** SQL: the model query; results are compared as a set unless `ordered`. */
+  | { kind: "sql"; solution: string; ordered?: boolean };
 
 export type StudentResponse =
   | { kind: "option"; optionId: string }
   | { kind: "text"; value: string }
   | { kind: "lines"; lines: number[] }
-  | { kind: "order"; ids: string[] };
+  | { kind: "order"; ids: string[] }
+  | { kind: "code"; language: CodeLanguage; source: string }
+  | { kind: "sql"; query: string };
 
 export interface Question {
   id: string;
@@ -94,7 +125,19 @@ export const ANSWER_KIND_BY_TYPE: Record<QuestionType, Answer["kind"][]> = {
   trace_variable: ["text", "option"],
   reverse_mode: ["option"],
   pseudocode_mcq: ["option"],
+  write_code: ["tests"],
+  sql_query: ["sql"],
 };
+
+/** The response kind the student sends for each answer kind. */
+export function responseKindFor(answer: Answer): StudentResponse["kind"] {
+  if (answer.kind === "tests") return "code";
+  return answer.kind;
+}
+
+export function needsExecution(answer: Answer): boolean {
+  return answer.kind === "tests" || answer.kind === "sql";
+}
 
 export function normalizeText(value: string, caseSensitive = false): string {
   const collapsed = value.trim().replace(/\s+/g, " ");
@@ -116,6 +159,10 @@ export function grade(answer: Answer, response: StudentResponse): boolean {
       const given = [...new Set(response.lines)].sort((a, b) => a - b);
       return expected.length === given.length && expected.every((v, i) => v === given[i]);
     }
+    case "tests":
+    case "sql":
+      // Graded by the execution service, never here.
+      throw new Error("Code and SQL answers are graded by the execution service");
     case "order":
       return (
         response.kind === "order" &&
@@ -140,6 +187,10 @@ export function describeAnswer(question: Pick<Question, "answer" | "body">): str
       const byId = new Map(body.lines?.map((l) => [l.id, l.text]));
       return (answer.orders[0] ?? []).map((id) => byId.get(id) ?? id).join("\n");
     }
+    case "tests":
+      return answer.reference?.source ?? "Passes every test case";
+    case "sql":
+      return answer.solution;
   }
 }
 
@@ -212,6 +263,9 @@ export function toStudentView(question: Question, seed: string): StudentQuestion
     }
     body.lines = lines;
   }
+  if (question.answer.kind === "tests") {
+    body.sampleTests = question.answer.tests.filter((t) => !t.hidden).map(({ input, output }) => ({ input, output }));
+  }
   return {
     id: question.id,
     type: question.type,
@@ -220,7 +274,7 @@ export function toStudentView(question: Question, seed: string): StudentQuestion
     difficulty: question.difficulty,
     body,
     hintCount: question.hints.length,
-    responseKind: question.answer.kind,
+    responseKind: responseKindFor(question.answer),
   };
 }
 
@@ -247,6 +301,15 @@ export function validateQuestion(q: Question): string[] {
     const lineCount = (q.body.code ?? "").split("\n").length;
     if (a.lines.length === 0) problems.push("no bug lines");
     if (a.lines.some((n) => n < 1 || n > lineCount)) problems.push("bug line out of range");
+  }
+  if (a.kind === "tests") {
+    if (!q.body.languages?.length) problems.push("no languages allowed");
+    if (!a.tests.some((t) => !t.hidden)) problems.push("needs at least one sample test");
+    if (!a.tests.some((t) => t.hidden)) problems.push("needs at least one hidden test");
+  }
+  if (a.kind === "sql") {
+    if (!q.body.schema?.trim()) problems.push("missing schema");
+    if (!a.solution.trim()) problems.push("missing solution query");
   }
   if (a.kind === "order") {
     const ids = new Set(q.body.lines?.map((l) => l.id) ?? []);

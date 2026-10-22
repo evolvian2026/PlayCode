@@ -48,4 +48,13 @@ export const PACKS: SeedPack[] = [
     passMark: 70,
     profile: "product",
   },
+  {
+    id: "mission-coding-round",
+    kind: "mission",
+    title: "Online coding round",
+    description: "Three programs and a SQL query, run against hidden tests like a real online assessment.",
+    questionIds: ["code-reverse-words", "code-second-largest", "code-primes", "sql-unplaced"],
+    passMark: 75,
+    profile: "product",
+  },
 ];

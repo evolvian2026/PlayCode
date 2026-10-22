@@ -1,7 +1,7 @@
-import { QUESTIONS } from "./questions";
+import { ALL_QUESTIONS } from "./index";
 import { verifyQuestions } from "./verify";
 
-const results = await verifyQuestions(QUESTIONS);
+const results = await verifyQuestions(ALL_QUESTIONS);
 let failed = 0;
 for (const r of results) {
   if (!r.ok) {

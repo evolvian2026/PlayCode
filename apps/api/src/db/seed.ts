@@ -4,13 +4,10 @@ import {
   isoWeekKey,
   localDate,
   seededRandom,
-  type Answer,
   type Role,
-  type StudentResponse,
 } from "@playcode/core";
-import { PACKS } from "../content/packs";
-import { QUESTIONS } from "../content/questions";
-import { SKILLS } from "../content/skills";
+import { ALL_QUESTIONS as QUESTIONS, PACKS, SKILLS } from "../content";
+import { correctResponse, wrongResponse } from "../content/responses";
 import { hashPassword } from "../lib/auth";
 import { closeLeagueWeek } from "../services/leagues";
 import { answerQuestion, startSession, type StartInput } from "../services/practice";
@@ -55,32 +52,6 @@ export async function seedContent(database: Db = db): Promise<void> {
   }
 }
 
-function correctResponse(answer: Answer): StudentResponse {
-  switch (answer.kind) {
-    case "option":
-      return { kind: "option", optionId: answer.optionId };
-    case "text":
-      return { kind: "text", value: answer.accepted[0]! };
-    case "lines":
-      return { kind: "lines", lines: answer.lines };
-    case "order":
-      return { kind: "order", ids: answer.orders[0]! };
-  }
-}
-
-function wrongResponse(answer: Answer, options: string[]): StudentResponse {
-  switch (answer.kind) {
-    case "option":
-      return { kind: "option", optionId: options.find((o) => o !== answer.optionId) ?? "z" };
-    case "text":
-      return { kind: "text", value: "not sure" };
-    case "lines":
-      return { kind: "lines", lines: [answer.lines[0]! === 1 ? 2 : 1] };
-    case "order":
-      return { kind: "order", ids: [...answer.orders[0]!].reverse() };
-  }
-}
-
 const FIRST = ["Aarav", "Ananya", "Rohan", "Priya", "Vikram", "Sneha", "Arjun", "Kavya", "Rahul", "Isha", "Karthik", "Meera", "Aditya", "Divya", "Nikhil", "Pooja", "Siddharth", "Riya", "Varun", "Neha", "Harsh", "Tanvi", "Manish", "Shreya", "Yash", "Anjali", "Pranav", "Nandini", "Kunal", "Aisha"];
 const LAST = ["Sharma", "Iyer", "Patel", "Reddy", "Singh", "Nair", "Gupta", "Menon", "Verma", "Das", "Joshi", "Rao", "Kulkarni", "Banerjee", "Mehta"];
 
@@ -108,7 +79,8 @@ interface SimStudent {
 async function simulateDay(s: SimStudent, tenantId: string, day: Date) {
   const { rand } = s;
   if (rand() > s.activity) return;
-  const skillIds = SKILLS.map((x) => x.id);
+  // Simulated history covers the quick question types; coding is left for real students.
+  const skillIds = SKILLS.map((x) => x.id).filter((id) => !id.startsWith("coding.") && !id.startsWith("sql."));
   const qById = new Map(QUESTIONS.map((q) => [q.id, q]));
   let clock = day.getTime() + Math.floor(rand() * 50) * 60_000;
   const sessionsToday = 1 + Math.floor(rand() * 2);
@@ -124,7 +96,7 @@ async function simulateDay(s: SimStudent, tenantId: string, day: Date) {
       const q = qById.get(session.question.id)!;
       // Harder questions are less likely to be right.
       const pCorrect = Math.max(0.1, s.skill - (q.difficulty - 1) * 0.15);
-      const response = rand() < pCorrect ? correctResponse(q.answer) : wrongResponse(q.answer, q.body.options?.map((o) => o.id) ?? []);
+      const response = rand() < pCorrect ? correctResponse(q) : wrongResponse(q);
       const timeMs = 20_000 + Math.floor(rand() * 60_000);
       clock += timeMs;
       const result = await answerQuestion(db, { userId: s.id, tenantId, now: new Date(clock) }, session.id, { questionId: q.id, response, timeMs });

@@ -1,4 +1,4 @@
-import type { Answer, Difficulty, Language, Option, ParsonsLine, Question, QuestionType } from "@playcode/core";
+import type { Answer, CodeLanguage, Difficulty, Language, Option, ParsonsLine, Question, QuestionType } from "@playcode/core";
 
 // Starter question bank. Every question with a `verify` block is executed by
 // `pnpm verify:content` (and in CI) to prove its stated answer is what the
@@ -17,6 +17,8 @@ export interface Verify {
 export interface SeedQuestion extends Question {
   verify?: Verify;
   tags?: string[];
+  /** Coding problems: a reference solution per language, all run against every test. */
+  solutions?: Partial<Record<CodeLanguage, string>>;
 }
 
 /** Template tag for code: keeps backslashes, trims the first newline and trailing space. */

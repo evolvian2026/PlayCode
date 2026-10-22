@@ -47,10 +47,33 @@ export interface SessionView {
   question: QuestionView | null;
 }
 
+export interface TestResult {
+  passed: boolean;
+  status: "ok" | "compile_error" | "runtime_error" | "timeout" | "output_limit" | "internal_error";
+  timeMs: number;
+  hidden: boolean;
+  input?: string;
+  expected?: string;
+  actual?: string;
+  stderr?: string;
+}
+
+export interface SqlResult {
+  ok: boolean;
+  columns: string[];
+  rows: (string | number | null)[][];
+  error?: string;
+}
+
+export type Evaluation =
+  | { kind: "code"; correct: boolean; score: number; passed: number; total: number; compileError?: string; tests: TestResult[] }
+  | { kind: "sql"; correct: boolean; score: number; result: SqlResult; expectedColumns?: string[] };
+
 export interface AnswerResult {
   correct: boolean;
   correctAnswer: string;
   answer: Answer;
+  evaluation: Evaluation | null;
   explanation: string;
   xp: number;
   xpBreakdown: { label: string; value: number }[];

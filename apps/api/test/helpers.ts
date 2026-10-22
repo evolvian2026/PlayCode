@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
-import { QUESTIONS } from "../src/content/questions";
+import { ALL_QUESTIONS as QUESTIONS } from "../src/content";
+import { correctResponse, wrongResponse } from "../src/content/responses";
 import { buildApp } from "../src/app";
 import { resetDatabase } from "../src/db/reset";
 import { DEMO_PASSWORD, seedDemo } from "../src/db/seed";
-import type { Answer, StudentResponse } from "@playcode/core";
+import type { StudentResponse } from "@playcode/core";
 
 export const START = new Date("2026-10-22T06:30:00Z"); // Thursday, noon in India
 
@@ -39,19 +40,5 @@ export async function setup(): Promise<TestApp> {
 
 const byId = new Map(QUESTIONS.map((q) => [q.id, q]));
 
-export function rightAnswer(questionId: string): StudentResponse {
-  const a: Answer = byId.get(questionId)!.answer;
-  if (a.kind === "option") return { kind: "option", optionId: a.optionId };
-  if (a.kind === "text") return { kind: "text", value: a.accepted[0]! };
-  if (a.kind === "lines") return { kind: "lines", lines: a.lines };
-  return { kind: "order", ids: a.orders[0]! };
-}
-
-export function wrongAnswer(questionId: string): StudentResponse {
-  const q = byId.get(questionId)!;
-  const a = q.answer;
-  if (a.kind === "option") return { kind: "option", optionId: q.body.options!.find((o) => o.id !== a.optionId)!.id };
-  if (a.kind === "text") return { kind: "text", value: "definitely wrong" };
-  if (a.kind === "lines") return { kind: "lines", lines: [a.lines[0] === 1 ? 2 : 1] };
-  return { kind: "order", ids: [...a.orders[0]!].reverse() };
-}
+export const rightAnswer = (questionId: string): StudentResponse => correctResponse(byId.get(questionId)!);
+export const wrongAnswer = (questionId: string): StudentResponse => wrongResponse(byId.get(questionId)!);

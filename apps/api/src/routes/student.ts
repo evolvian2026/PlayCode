@@ -8,7 +8,7 @@ import { notFound } from "../lib/errors";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { studentDetail } from "../services/analytics";
 import { leagueStandings } from "../services/leagues";
-import { answerQuestion, getSession, sessionScore, startSession, takeHint, visibleTo, type StudentCtx } from "../services/practice";
+import { answerQuestion, getSession, runCurrent, sessionScore, startSession, takeHint, visibleTo, type StudentCtx } from "../services/practice";
 import { getOrCreateProfile, profileSummary } from "../services/profile";
 import { studentUnitIdsWithAncestors } from "../services/scope";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
@@ -18,7 +18,11 @@ const responseSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), value: z.string().max(500) }),
   z.object({ kind: z.literal("lines"), lines: z.array(z.number().int().min(1)).max(50) }),
   z.object({ kind: z.literal("order"), ids: z.array(z.string().max(20)).max(50) }),
+  z.object({ kind: z.literal("code"), language: z.enum(["c", "java", "python"]), source: z.string().max(20_000) }),
+  z.object({ kind: z.literal("sql"), query: z.string().max(20_000) }),
 ]);
+
+export { responseSchema };
 
 const startSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("skill"), skillId: z.string() }),
@@ -156,6 +160,12 @@ export async function studentRoutes(app: FastifyInstance) {
     const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
     const body = parse(z.object({ questionId: z.string(), response: responseSchema, timeMs: z.number().min(0).max(3_600_000) }), req.body);
     return answerQuestion(db, ctxOf(req), id, body);
+  });
+
+  app.post("/sessions/:id/run", async (req) => {
+    const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+    const body = parse(z.object({ questionId: z.string(), response: responseSchema }), req.body);
+    return runCurrent(db, ctxOf(req), id, body);
   });
 
   app.post("/sessions/:id/hint", async (req) => {

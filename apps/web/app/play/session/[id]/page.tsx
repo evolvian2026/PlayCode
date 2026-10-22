@@ -3,12 +3,32 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { EvaluationView } from "@/components/CodeAnswer";
 import { draftToResponse, emptyDraft, QuestionInput, type Draft } from "@/components/QuestionInput";
 import { Icon } from "@/components/Icon";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { usePlayer } from "@/lib/player-state";
-import type { AnswerResult, SessionView } from "@/lib/types";
+import type { AnswerResult, Evaluation, SessionView } from "@/lib/types";
+
+// Code drafts survive a reload or an accidental exit.
+const draftKey = (sessionId: string, questionId: string) => `playcode.draft.${sessionId}.${questionId}`;
+function loadDraft(sessionId: string, questionId: string): Draft | null {
+  try {
+    const raw = localStorage.getItem(draftKey(sessionId, questionId));
+    return raw ? (JSON.parse(raw) as Draft) : null;
+  } catch {
+    return null;
+  }
+}
+function saveDraft(sessionId: string, questionId: string, d: Draft | null) {
+  try {
+    if (d) localStorage.setItem(draftKey(sessionId, questionId), JSON.stringify(d));
+    else localStorage.removeItem(draftKey(sessionId, questionId));
+  } catch {
+    // Storage blocked: the draft lives only in memory.
+  }
+}
 
 const DIFFICULTY = ["", "Easy", "Medium", "Hard"];
 
@@ -59,6 +79,8 @@ export default function SessionPlayer() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [runResult, setRunResult] = useState<Evaluation | null>(null);
+  const [running, setRunning] = useState(false);
   const shownAt = useRef(Date.now());
 
   useEffect(() => {
@@ -68,7 +90,9 @@ export default function SessionPlayer() {
   const question = session?.question ?? null;
   useEffect(() => {
     if (question) {
-      setDraft(emptyDraft(question));
+      const saved = question.responseKind === "code" || question.responseKind === "sql" ? loadDraft(id, question.id) : null;
+      setDraft(saved?.kind === question.responseKind ? saved : emptyDraft(question));
+      setRunResult(null);
       setHints([]);
       shownAt.current = Date.now();
     }
@@ -90,6 +114,25 @@ export default function SessionPlayer() {
   if (!question || !draft) return <Loading />;
 
   const response = draftToResponse(draft);
+  const executes = draft.kind === "code" || draft.kind === "sql";
+
+  function updateDraft(d: Draft) {
+    setDraft(d);
+    if (d.kind === "code" || d.kind === "sql") saveDraft(id, question!.id, d);
+  }
+
+  async function run() {
+    if (!response || !question) return;
+    setRunning(true);
+    setActionError(null);
+    try {
+      setRunResult(await api<Evaluation>(`/student/sessions/${session!.id}/run`, { body: { questionId: question.id, response } }));
+    } catch (e) {
+      setActionError(errorMessage(e));
+    } finally {
+      setRunning(false);
+    }
+  }
 
   async function submit() {
     if (!response || result || busy || !question) return;
@@ -101,6 +144,7 @@ export default function SessionPlayer() {
       });
       setResult(r);
       setProfile(r.profile);
+      saveDraft(id, question.id, null);
       if (r.levelUp) setToast(`Level up! You are now level ${r.profile.level}`);
       else if (r.streakExtended && r.profile.streak.days > 1) setToast(`${r.profile.streak.days}-day streak!`);
     } catch (e) {
@@ -159,9 +203,14 @@ export default function SessionPlayer() {
         </span>
       </div>
 
-      <h2 style={{ fontSize: "1.15rem" }}>{question.body.stem}</h2>
+      <h2 style={{ fontSize: "1.15rem", whiteSpace: "pre-line" }}>
+        {/* `backticks` in a stem mark inline code. */}
+        {question.body.stem.split("`").map((part, i) => (i % 2 ? <code key={i} className="inline-code">{part}</code> : part))}
+      </h2>
 
-      <QuestionInput question={question} draft={draft} onChange={setDraft} onSubmit={submit} answer={result?.answer ?? null} />
+      <QuestionInput question={question} draft={draft} onChange={updateDraft} onSubmit={submit} answer={result?.answer ?? null} />
+
+      {runResult && !result && <EvaluationView evaluation={runResult} title={runResult.kind === "code" ? "Sample tests" : "Your query's result"} />}
 
       {hints.map((h, i) => (
         <div key={i} className="card tight row" style={{ background: "var(--warn-soft)", borderColor: "transparent" }}>
@@ -180,9 +229,10 @@ export default function SessionPlayer() {
             </h2>
             {result.xp > 0 && <span className="pill" style={{ color: "var(--xp)" }}>+{result.xp} XP</span>}
           </div>
+          {result.evaluation && <EvaluationView evaluation={result.evaluation} title={result.evaluation.kind === "code" ? "All tests" : "Your query's result"} />}
           {!result.correct && (
             <div>
-              <div className="small muted">Correct answer</div>
+              <div className="small muted">{executes ? "Model solution" : "Correct answer"}</div>
               <pre>{result.correctAnswer}</pre>
             </div>
           )}
@@ -202,8 +252,13 @@ export default function SessionPlayer() {
         </div>
       ) : (
         <div className="stack">
-          <button className="btn primary big" disabled={!response || busy} onClick={submit}>
-            {busy ? "Checking..." : "Check"}
+          {executes && (
+            <button className="btn big" disabled={!response || running || busy} onClick={run}>
+              {running ? "Running..." : draft.kind === "code" ? "Run sample tests" : "Run query"}
+            </button>
+          )}
+          <button className="btn primary big" disabled={!response || busy || running} onClick={submit}>
+            {busy ? (executes ? "Running all tests..." : "Checking...") : executes ? "Submit" : "Check"}
           </button>
           {hintsLeft > 0 && (
             <button className="btn ghost small" onClick={hint}>

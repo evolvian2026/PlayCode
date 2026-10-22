@@ -26,4 +26,6 @@ export const SKILLS: SeedSkill[] = [
   { id: "oop.inheritance", topic: "oop", topicName: "OOP", name: "Inheritance" },
   { id: "complexity.bigo", topic: "complexity", topicName: "Complexity", name: "Big-O" },
   { id: "pseudocode.basics", topic: "pseudocode", topicName: "Pseudocode", name: "Pseudocode rounds" },
+  { id: "coding.basics", topic: "coding", topicName: "Coding", name: "Coding problems" },
+  { id: "sql.basics", topic: "sql", topicName: "SQL", name: "SQL queries" },
 ];

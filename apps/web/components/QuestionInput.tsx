@@ -2,6 +2,7 @@
 
 import type { Answer, StudentResponse } from "@playcode/core";
 import { CodeBlock } from "./CodeBlock";
+import { CodeQuestion, SqlQuestion, type CodeDraft } from "./CodeAnswer";
 import type { QuestionView } from "@/lib/types";
 
 /** The in-progress answer, before it becomes a StudentResponse. */
@@ -9,7 +10,9 @@ export type Draft =
   | { kind: "option"; optionId: string | null }
   | { kind: "text"; value: string }
   | { kind: "lines"; lines: number[] }
-  | { kind: "order"; ids: string[] };
+  | { kind: "order"; ids: string[] }
+  | CodeDraft
+  | { kind: "sql"; query: string };
 
 export function emptyDraft(q: QuestionView): Draft {
   switch (q.responseKind) {
@@ -21,6 +24,10 @@ export function emptyDraft(q: QuestionView): Draft {
       return { kind: "lines", lines: [] };
     case "order":
       return { kind: "order", ids: [] };
+    case "code":
+      return { kind: "code", language: q.body.languages?.[0] ?? "python", sources: { ...q.body.starterCode } };
+    case "sql":
+      return { kind: "sql", query: "SELECT " };
   }
 }
 
@@ -34,6 +41,12 @@ export function draftToResponse(d: Draft): StudentResponse | null {
       return d.lines.length ? { kind: "lines", lines: d.lines } : null;
     case "order":
       return d.ids.length ? { kind: "order", ids: d.ids } : null;
+    case "code": {
+      const source = d.sources[d.language] ?? "";
+      return source.trim() ? { kind: "code", language: d.language, source } : null;
+    }
+    case "sql":
+      return d.query.trim() && d.query.trim().toUpperCase() !== "SELECT" ? { kind: "sql", query: d.query } : null;
   }
 }
 
@@ -49,6 +62,9 @@ interface Props {
 export function QuestionInput({ question, draft, onChange, onSubmit, answer }: Props) {
   const { body } = question;
   const locked = answer !== null;
+
+  if (draft.kind === "code") return <CodeQuestion question={question} draft={draft} onChange={onChange} locked={locked} />;
+  if (draft.kind === "sql") return <SqlQuestion question={question} query={draft.query} onChange={(query) => onChange({ kind: "sql", query })} locked={locked} />;
 
   if (draft.kind === "lines") {
     const right = answer?.kind === "lines" ? new Set(answer.lines) : null;

@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PACKS } from "../src/content/packs";
-import { QUESTIONS } from "../src/content/questions";
-import { SKILLS } from "../src/content/skills";
+import { ALL_QUESTIONS as QUESTIONS, PACKS, SKILLS } from "../src/content";
 import { verifyQuestions } from "../src/content/verify";
 
 describe("starter content", () => {

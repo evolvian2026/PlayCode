@@ -1,7 +1,8 @@
-import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import {
   computeXp,
   describeAnswer,
+  EXECUTION_TYPES,
   expectedTimeMs,
   gainHeart,
   grade,
@@ -10,12 +11,14 @@ import {
   isoWeekKey,
   levelForXp,
   loseHeart,
+  needsExecution,
   nextHeartInMs,
   recordActivity,
   shuffle,
   START_RATING,
   toStudentView,
   updateRatings,
+  xpWeight,
   type Question,
   type StudentResponse,
 } from "@playcode/core";
@@ -33,6 +36,7 @@ import {
   users,
   type SessionKind,
 } from "../db/schema";
+import { checkRunRate, evaluate, tryRun, type Evaluation } from "../execution";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { addWeeklyXp } from "./leagues";
 import { getOrCreateProfile, profileSummary, streakColumns, streakState } from "./profile";
@@ -69,6 +73,11 @@ export function toCoreQuestion(row: QuestionRow): Question {
 /** Live questions visible to a tenant: global content plus the tenant's own. */
 export function visibleTo(tenantId: string) {
   return and(eq(questions.status, "live"), or(isNull(questions.tenantId), eq(questions.tenantId, tenantId)));
+}
+
+/** Quick questions only (no code execution): daily challenges and duels. */
+export function quickVisibleTo(tenantId: string) {
+  return and(visibleTo(tenantId), notInArray(questions.type, [...EXECUTION_TYPES]));
 }
 
 async function loadQuestions(db: DbOrTx, ids: string[]): Promise<Map<string, QuestionRow>> {
@@ -137,7 +146,7 @@ export async function startSession(db: Db, ctx: StudentCtx, input: StartInput) {
         .from(sessions)
         .where(and(eq(sessions.userId, ctx.userId), eq(sessions.kind, "daily"), eq(sessions.day, today)));
       if (existing) return sessionView(db, existing);
-      const pool = await db.select({ id: questions.id }).from(questions).where(visibleTo(ctx.tenantId)).orderBy(asc(questions.id));
+      const pool = await db.select({ id: questions.id }).from(questions).where(quickVisibleTo(ctx.tenantId)).orderBy(asc(questions.id));
       // Same five questions for everyone in the institution today, so friends can compare.
       const picked = shuffle(pool.map((p) => p.id), hashString(`${ctx.tenantId}:${today}`)).slice(0, DAILY_LENGTH);
       values = { ...base, day: today, questionIds: picked };
@@ -256,10 +265,38 @@ export interface AnswerInput {
   timeMs: number;
 }
 
+/** Run code against the sample tests (or a SQL query against the tables) without answering. */
+export async function runCurrent(db: DbOrTx, ctx: StudentCtx, sessionId: string, input: { questionId: string; response: StudentResponse }) {
+  const [s] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
+  if (!s || s.userId !== ctx.userId) throw notFound("Session");
+  if (s.finishedAt || s.questionIds[s.currentIndex] !== input.questionId) throw conflict("not_current", "That question is not the current one");
+  const [q] = await db.select().from(questions).where(eq(questions.id, input.questionId));
+  if (!q) throw notFound("Question");
+  checkRunRate(ctx.userId, ctx.now.getTime());
+  return tryRun(toCoreQuestion(q), input.response);
+}
+
+/** Summary of an execution result kept with the response (no student-visible test data). */
+function storedResult(e: Evaluation): Record<string, unknown> {
+  return e.kind === "code"
+    ? { kind: "code", score: e.score, passed: e.passed, total: e.total, statuses: e.tests.map((t) => t.status) }
+    : { kind: "sql", score: e.score, ok: e.result.ok, rows: e.result.rows.length, error: e.result.error ?? null };
+}
+
 export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string, input: AnswerInput) {
   const tenant = await getTenant(db, ctx.tenantId);
   const today = tenantToday(tenant, ctx.now);
   const rules = streakRules(tenant);
+
+  // Code and SQL run before the transaction: execution takes seconds and must not hold row locks.
+  const [pending] = await db.select().from(questions).where(eq(questions.id, input.questionId));
+  let evaluation: Evaluation | null = null;
+  if (pending && needsExecution(pending.answer)) {
+    const [s] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
+    if (!s || s.userId !== ctx.userId) throw notFound("Session");
+    if (s.finishedAt || s.questionIds[s.currentIndex] !== input.questionId) throw conflict("not_current", "That question is not the current one");
+    evaluation = await evaluate(toCoreQuestion(pending), input.response, "practice");
+  }
 
   return db.transaction(async (tx) => {
     const [s] = await tx.select().from(sessions).where(eq(sessions.id, sessionId)).for("update");
@@ -269,7 +306,7 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
     const [q] = await tx.select().from(questions).where(eq(questions.id, input.questionId)).for("update");
     if (!q) throw notFound("Question");
 
-    const correct = grade(q.answer, input.response);
+    const correct = evaluation ? evaluation.correct : grade(q.answer, input.response);
     const history = await tx
       .select({ correct: responses.correct })
       .from(responses)
@@ -294,10 +331,11 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
       previouslyCorrect,
       hintsUsed,
       timeMs: Math.max(0, Math.round(input.timeMs)),
-      expectedTimeMs: expectedTimeMs(q.difficulty),
+      expectedTimeMs: expectedTimeMs(q.difficulty, Boolean(evaluation)),
       playerRating: player.rating,
       questionRating: q.rating,
       repeatXpToday,
+      weight: xpWeight(q.type),
     });
 
     // Ratings: student mastery on the skill, and calibration of the question.
@@ -368,6 +406,7 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
       xp: xp.xp,
       timeMs: Math.max(0, Math.round(input.timeMs)),
       hintsUsed,
+      result: evaluation ? storedResult(evaluation) : null,
       createdAt: ctx.now,
     });
 
@@ -389,7 +428,9 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
     return {
       correct,
       correctAnswer: describeAnswer(toCoreQuestion(q)),
-      answer: q.answer,
+      // Hidden tests stay hidden after answering; only the model solution is revealed.
+      answer: q.answer.kind === "tests" ? { kind: "tests" as const, tests: [], reference: q.answer.reference } : q.answer,
+      evaluation,
       explanation: q.explanation,
       xp: xp.xp,
       xpBreakdown: xp.breakdown,
