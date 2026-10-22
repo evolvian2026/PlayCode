@@ -11,6 +11,7 @@ import { authRoutes } from "./routes/auth";
 import { consoleRoutes } from "./routes/console";
 import { developerRoutes } from "./routes/developers";
 import { driveRoutes } from "./routes/drives";
+import { ltiRoutes } from "./routes/lti";
 import { privacyRoutes } from "./routes/privacy";
 import { studioRoutes } from "./routes/studio";
 import { engageRoutes } from "./routes/engage";
@@ -84,5 +85,6 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(driveRoutes);
   await app.register(privacyRoutes);
   await app.register(studioRoutes, { prefix: "/console" });
+  await app.register(ltiRoutes);
   return app;
 }

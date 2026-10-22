@@ -744,3 +744,91 @@ export const coachHintCache = pgTable(
   },
   (t) => [primaryKey({ columns: [t.questionId, t.version, t.level] })],
 );
+
+// ---------- LTI 1.3 ----------
+
+/** An LMS (Moodle, Canvas, Blackboard...) registered to launch PlayCode for an institution. */
+export const ltiPlatforms = pgTable(
+  "lti_platforms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    issuer: text("issuer").notNull(),
+    clientId: text("client_id").notNull(),
+    /** Deployments allowed to launch; empty means any deployment of this client. */
+    deploymentIds: jsonb("deployment_ids").$type<string[]>().notNull().default([]),
+    authLoginUrl: text("auth_login_url").notNull(),
+    authTokenUrl: text("auth_token_url").notNull(),
+    jwksUrl: text("jwks_url").notNull(),
+    /** Learners launching for the first time get a student account in this unit. */
+    autoProvisionUnitId: uuid("auto_provision_unit_id").references(() => orgUnits.id, { onDelete: "set null" }),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("lti_platforms_issuer_client_uq").on(t.issuer, t.clientId)],
+);
+
+/** PlayCode's own signing keys (for grade passback client assertions), published at /lti/jwks. */
+export const ltiKeys = pgTable("lti_keys", {
+  kid: text("kid").primaryKey(),
+  publicJwk: jsonb("public_jwk").$type<Record<string, unknown>>().notNull(),
+  privateKeyEnc: text("private_key_enc").notNull(),
+  createdAt: createdAt(),
+});
+
+/** Which PlayCode user an LMS user (platform + sub) is. */
+export const ltiAccounts = pgTable(
+  "lti_accounts",
+  {
+    platformId: uuid("platform_id").notNull().references(() => ltiPlatforms.id, { onDelete: "cascade" }),
+    sub: text("sub").notNull(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.platformId, t.sub] }), index("lti_accounts_user_idx").on(t.userId)],
+);
+
+/** An activity placed in an LMS course, bound to a PlayCode assignment. */
+export const ltiLinks = pgTable(
+  "lti_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    platformId: uuid("platform_id").notNull().references(() => ltiPlatforms.id, { onDelete: "cascade" }),
+    resourceLinkId: text("resource_link_id").notNull(),
+    title: text("title"),
+    contextTitle: text("context_title"),
+    assignmentId: uuid("assignment_id").references(() => assignments.id, { onDelete: "set null" }),
+    /** Assignment and Grade Services: where scores go, if the LMS offered it. */
+    lineitemUrl: text("lineitem_url"),
+    agsScopes: jsonb("ags_scopes").$type<string[]>().notNull().default([]),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("lti_links_platform_resource_uq").on(t.platformId, t.resourceLinkId)],
+);
+
+/** Scores waiting to go back to the LMS gradebook (an outbox with retries). */
+export const ltiScores = pgTable(
+  "lti_scores",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    linkId: uuid("link_id").notNull().references(() => ltiLinks.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    ltiSub: text("lti_sub").notNull(),
+    scoreGiven: integer("score_given").notNull(),
+    scoreMaximum: integer("score_maximum").notNull(),
+    status: text("status").$type<"pending" | "sent" | "failed">().notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("lti_scores_due_idx").on(t.status, t.nextAttemptAt)],
+);
+
+/** Nonces already used in a launch, so a captured launch can't be replayed. */
+export const ltiNonces = pgTable("lti_nonces", {
+  nonce: text("nonce").primaryKey(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});

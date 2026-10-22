@@ -15,6 +15,8 @@ import {
   erasureRequests,
   integrityEvents,
   leagueMembers,
+  ltiAccounts,
+  ltiScores,
   memberships,
   mistakes,
   notifications,
@@ -198,6 +200,8 @@ export async function resolveErasure(
     await tx.delete(leagueMembers).where(eq(leagueMembers.userId, user.id));
     await tx.delete(notifications).where(eq(notifications.userId, user.id));
     await tx.delete(coachHints).where(eq(coachHints.userId, user.id));
+    await tx.delete(ltiScores).where(eq(ltiScores.userId, user.id));
+    await tx.delete(ltiAccounts).where(eq(ltiAccounts.userId, user.id));
     await tx.delete(certificates).where(eq(certificates.userId, user.id));
     await tx.delete(driveCandidates).where(eq(driveCandidates.userId, user.id));
     await tx.delete(playerProfiles).where(eq(playerProfiles.userId, user.id));

@@ -5,14 +5,19 @@ import { useEffect, useState } from "react";
 import { api, errorMessage, setToken } from "@/lib/api";
 import type { Me } from "@/lib/types";
 
-// Single sign-on lands here with our session token in the URL fragment
-// (#token=...), which the browser never sends to any server.
+// Single sign-on and LMS launches land here with our session token in the URL
+// fragment (#token=...&next=...), which the browser never sends to any server.
+
+/** Only same-site paths, so a crafted link can't bounce the user elsewhere. */
+const safeNext = (next: string | null) => (next && next.startsWith("/") && !next.startsWith("//") && !next.includes("\\") ? next : null);
 export default function SsoComplete() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = new URLSearchParams(window.location.hash.slice(1)).get("token");
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const token = fragment.get("token");
+    const next = safeNext(fragment.get("next"));
     window.history.replaceState(null, "", "/sso");
     if (!token) {
       router.replace("/login");
@@ -20,7 +25,7 @@ export default function SsoComplete() {
     }
     setToken(token);
     api<Me>("/me")
-      .then((me) => router.replace(me.home === "console" ? "/console" : "/play"))
+      .then((me) => router.replace(next ?? (me.home === "console" ? "/console" : "/play")))
       .catch((err) => {
         setToken(null);
         setError(errorMessage(err));

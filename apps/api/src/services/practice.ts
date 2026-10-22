@@ -40,6 +40,7 @@ import { checkRunRate, evaluate, tryRun, type Evaluation } from "../execution";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { issueMissionCertificate } from "./certificates";
 import { addWeeklyXp } from "./leagues";
+import { deliverLtiScores, queueLtiScores } from "./lti";
 import { deliverDue, emitEvent } from "./webhooks";
 import { getOrCreateProfile, profileSummary, streakColumns, streakState } from "./profile";
 import { studentUnitIdsWithAncestors } from "./scope";
@@ -303,6 +304,7 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
   }
 
   let queuedEvents = 0;
+  let ltiQueued = 0;
   const out = await db.transaction(async (tx) => {
     const [s] = await tx.select().from(sessions).where(eq(sessions.id, sessionId)).for("update");
     if (!s || s.userId !== ctx.userId) throw notFound("Session");
@@ -450,6 +452,8 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
         { assignmentId: s.assignmentId, userId: ctx.userId, sessionId: s.id, scorePct: sessionScore(updatedSession!), correct: updatedSession!.correctCount, total: s.questionIds.length },
         ctx.now,
       );
+      // Activities launched from an LMS get the score in its gradebook.
+      ltiQueued = await queueLtiScores(tx, { assignmentId: s.assignmentId, userId: ctx.userId, correct: updatedSession!.correctCount, total: s.questionIds.length, now: ctx.now });
     }
 
     return {
@@ -472,5 +476,6 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
     };
   });
   if (queuedEvents) void deliverDue(db, ctx.now).catch(() => {});
+  if (ltiQueued) void deliverLtiScores(db, ctx.now).catch(() => {});
   return out;
 }

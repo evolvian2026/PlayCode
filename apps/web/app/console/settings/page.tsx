@@ -176,6 +176,166 @@ function AiSettings() {
   );
 }
 
+interface LtiPlatform {
+  id: string;
+  name: string;
+  issuer: string;
+  clientId: string;
+  deploymentIds: string[];
+  authLoginUrl: string;
+  authTokenUrl: string;
+  jwksUrl: string;
+  autoProvisionUnitId: string | null;
+  enabled: boolean;
+}
+
+const EMPTY_PLATFORM = { name: "", issuer: "", clientId: "", deploymentIds: "", authLoginUrl: "", authTokenUrl: "", jwksUrl: "", autoProvisionUnitId: "" };
+
+/** Endpoint patterns for common LMSs, filled in from the site address. */
+function lmsPreset(kind: "moodle" | "canvas", site: string) {
+  const base = site.trim().replace(/\/$/, "");
+  if (kind === "moodle") return { issuer: base, authLoginUrl: `${base}/mod/lti/auth.php`, authTokenUrl: `${base}/mod/lti/token.php`, jwksUrl: `${base}/mod/lti/certs.php` };
+  return { issuer: "https://canvas.instructure.com", authLoginUrl: "https://sso.canvaslms.com/api/lti/authorize_redirect", authTokenUrl: "https://sso.canvaslms.com/login/oauth2/token", jwksUrl: "https://sso.canvaslms.com/api/lti/security/jwks" };
+}
+
+function LtiSettings() {
+  const { data, error, reload } = useApi<{ tool: { loginUrl: string; launchUrl: string; jwksUrl: string }; platforms: LtiPlatform[] }>("/console/lti");
+  const units = useApi<{ units: { id: string; name: string }[] }>("/console/org-units");
+  const [f, setF] = useState(EMPTY_PLATFORM);
+  const [site, setSite] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  if (error) return <ErrorBox message={error.message} onRetry={reload} />;
+  if (!data) return null;
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    setSaveError(null);
+    try {
+      await api("/console/lti/platforms", {
+        body: { ...f, deploymentIds: f.deploymentIds.split(/[\s,]+/).filter(Boolean), autoProvisionUnitId: f.autoProvisionUnitId || null, enabled: true },
+      });
+      setF(EMPTY_PLATFORM);
+      setAdding(false);
+      reload();
+    } catch (err) {
+      setSaveError(errorMessage(err));
+    }
+  }
+
+  async function toggle(p: LtiPlatform) {
+    try {
+      await api(`/console/lti/platforms/${p.id}`, { method: "PUT", body: { ...p, enabled: !p.enabled } });
+      reload();
+    } catch (err) {
+      setSaveError(errorMessage(err));
+    }
+  }
+
+  async function remove(p: LtiPlatform) {
+    if (!window.confirm(`Disconnect ${p.name}? Activities placed in its courses will stop working.`)) return;
+    await api(`/console/lti/platforms/${p.id}`, { method: "DELETE" }).catch((err) => setSaveError(errorMessage(err)));
+    reload();
+  }
+
+  const field = (key: keyof typeof EMPTY_PLATFORM, label: string, placeholder = "") => (
+    <div style={{ flex: 1, minWidth: 220 }}>
+      <label htmlFor={`lti-${key}`}>{label}</label>
+      <input id={`lti-${key}`} value={f[key]} placeholder={placeholder} onChange={(e) => setF({ ...f, [key]: e.target.value })} required={key !== "deploymentIds" && key !== "autoProvisionUnitId"} />
+    </div>
+  );
+
+  return (
+    <div className="card stack">
+      <h2 style={{ margin: 0 }}>LMS (LTI 1.3)</h2>
+      <p className="muted small" style={{ margin: 0 }}>
+        Put PlayCode assignments inside Moodle, Canvas or any LTI 1.3 LMS. Students open them from their course without a separate password, and scores go to
+        the course gradebook. Give your LMS admin these tool details:
+      </p>
+      <div className="stack small" style={{ gap: 4 }}>
+        <div>
+          Login initiation URL: <code className="inline-code">{data.tool.loginUrl}</code>
+        </div>
+        <div>
+          Redirect / launch URL: <code className="inline-code">{data.tool.launchUrl}</code>
+        </div>
+        <div>
+          Public keyset (JWKS) URL: <code className="inline-code">{data.tool.jwksUrl}</code>
+        </div>
+        <div className="muted">Turn on the Assignment and Grade Services (scores) and share name and email. Open the tool in a new window.</div>
+      </div>
+      {data.platforms.map((p) => (
+        <div key={p.id} className="spread wrap" style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+          <div>
+            <b>{p.name}</b> <span className="small muted">{p.issuer} · client {p.clientId}</span>
+          </div>
+          <div className="row">
+            <span className={`pill ${p.enabled ? "good" : ""}`}>{p.enabled ? "Connected" : "Off"}</span>
+            <button className="btn small" onClick={() => toggle(p)}>
+              {p.enabled ? "Turn off" : "Turn on"}
+            </button>
+            <button className="btn small ghost" onClick={() => remove(p)}>
+              Remove
+            </button>
+          </div>
+        </div>
+      ))}
+      {!adding ? (
+        <button className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setAdding(true)}>
+          Connect an LMS
+        </button>
+      ) : (
+        <form className="stack" onSubmit={add} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+          <div className="row wrap" style={{ alignItems: "flex-end" }}>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <label htmlFor="lti-site">Moodle site address (to fill in the URLs)</label>
+              <input id="lti-site" value={site} onChange={(e) => setSite(e.target.value)} placeholder="https://lms.college.edu" />
+            </div>
+            <button type="button" className="btn small" disabled={!site.trim()} onClick={() => setF({ ...f, name: f.name || "Moodle", ...lmsPreset("moodle", site) })}>
+              Fill for Moodle
+            </button>
+            <button type="button" className="btn small" onClick={() => setF({ ...f, name: f.name || "Canvas", ...lmsPreset("canvas", "") })}>
+              Fill for Canvas
+            </button>
+          </div>
+          <div className="row wrap">
+            {field("name", "Name", "College Moodle")}
+            {field("clientId", "Client ID (from the LMS)")}
+            {field("deploymentIds", "Deployment IDs (optional)", "1")}
+          </div>
+          <div className="row wrap">
+            {field("issuer", "Platform ID (issuer)")}
+            {field("authLoginUrl", "Authentication request URL")}
+          </div>
+          <div className="row wrap">
+            {field("authTokenUrl", "Access token URL")}
+            {field("jwksUrl", "Public keyset URL")}
+          </div>
+          <div>
+            <label htmlFor="lti-unit">New students from the LMS</label>
+            <select id="lti-unit" value={f.autoProvisionUnitId} onChange={(e) => setF({ ...f, autoProvisionUnitId: e.target.value })}>
+              <option value="">Only students already in PlayCode can launch</option>
+              {(units.data?.units ?? []).map((u) => (
+                <option key={u.id} value={u.id}>
+                  Create their account in {u.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {saveError && <ErrorBox message={saveError} />}
+          <div className="row">
+            <button className="btn primary">Save LMS</button>
+            <button type="button" className="btn ghost" onClick={() => setAdding(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+      {saveError && !adding && <ErrorBox message={saveError} />}
+    </div>
+  );
+}
+
 function readFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -289,6 +449,7 @@ export default function Settings() {
       </div>
       <AiSettings />
       <SsoSettings />
+      <LtiSettings />
     </div>
   );
 }
