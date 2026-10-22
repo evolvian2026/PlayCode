@@ -8,6 +8,7 @@ import { notFound } from "../lib/errors";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { studentDetail } from "../services/analytics";
 import { answerDuel, cancelDuel, createDuel, duelLobby, getDuel, respondToInvite } from "../services/duels";
+import { attemptView, logIntegrity, runInAttempt, saveAnswer, saveSnapshot, startAttempt, studentAssessments, submitOwn } from "../services/assessments";
 import { leagueStandings } from "../services/leagues";
 import { answerQuestion, getSession, runCurrent, sessionScore, startSession, takeHint, visibleTo, type StudentCtx } from "../services/practice";
 import { getOrCreateProfile, profileSummary } from "../services/profile";
@@ -107,6 +108,7 @@ export async function studentRoutes(app: FastifyInstance) {
       .select({ count: sql<number>`count(*)::int` })
       .from(duels)
       .where(and(eq(duels.opponentId, ctx.userId), eq(duels.status, "waiting"), gte(duels.createdAt, new Date(ctx.now.getTime() - 2 * 60_000))));
+    const tests = (await studentAssessments(db, ctx)).filter((a) => a.state === "open" || a.state === "in_progress");
     return {
       tenant: { name: tenant.name },
       today,
@@ -118,6 +120,7 @@ export async function studentRoutes(app: FastifyInstance) {
       league: { division: league.division, rank: me?.rank ?? null, groupSize: league.members.length, weeklyXp: me?.weeklyXp ?? 0, zone: me?.zone ?? null },
       openMistakes,
       duelInvites,
+      tests: tests.map((a) => ({ id: a.id, title: a.title, state: a.state, closeAt: a.closeAt, durationMinutes: a.durationMinutes })),
       suggestedSkill: suggested ? { id: suggested.id, name: suggested.name, topicName: suggested.topicName } : null,
     };
   });
@@ -244,6 +247,32 @@ export async function studentRoutes(app: FastifyInstance) {
   });
 
   app.get("/assignments", async (req) => ({ assignments: await studentAssignments(ctxOf(req)) }));
+
+  // ---------- Proctored tests ----------
+  const attemptId = z.object({ id: z.string().uuid() });
+  app.get("/assessments", async (req) => ({ assessments: await studentAssessments(db, ctxOf(req)) }));
+  app.post("/assessments/:id/start", async (req) =>
+    startAttempt(db, ctxOf(req), parse(attemptId, req.params).id, parse(z.object({ deviceId: z.string().min(8).max(64) }), req.body).deviceId),
+  );
+  app.get("/attempts/:id", async (req) => attemptView(db, ctxOf(req), parse(attemptId, req.params).id));
+  app.put("/attempts/:id/answers", async (req) =>
+    saveAnswer(db, ctxOf(req), parse(attemptId, req.params).id, parse(z.object({ questionId: z.string(), response: responseSchema.nullable() }), req.body)),
+  );
+  app.post("/attempts/:id/run", async (req) =>
+    runInAttempt(db, ctxOf(req), parse(attemptId, req.params).id, parse(z.object({ questionId: z.string(), response: responseSchema }), req.body)),
+  );
+  app.post("/attempts/:id/events", async (req) =>
+    logIntegrity(
+      db,
+      ctxOf(req),
+      parse(attemptId, req.params).id,
+      parse(z.object({ events: z.array(z.object({ type: z.string().max(40), detail: z.string().max(200).optional() })).max(50) }), req.body).events,
+    ),
+  );
+  app.post("/attempts/:id/snapshot", { bodyLimit: 512 * 1024 }, async (req) =>
+    saveSnapshot(db, ctxOf(req), parse(attemptId, req.params).id, parse(z.object({ image: z.string().max(450_000) }), req.body).image),
+  );
+  app.post("/attempts/:id/submit", async (req) => submitOwn(db, ctxOf(req), parse(attemptId, req.params).id));
 
   // ---------- Duels ----------
   const duelId = z.object({ id: z.string().uuid() });

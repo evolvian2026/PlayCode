@@ -25,7 +25,7 @@ export function emptyDraft(q: QuestionView): Draft {
     case "order":
       return { kind: "order", ids: [] };
     case "code":
-      return { kind: "code", language: q.body.languages?.[0] ?? "python", sources: { ...q.body.starterCode } };
+      return { kind: "code", language: q.body.languages?.[0] ?? "python", sources: { ...q.body.starterCode }, starters: q.body.starterCode };
     case "sql":
       return { kind: "sql", query: "SELECT " };
   }
@@ -43,7 +43,8 @@ export function draftToResponse(d: Draft): StudentResponse | null {
       return d.ids.length ? { kind: "order", ids: d.ids } : null;
     case "code": {
       const source = d.sources[d.language] ?? "";
-      return source.trim() ? { kind: "code", language: d.language, source } : null;
+      const untouched = source.trim() === (d.starters?.[d.language] ?? "").trim();
+      return source.trim() && !untouched ? { kind: "code", language: d.language, source } : null;
     }
     case "sql":
       return d.query.trim() && d.query.trim().toUpperCase() !== "SELECT" ? { kind: "sql", query: d.query } : null;

@@ -86,9 +86,10 @@ export default function MePage() {
       <div className="card stack">
         <div className="spread">
           <h2 style={{ margin: 0 }}>Skills</h2>
-          <Link href="/play/mistakes" className="small">
-            Mistake notebook ({data.openMistakes})
-          </Link>
+          <span className="row small">
+            <Link href="/play/tests">Tests</Link>
+            <Link href="/play/mistakes">Mistake notebook ({data.openMistakes})</Link>
+          </span>
         </div>
         {[...topics.values()].map((t) => (
           <div key={t.name} className="stack" style={{ gap: 6 }}>

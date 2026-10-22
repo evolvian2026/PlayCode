@@ -103,6 +103,8 @@ export interface CodeDraft {
   kind: "code";
   language: CodeLanguage;
   sources: Partial<Record<CodeLanguage, string>>;
+  /** The untouched starter code, so it never counts as an answer. */
+  starters?: Partial<Record<CodeLanguage, string>>;
 }
 
 export function CodeQuestion({ question, draft, onChange, locked }: { question: QuestionView; draft: CodeDraft; onChange: (d: CodeDraft) => void; locked: boolean }) {

@@ -55,6 +55,14 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   return data as T;
 }
 
+/** Fetch an authenticated binary (e.g. a proctoring snapshot) as an object URL. */
+export async function fetchObjectUrl(path: string): Promise<string> {
+  const token = getToken();
+  const res = await fetch(`${API_URL}${path}`, { headers: token ? { authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new ApiError(res.status, "error", "Could not load the file");
+  return URL.createObjectURL(await res.blob());
+}
+
 /** Fetch on mount (and when `path` changes). Pass null to skip. */
 export function useApi<T>(path: string | null) {
   const [data, setData] = useState<T | null>(null);

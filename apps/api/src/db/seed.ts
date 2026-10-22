@@ -13,7 +13,7 @@ import { closeLeagueWeek } from "../services/leagues";
 import { answerQuestion, startSession, type StartInput } from "../services/practice";
 import { db, pool, type Db } from "./client";
 import { runMigrations } from "./migrate";
-import { assignments, memberships, orgUnits, packs, questions, skills, tenants, users } from "./schema";
+import { assessments, assignments, memberships, orgUnits, packs, questions, skills, tenants, users } from "./schema";
 
 export const DEMO_PASSWORD = "playcode123";
 
@@ -194,6 +194,23 @@ export async function seedDemo(now = new Date()): Promise<void> {
       createdBy: faculty.id,
     },
   ]);
+  const pool = (skillPrefix: string[]) => QUESTIONS.filter((q) => skillPrefix.some((p) => q.skillId.startsWith(p))).map((q) => q.id);
+  await db.insert(assessments).values({
+    tenantId,
+    title: "Mock placement drive 1",
+    instructions: "Two sections. Section A has negative marking. Use any language for the coding problem.",
+    proctorLevel: 1,
+    durationMinutes: 45,
+    openAt: new Date(now.getTime() - 3600_000),
+    closeAt: new Date(now.getTime() + 2 * 86_400_000),
+    sections: [
+      { title: "A: Output and pseudocode", questionIds: pool(["pseudocode.", "loops.", "basics."]), pick: 8, marks: 1, negative: 0.25 },
+      { title: "B: Coding", questionIds: pool(["coding."]), pick: 1, marks: 10, negative: 0 },
+    ],
+    orgUnitIds: [cse27.id],
+    releasePolicy: "manual",
+    createdBy: faculty.id,
+  });
   console.log(`Seeded demo institution with ${students.length} students. Password for every account: ${DEMO_PASSWORD}`);
 }
 

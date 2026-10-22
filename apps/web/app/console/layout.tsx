@@ -11,6 +11,7 @@ const NAV = [
   { href: "/console", label: "Overview", icon: "chart", perm: null },
   { href: "/console/students", label: "Students", icon: "users", perm: null },
   { href: "/console/assignments", label: "Assignments", icon: "clipboard", perm: "assignments.manage" },
+  { href: "/console/tests", label: "Tests", icon: "flag", perm: "assessments.proctor" },
   { href: "/console/batches", label: "Batches", icon: "layers", perm: null },
   { href: "/console/content", label: "Question bank", icon: "book", perm: "content.view" },
 ];

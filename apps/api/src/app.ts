@@ -6,6 +6,7 @@ import { verifyToken } from "./lib/auth";
 import { HttpError } from "./lib/errors";
 import { subscribe } from "./lib/realtime";
 import { adminRoutes } from "./routes/admin";
+import { assessmentConsoleRoutes } from "./routes/assessments-console";
 import { authRoutes } from "./routes/auth";
 import { consoleRoutes } from "./routes/console";
 import { studentRoutes } from "./routes/student";
@@ -19,7 +20,7 @@ export interface AppOptions {
 export async function buildApp(options: AppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: options.logger ?? false });
   app.decorate("now", options.now ?? (() => new Date()));
-  await app.register(cors, { origin: env.CORS_ORIGIN.split(","), credentials: true });
+  await app.register(cors, { origin: env.CORS_ORIGIN.split(","), credentials: true, methods: ["GET", "POST", "PUT", "DELETE"] });
 
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof HttpError) {
@@ -58,6 +59,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(authRoutes);
   await app.register(studentRoutes, { prefix: "/student" });
   await app.register(consoleRoutes, { prefix: "/console" });
+  await app.register(assessmentConsoleRoutes, { prefix: "/console" });
   await app.register(adminRoutes, { prefix: "/admin" });
   return app;
 }

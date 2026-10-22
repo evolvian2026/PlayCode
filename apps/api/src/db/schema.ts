@@ -304,3 +304,115 @@ export const duelPlayers = pgTable(
   },
   (t) => [primaryKey({ columns: [t.duelId, t.userId] }), index("duel_players_user_idx").on(t.userId)],
 );
+
+// ---------- Proctored assessments ----------
+
+export interface AssessmentSection {
+  title: string;
+  /** Pool to draw from; each student gets `pick` of these, in a shuffled order. */
+  questionIds: string[];
+  pick: number;
+  marks: number;
+  negative: number;
+}
+
+export const assessments = pgTable(
+  "assessments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    instructions: text("instructions").notNull().default(""),
+    proctorLevel: integer("proctor_level").$type<1 | 2>().notNull().default(1),
+    durationMinutes: integer("duration_minutes").notNull(),
+    openAt: timestamp("open_at", { withTimezone: true }).notNull(),
+    closeAt: timestamp("close_at", { withTimezone: true }).notNull(),
+    sections: jsonb("sections").$type<AssessmentSection[]>().notNull(),
+    orgUnitIds: jsonb("org_unit_ids").$type<string[]>().notNull(),
+    releasePolicy: text("release_policy").$type<"immediate" | "manual">().notNull().default("manual"),
+    resultsReleasedAt: timestamp("results_released_at", { withTimezone: true }),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("assessments_tenant_idx").on(t.tenantId)],
+);
+
+export interface AttemptQuestion {
+  questionId: string;
+  section: number;
+}
+
+export interface AttemptResult {
+  questionId: string;
+  section: number;
+  answered: boolean;
+  score: number; // 0-1
+  correct: boolean;
+  detail?: Record<string, unknown>;
+}
+
+export type AttemptStatus = "in_progress" | "submitted" | "auto_submitted";
+
+export const assessmentAttempts = pgTable(
+  "assessment_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id").notNull().references(() => assessments.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    questions: jsonb("questions").$type<AttemptQuestion[]>().notNull(),
+    answers: jsonb("answers").$type<Record<string, { response: StudentResponse; savedAt: string }>>().notNull().default({}),
+    status: text("status").$type<AttemptStatus>().notNull().default("in_progress"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    deadline: timestamp("deadline", { withTimezone: true }).notNull(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    deviceId: text("device_id"),
+    results: jsonb("results").$type<AttemptResult[]>(),
+    score: integer("score_x100"), // score * 100, to keep it exact
+    maxScore: integer("max_score_x100"),
+    sectionScores: jsonb("section_scores").$type<{ title: string; score: number; max: number; correct: number; wrong: number; skipped: number }[]>(),
+    integrity: jsonb("integrity").$type<Record<string, number>>().notNull().default({}),
+    maxSimilarity: integer("max_similarity_pct").notNull().default(0),
+    riskScore: integer("risk_score").notNull().default(0),
+    extraMs: integer("extra_ms").notNull().default(0),
+  },
+  (t) => [uniqueIndex("attempts_assessment_user_uq").on(t.assessmentId, t.userId), index("attempts_user_idx").on(t.userId)],
+);
+
+export const integrityEvents = pgTable(
+  "integrity_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    attemptId: uuid("attempt_id").notNull().references(() => assessmentAttempts.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    detail: text("detail"),
+    at: timestamp("at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("integrity_events_attempt_idx").on(t.attemptId, t.at)],
+);
+
+export const attemptSnapshots = pgTable(
+  "attempt_snapshots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    attemptId: uuid("attempt_id").notNull().references(() => assessmentAttempts.id, { onDelete: "cascade" }),
+    storageKey: text("storage_key").notNull(),
+    contentType: text("content_type").notNull(),
+    at: timestamp("at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("attempt_snapshots_attempt_idx").on(t.attemptId, t.at)],
+);
+
+export const plagiarismPairs = pgTable(
+  "plagiarism_pairs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id").notNull().references(() => assessments.id, { onDelete: "cascade" }),
+    questionId: text("question_id").notNull(),
+    attemptA: uuid("attempt_a").notNull().references(() => assessmentAttempts.id, { onDelete: "cascade" }),
+    attemptB: uuid("attempt_b").notNull().references(() => assessmentAttempts.id, { onDelete: "cascade" }),
+    similarityPct: integer("similarity_pct").notNull(),
+  },
+  (t) => [uniqueIndex("plagiarism_pair_uq").on(t.assessmentId, t.questionId, t.attemptA, t.attemptB)],
+);

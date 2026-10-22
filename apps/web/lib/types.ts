@@ -111,3 +111,17 @@ export interface OrgUnit {
   parentId: string | null;
   students: number;
 }
+
+export interface TestListItem {
+  id: string;
+  title: string;
+  proctorLevel: 1 | 2;
+  durationMinutes: number;
+  openAt: string;
+  closeAt: string;
+  questionCount: number;
+  state: "upcoming" | "open" | "in_progress" | "submitted" | "missed";
+  attemptId: string | null;
+  score: number | null;
+  maxScore: number | null;
+}

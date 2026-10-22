@@ -18,6 +18,7 @@ interface Home {
   league: { division: Division; rank: number | null; groupSize: number; weeklyXp: number; zone: string | null };
   openMistakes: number;
   duelInvites: number;
+  tests: { id: string; title: string; state: string; closeAt: string; durationMinutes: number }[];
   suggestedSkill: { id: string; name: string; topicName: string } | null;
 }
 
@@ -91,6 +92,25 @@ export default function PlayHome() {
           </button>
         )}
       </div>
+
+      {data.tests.length > 0 && (
+        <div className="card stack" style={{ borderColor: "var(--accent)" }}>
+          <h2>Tests open now</h2>
+          {data.tests.map((t) => (
+            <div key={t.id} className="spread">
+              <div>
+                <div style={{ fontWeight: 600 }}>{t.title}</div>
+                <div className="muted small">
+                  {t.durationMinutes} min · closes {dueIn(t.closeAt).replace("due ", "")}
+                </div>
+              </div>
+              <button className="btn primary small" onClick={() => router.push(`/play/tests/${t.id}`)}>
+                {t.state === "in_progress" ? "Resume" : "Open"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {data.assignments.length > 0 && (
         <div className="card stack">

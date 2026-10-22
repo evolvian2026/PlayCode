@@ -626,3 +626,8 @@ input {
   padding: 1px 6px;
   border-radius: 6px;
 }
+
+/* Tests use the full width for code and the question palette. */
+.play-shell:has(.exam) {
+  max-width: 960px;
+}

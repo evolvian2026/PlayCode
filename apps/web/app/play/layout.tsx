@@ -18,7 +18,7 @@ const NAV = [
 ];
 
 /** The question player and a live duel take the whole screen. */
-const isFullScreen = (path: string) => path.startsWith("/play/session") || /^\/play\/duels\/[^/]+/.test(path);
+const isFullScreen = (path: string) => path.startsWith("/play/session") || /^\/play\/(duels|tests)\/[^/]+/.test(path);
 
 function TopBar() {
   const { profile } = usePlayer();

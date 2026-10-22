@@ -14,6 +14,7 @@ export interface TestApp {
   login: (email: string, password?: string) => Promise<string>;
   get: (token: string, url: string) => Promise<{ status: number; body: any }>;
   post: (token: string, url: string, payload?: unknown) => Promise<{ status: number; body: any }>;
+  put: (token: string, url: string, payload?: unknown) => Promise<{ status: number; body: any }>;
 }
 
 export async function setup(): Promise<TestApp> {
@@ -21,7 +22,7 @@ export async function setup(): Promise<TestApp> {
   await seedDemo(START);
   const clock = { now: new Date(START) };
   const app = await buildApp({ now: () => clock.now });
-  const call = async (method: "GET" | "POST", token: string, url: string, payload?: unknown) => {
+  const call = async (method: "GET" | "POST" | "PUT", token: string, url: string, payload?: unknown) => {
     const res = await app.inject({ method, url, payload: payload as never, headers: token ? { authorization: `Bearer ${token}` } : {} });
     return { status: res.statusCode, body: res.json() };
   };
@@ -35,6 +36,7 @@ export async function setup(): Promise<TestApp> {
     },
     get: (token, url) => call("GET", token, url),
     post: (token, url, payload) => call("POST", token, url, payload),
+    put: (token, url, payload) => call("PUT", token, url, payload),
   };
 }
 

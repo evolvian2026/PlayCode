@@ -15,6 +15,8 @@ const schema = z.object({
   JUDGE0_URL: z.string().url().optional(),
   JUDGE0_TOKEN: z.string().optional(),
   JUDGE0_LANGUAGE_IDS: z.string().optional(),
+  /** Local folder for uploaded files (proctoring snapshots). Swap for object storage in production. */
+  STORAGE_DIR: z.string().default(".storage"),
 });
 
 export const env = schema.parse(process.env);
