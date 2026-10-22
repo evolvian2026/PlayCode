@@ -1,17 +1,17 @@
-import { randomBytes } from "node:crypto";
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { hashString, QUESTION_TYPES, shuffle } from "@playcode/core";
+import { QUESTION_TYPES } from "@playcode/core";
 import { z } from "zod";
 import { db } from "../db/client";
 import { assignments, memberships, orgUnits, packs, questions, sessions, skills, users } from "../db/schema";
 import { audit } from "../lib/audit";
-import { hashPassword } from "../lib/auth";
-import { badRequest, forbidden, notFound } from "../lib/errors";
+import { forbidden, notFound } from "../lib/errors";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
 import { engagement, readinessReport, skillsReport, studentDetail, studentList } from "../services/analytics";
+import { createAssignment } from "../services/assignments";
 import { effectiveBranding, updateBranding } from "../services/branding";
 import { DEFAULT_PASS_MARK, sessionScore, visibleTo } from "../services/practice";
+import { importStudents } from "../services/students";
 import { assertUnitsInScope, descendants, scopedUnitIds, studentIdsInUnits, tenantUnits } from "../services/scope";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
 
@@ -128,36 +128,8 @@ export async function consoleRoutes(app: FastifyInstance) {
       req.body,
     );
     await assertUnitsInScope(db, req.auth, [body.unitId]);
-    const tenant = await getTenant(db, tenantId);
-    const rows = parseStudentCsv(body.csv);
-    const invalid = rows.filter((r) => !r.name || !z.string().email().safeParse(r.email).success);
-    if (invalid.length) throw badRequest(`${invalid.length} row(s) need a name and a valid email`, invalid.slice(0, 10));
-    const emails = [...new Set(rows.map((r) => r.email))];
-    const existing = new Set(
-      emails.length ? (await db.select({ email: users.email }).from(users).where(inArray(users.email, emails))).map((u) => u.email) : [],
-    );
-    const [{ count: used } = { count: 0 }] = await db
-      .select({ count: sql<number>`count(distinct ${memberships.userId})::int` })
-      .from(memberships)
-      .where(and(eq(memberships.tenantId, tenantId), eq(memberships.role, "student")));
-    const toCreate = rows.filter((r, i) => !existing.has(r.email) && rows.findIndex((x) => x.email === r.email) === i);
-    if (used + toCreate.length > tenant.seats) {
-      throw badRequest(`This import needs ${toCreate.length} seats but only ${Math.max(0, tenant.seats - used)} are left on your licence`);
-    }
-    const created: { name: string; email: string; rollNo: string | null; phone: string | null; password: string }[] = [];
-    await db.transaction(async (tx) => {
-      for (const r of toCreate) {
-        const password = body.defaultPassword ?? randomBytes(6).toString("base64url");
-        const [user] = await tx
-          .insert(users)
-          .values({ tenantId, name: r.name, email: r.email, rollNo: r.rollNo, phone: r.phone, passwordHash: await hashPassword(password) })
-          .returning();
-        await tx.insert(memberships).values({ userId: user!.id, tenantId, orgUnitId: body.unitId, role: "student" });
-        created.push({ ...r, password });
-      }
-      await audit(tx, { tenantId, actorId: req.auth.userId, action: "students.import", target: body.unitId, data: { created: created.length } });
-    });
-    return { created, skipped: rows.filter((r) => existing.has(r.email)).map((r) => ({ email: r.email, reason: "already registered" })) };
+    const result = await importStudents(db, { tenantId, actorId: req.auth.userId, unitId: body.unitId, rows: parseStudentCsv(body.csv), defaultPassword: body.defaultPassword, now: app.now() });
+    return { created: result.created.map(({ id: _id, ...c }) => c), skipped: result.skipped };
   });
 
   // ---------- Branding ----------
@@ -320,36 +292,8 @@ export async function consoleRoutes(app: FastifyInstance) {
       req.body,
     );
     await assertUnitsInScope(db, req.auth, body.unitIds);
-    let questionIds: string[];
-    if (body.packId) {
-      const [pack] = await db.select().from(packs).where(eq(packs.id, body.packId));
-      if (!pack || (pack.tenantId && pack.tenantId !== tenantId)) throw notFound("Pack");
-      questionIds = pack.questionIds;
-    } else {
-      const pool = await db
-        .select({ id: questions.id })
-        .from(questions)
-        .where(and(visibleTo(tenantId), inArray(questions.skillId, body.skillIds!)))
-        .orderBy(questions.difficulty, questions.id);
-      if (pool.length === 0) throw badRequest("Those skills have no questions yet");
-      // Everyone in the assignment gets the same questions, in the same order.
-      questionIds = shuffle(pool.map((p) => p.id), hashString(`${body.title}:${body.openAt.toISOString()}`)).slice(0, body.count);
-    }
-    const [created] = await db
-      .insert(assignments)
-      .values({
-        tenantId,
-        title: body.title,
-        packId: body.packId ?? null,
-        questionIds,
-        orgUnitIds: body.unitIds,
-        openAt: body.openAt,
-        closeAt: body.closeAt,
-        createdBy: req.auth.userId,
-      })
-      .returning();
-    await audit(db, { tenantId, actorId: req.auth.userId, action: "assignment.create", target: created!.id, data: { title: body.title, questions: questionIds.length } });
-    return { assignment: { ...created!, passMark: DEFAULT_PASS_MARK } };
+    const created = await createAssignment(db, { ...body, tenantId, actorId: req.auth.userId });
+    return { assignment: { ...created, passMark: DEFAULT_PASS_MARK } };
   });
 
   // ---------- Analytics ----------

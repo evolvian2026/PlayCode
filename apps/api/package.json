@@ -14,7 +14,8 @@
     "verify:content": "tsx src/content/verify-cli.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "nudges:run": "tsx src/scripts/run-nudges.ts"
+    "nudges:run": "tsx src/scripts/run-nudges.ts",
+    "webhooks:deliver": "tsx src/scripts/deliver-webhooks.ts"
   },
   "dependencies": {
     "@fastify/cors": "11.3.1",

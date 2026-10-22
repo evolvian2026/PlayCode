@@ -12,6 +12,8 @@ export default defineConfig({
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? "postgres://playcode:playcode@localhost:5432/playcode_test",
       JWT_SECRET: "test-secret-test-secret-test-secret",
       STORAGE_DIR: join(tmpdir(), "playcode-test-storage"),
+      // Webhook tests deliver to a local receiver.
+      WEBHOOKS_ALLOW_PRIVATE: "true",
     },
   },
 });

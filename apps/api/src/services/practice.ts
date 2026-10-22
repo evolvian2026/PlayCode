@@ -40,6 +40,7 @@ import { checkRunRate, evaluate, tryRun, type Evaluation } from "../execution";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { issueMissionCertificate } from "./certificates";
 import { addWeeklyXp } from "./leagues";
+import { deliverDue, emitEvent } from "./webhooks";
 import { getOrCreateProfile, profileSummary, streakColumns, streakState } from "./profile";
 import { studentUnitIdsWithAncestors } from "./scope";
 import { getTenant, streakRules, tenantToday } from "./tenant";
@@ -299,7 +300,8 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
     evaluation = await evaluate(toCoreQuestion(pending), input.response, "practice");
   }
 
-  return db.transaction(async (tx) => {
+  let queuedEvents = 0;
+  const out = await db.transaction(async (tx) => {
     const [s] = await tx.select().from(sessions).where(eq(sessions.id, sessionId)).for("update");
     if (!s || s.userId !== ctx.userId) throw notFound("Session");
     if (s.finishedAt) throw conflict("session_finished", "This session is already finished");
@@ -433,7 +435,18 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
       const scorePct = sessionScore(updatedSession!);
       if (pack && pack.kind === "mission" && scorePct >= pack.passMark) {
         certificate = await issueMissionCertificate(tx, { tenantId: ctx.tenantId, userId: ctx.userId, packId: pack.id, title: pack.title, scorePct, now: ctx.now });
+        queuedEvents += await emitEvent(tx, ctx.tenantId, "certificate.issued", { code: certificate, userId: ctx.userId, packId: pack.id, title: pack.title, scorePct }, ctx.now);
       }
+    }
+    // Webhook events are written in the same transaction (an outbox), so they exist only if the answer does.
+    if (finished && s.kind === "assignment" && s.assignmentId) {
+      queuedEvents += await emitEvent(
+        tx,
+        ctx.tenantId,
+        "assignment.completed",
+        { assignmentId: s.assignmentId, userId: ctx.userId, sessionId: s.id, scorePct: sessionScore(updatedSession!), correct: updatedSession!.correctCount, total: s.questionIds.length },
+        ctx.now,
+      );
     }
 
     return {
@@ -455,4 +468,6 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
       session: await sessionView(tx, updatedSession!),
     };
   });
+  if (queuedEvents) void deliverDue(db, ctx.now).catch(() => {});
+  return out;
 }

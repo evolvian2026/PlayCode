@@ -16,6 +16,7 @@ const NAV = [
   { href: "/console/engage", label: "Engagement", icon: "megaphone", perm: null },
   { href: "/console/batches", label: "Batches", icon: "layers", perm: null },
   { href: "/console/content", label: "Question bank", icon: "book", perm: "content.view" },
+  { href: "/console/integrations", label: "Integrations", icon: "layers", perm: "api.manage" },
   { href: "/console/settings", label: "Settings", icon: "settings", perm: "tenant.settings" },
 ];
 

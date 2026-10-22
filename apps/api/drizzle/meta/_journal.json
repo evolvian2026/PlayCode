@@ -43,6 +43,13 @@
       "when": 1792659893798,
       "tag": "0005_branding_certificates",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792660449555,
+      "tag": "0006_public_api",
+      "breakpoints": true
     }
   ]
 }

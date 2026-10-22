@@ -18,6 +18,7 @@ import {
   submitAttempt,
 } from "../services/assessments";
 import { assertUnitsInScope, scopedUnitIds } from "../services/scope";
+import { emitAndDeliver } from "../services/webhooks";
 
 const sectionSchema = z
   .object({
@@ -140,6 +141,7 @@ export async function assessmentConsoleRoutes(app: FastifyInstance) {
   app.post("/assessments/:id/release", { preHandler: manage }, async (req) => {
     const a = await scopedAssessment(req, parse(idParam, req.params).id);
     await db.update(assessments).set({ resultsReleasedAt: app.now() }).where(eq(assessments.id, a.id));
+    emitAndDeliver(db, a.tenantId, "assessment.results_released", { assessmentId: a.id, title: a.title }, app.now());
     await audit(db, { tenantId: a.tenantId, actorId: req.auth.userId, action: "assessment.release", target: a.id });
     return { ok: true };
   });

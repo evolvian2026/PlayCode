@@ -29,6 +29,7 @@ import { checkRunRate, evaluate, tryRun } from "../execution";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { putObject } from "../lib/storage";
 import { toCoreQuestion, type StudentCtx } from "./practice";
+import { emitAndDeliver } from "./webhooks";
 import { descendants, studentIdsInUnits, studentUnitIdsWithAncestors, tenantUnits } from "./scope";
 
 /** Answers saved within this grace period after the deadline still count (network lag). */
@@ -288,7 +289,16 @@ export async function submitAttempt(db: Db, attemptId: string, now: Date, status
     .set({ status, submittedAt: now, results, score: Math.round(scored.score * 100), maxScore: Math.round(scored.max * 100), sectionScores: scored.sections })
     .where(and(eq(assessmentAttempts.id, at.id), eq(assessmentAttempts.status, "in_progress")))
     .returning();
-  if (updated) await checkPlagiarism(db, updated, byId);
+  if (updated) {
+    await checkPlagiarism(db, updated, byId);
+    emitAndDeliver(
+      db,
+      updated.tenantId,
+      "assessment.submitted",
+      { assessmentId: a.id, attemptId: updated.id, userId: updated.userId, status, score: scored.score, maxScore: scored.max, sections: scored.sections },
+      now,
+    );
+  }
 }
 
 /** Compare this attempt's code answers with every other submitted attempt on the same question. */

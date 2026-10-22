@@ -19,6 +19,7 @@ export const PERMISSIONS = [
   "analytics.own_units",
   "reports.export",
   "audit.view",
+  "api.manage",
   "practice.play",
 ] as const;
 
@@ -62,6 +63,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "audit.view",
     "leagues.manage",
     "events.manage",
+    "api.manage",
   ],
   content_manager: ["content.global.manage", "content.view"],
   partner_admin: [
@@ -79,6 +81,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "reports.export",
     "audit.view",
     "leagues.manage",
+    "api.manage",
   ],
   inst_admin: [
     "tenant.settings",
@@ -94,6 +97,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "reports.export",
     "audit.view",
     "leagues.manage",
+    "api.manage",
   ],
   tpo: [
     "users.manage",

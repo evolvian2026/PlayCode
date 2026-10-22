@@ -22,6 +22,13 @@ const schema = z.object({
   WHATSAPP_PHONE_ID: z.string().optional(),
   WHATSAPP_TEMPLATE_LANG: z.string().default("en"),
   PUBLIC_APP_URL: z.string().default("http://localhost:3000"),
+  /** Encrypts stored secrets (webhook signing keys, SSO client secrets). Defaults to a key derived from JWT_SECRET. */
+  DATA_KEY: z.string().min(16).optional(),
+  /** Allow webhook URLs on private networks (development and tests only). */
+  WEBHOOKS_ALLOW_PRIVATE: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
 });
 
 export const env = schema.parse(process.env);

@@ -9,9 +9,11 @@ import { adminRoutes } from "./routes/admin";
 import { assessmentConsoleRoutes } from "./routes/assessments-console";
 import { authRoutes } from "./routes/auth";
 import { consoleRoutes } from "./routes/console";
+import { developerRoutes } from "./routes/developers";
 import { engageRoutes } from "./routes/engage";
 import { publicRoutes } from "./routes/public";
 import { studentRoutes } from "./routes/student";
+import { v1Routes } from "./routes/v1";
 
 export interface AppOptions {
   /** Injectable clock, so tests can move time. */
@@ -31,7 +33,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
       : false,
   });
   app.decorate("now", options.now ?? (() => new Date()));
-  await app.register(cors, { origin: env.CORS_ORIGIN.split(","), credentials: true, methods: ["GET", "POST", "PUT", "DELETE"] });
+  await app.register(cors, { origin: env.CORS_ORIGIN.split(","), credentials: true, methods: ["GET", "POST", "PUT", "PATCH", "DELETE"] });
 
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof HttpError) {
@@ -74,5 +76,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(assessmentConsoleRoutes, { prefix: "/console" });
   await app.register(adminRoutes, { prefix: "/admin" });
   await app.register(engageRoutes);
+  await app.register(developerRoutes, { prefix: "/console" });
+  await app.register(v1Routes);
   return app;
 }

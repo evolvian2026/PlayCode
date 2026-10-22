@@ -496,3 +496,63 @@ export const certificates = pgTable(
   },
   (t) => [uniqueIndex("certificates_user_ref_uq").on(t.userId, t.kind, t.refId)],
 );
+
+// ---------- Public API and webhooks ----------
+
+export const API_SCOPES = ["users:read", "users:write", "assignments:read", "assignments:write", "results:read"] as const;
+export type ApiScope = (typeof API_SCOPES)[number];
+
+export const apiClients = pgTable(
+  "api_clients",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    clientId: text("client_id").notNull().unique(),
+    /** SHA-256 of the secret; the secret itself is shown once at creation. */
+    secretHash: text("secret_hash").notNull(),
+    scopes: jsonb("scopes").$type<ApiScope[]>().notNull(),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [index("api_clients_tenant_idx").on(t.tenantId)],
+);
+
+export const WEBHOOK_EVENTS = ["assignment.completed", "assessment.submitted", "assessment.results_released", "certificate.issued", "user.created"] as const;
+export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+
+export const webhooks = pgTable(
+  "webhooks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    /** Signing secret, encrypted at rest (lib/crypto). */
+    secretEnc: text("secret_enc").notNull(),
+    events: jsonb("events").$type<WebhookEvent[]>().notNull(),
+    active: boolean("active").notNull().default(true),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("webhooks_tenant_idx").on(t.tenantId)],
+);
+
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    webhookId: uuid("webhook_id").notNull().references(() => webhooks.id, { onDelete: "cascade" }),
+    event: text("event").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    status: text("status").$type<"pending" | "delivered" | "failed">().notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull(),
+    lastStatusCode: integer("last_status_code"),
+    lastError: text("last_error"),
+    createdAt: createdAt(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  },
+  (t) => [index("webhook_deliveries_due_idx").on(t.status, t.nextAttemptAt), index("webhook_deliveries_hook_idx").on(t.webhookId, t.createdAt)],
+);
