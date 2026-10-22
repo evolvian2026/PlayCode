@@ -38,3 +38,6 @@ export const env = schema.parse(process.env);
 if (env.NODE_ENV === "production" && env.JWT_SECRET === "dev-only-secret-change-me-please") {
   throw new Error("Set JWT_SECRET in production");
 }
+if (env.NODE_ENV === "production" && env.ALLOW_PRIVATE_URLS) {
+  throw new Error("ALLOW_PRIVATE_URLS is for development only");
+}

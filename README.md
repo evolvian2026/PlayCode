@@ -6,7 +6,7 @@ the bug, reorder the lines and more), wrapped in XP, streaks, hearts, leagues
 and missions. Colleges get assignments, analytics and a readiness score per
 student.
 
-This covers Phase 1 (MVP) and Phase 2 of the product and architecture spec.
+This covers Phases 1, 2 and 3 of the product and architecture spec.
 
 ## What is in this build
 
@@ -25,6 +25,14 @@ This covers Phase 1 (MVP) and Phase 2 of the product and architecture spec.
 - Events: section-vs-section (run by the institution) and inter-college (run by PlayCode) competitions ranked by XP per member.
 - Nudges: automatic reminders (streak at risk, assignment due, test open) and TPO announcements to filtered groups, delivered in-app and on WhatsApp.
 
+**Phase 3 additions**
+- Partner programme: training partners resell PlayCode under their own brand, run several colleges from one seat pool and switch into any of them. White-label branding (name, colour, logo, certificate signatory) flows from partner to college.
+- Certificates for passed missions, each with a public verification page and QR code (`/verify/<code>`).
+- Public API v1 (`/v1`, OAuth client credentials with scopes) for ERP/LMS sync: students, org units, assignments, results and readiness. Signed webhooks (HMAC-SHA256) with retries for `user.created`, `assignment.completed`, `assessment.submitted`, `assessment.results_released`, `certificate.issued`, `candidate.registered`, `candidate.status_changed` and `user.erased`.
+- Corporate hiring drives: companies publish a drive with a public apply link (`/apply/<code>`), candidates register and take a proctored test, recruiters shortlist, reject or hire and export a CSV.
+- Single sign-on with OpenID Connect: Google Workspace, Microsoft Entra ID or any OIDC provider, with allowed email domains and optional auto-provisioning into a batch.
+- Privacy tools (built for India's DPDP Act 2023): privacy notice and WhatsApp consent in an append-only ledger, "download my data" for students, deletion requests that admins approve or decline, and a filterable audit log.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -42,7 +50,8 @@ This covers Phase 1 (MVP) and Phase 2 of the product and architecture spec.
 ```
 packages/core   Pure domain logic: question types and grading, XP, levels, streaks,
                 hearts, leagues, Elo-style mastery, readiness score, badges, roles.
-apps/api        Fastify + Drizzle ORM on PostgreSQL. Routes: /auth, /student, /console, /admin.
+apps/api        Fastify + Drizzle ORM on PostgreSQL. Routes: /auth, /student, /console, /admin,
+                /public, /privacy and the public API under /v1.
 apps/web        Next.js 15 (App Router) PWA: /play for students, /console for staff.
 ```
 
@@ -70,6 +79,13 @@ weeks of simulated practice. Every account's password is `playcode123`.
 | TPO | tpo@demo.edu |
 | Institution admin | admin@demo.edu |
 | Platform super admin | superadmin@playcode.dev |
+| Training partner admin (SkillBridge) | partner@skillbridge.in |
+| Partner's college admin (Sunrise, sign in at `/login?org=sunrise`) | admin@sunrise.edu |
+| Partner's college student | sunrise.student1@sunrise.edu |
+| Company HR admin (Acme) | hr@acme.dev |
+| Company recruiter (Acme) | recruiter@acme.dev |
+
+The demo institution also has a pending deletion request (Privacy requests in the console).
 
 Set `NEXT_PUBLIC_DEMO_LOGINS=false` to hide the demo buttons on the sign-in page.
 
@@ -93,12 +109,24 @@ Scheduled jobs (run them from cron or your scheduler):
 | --- | --- | --- |
 | Close league week | Mondays after midnight, tenant time | `pnpm --filter @playcode/api league:close` |
 | Nudges and notification delivery | Hourly (streak reminders only fire 6-9 pm local time) | `pnpm --filter @playcode/api nudges:run` |
+| Webhook retries | Every minute | `pnpm --filter @playcode/api webhooks:deliver` |
+
+Webhooks are sent straight away when an event happens; the job retries failures
+(1, 2, 4, 8, 16 then 32 minutes apart, 7 attempts in all) and picks up anything a crash left behind.
 
 Code execution:
 - Development and tests use the local runner (`EXECUTION_BACKEND=local`), which needs `gcc`, `javac`/`java` and `python3` and limits CPU, memory and output with `prlimit`. It does not isolate the network or filesystem, so the API refuses it in production.
 - Production: run [Judge0](https://github.com/judge0/judge0) on its own network and set `EXECUTION_BACKEND=judge0` and `JUDGE0_URL`. Assessments get priority over duels and practice in the execution queue.
 
 WhatsApp nudges: set `WHATSAPP_TOKEN` and `WHATSAPP_PHONE_ID` (WhatsApp Cloud API) and create approved templates named `playcode_streak_at_risk`, `playcode_assignment_due`, `playcode_test_open`, `playcode_duel_invite` and `playcode_announcement`, each with two body parameters (title, message). Students add their number on their profile or through the CSV import (fourth column).
+
+Single sign-on: set `API_PUBLIC_URL` to the address browsers use for the API, and register `<API_PUBLIC_URL>/auth/sso/callback` as the redirect URI in Google Cloud or Microsoft Entra. The institution admin then enters the client ID and secret under Settings. Students sign in from `/login?org=<slug>`.
+
+Secrets: webhook signing keys and SSO client secrets are encrypted with `DATA_KEY` (AES-256-GCM). Set it in production; without it a key is derived from `JWT_SECRET`, so rotating that secret would make stored secrets unreadable.
+
+Outbound URLs: webhook targets and SSO issuers on private networks (localhost, 10.x, 192.168.x, cloud metadata) are refused. `ALLOW_PRIVATE_URLS=true` lifts this for development and tests only; the API refuses it in production.
+
+Data erasure: approving a deletion request removes the student's practice history, answers, test attempts with proctoring snapshots, certificates, notifications and hiring-drive records, and anonymises the account (the row stays so cohort totals add up). The consent ledger, the request and the audit trail (with email addresses removed) are kept as the record.
 
 Other operations:
 
@@ -110,10 +138,12 @@ Other operations:
 
 - **Fastify instead of NestJS**: lighter for a modular monolith of this size; modules live in `apps/api/src/routes` and `services`.
 - **Leaderboards from PostgreSQL**, no Redis yet: group sizes are 30, so queries stay cheap. Add Redis with realtime duels.
-- **Email and password sign-in**: OTP and SSO are next. Imported students get a starting password from the import screen.
+- **Email and password sign-in, plus OpenID Connect SSO**: SAML and OTP are not built. Imported students get a starting password from the import screen.
 - **Tenant isolation in the API layer**: every query is scoped by tenant and org unit. PostgreSQL row-level security is the next hardening step.
 
 - **Single API instance assumed for live features**: the WebSocket hub and the execution queue are in-process. Running several API instances needs Redis pub/sub and a shared job queue (BullMQ/SQS).
 - **Camera checks are snapshots only**: face detection (no face, multiple faces) is reserved in the integrity model but not implemented.
 
-Not built yet: AI hints and question drafting (needs an LLM API key), single sign-on (needs Google/Microsoft app registration), scheduled PDF reports, L3 proctoring, and the content studio UI.
+- **Sessions are checked against the account on every request**, so disabling or erasing an account signs it out at once. This costs one primary-key lookup per request.
+
+Not built yet: LTI 1.3 for LMS launch, SAML, AI hints and question drafting (needs an LLM API key), L3 proctoring (face and phone detection), scheduled PDF reports, and the content studio UI.
