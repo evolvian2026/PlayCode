@@ -14,6 +14,7 @@ import { effectiveBranding, updateBranding } from "../services/branding";
 import { DEFAULT_PASS_MARK, sessionScore, visibleTo } from "../services/practice";
 import { getConnection, PRESET_ISSUERS, redirectUri, saveConnection } from "../services/sso";
 import { importStudents } from "../services/students";
+import { interviewForStaff, interviewsFor } from "../services/interviews";
 import { assertUnitsInScope, descendants, scopedUnitIds, studentIdsInUnits, tenantUnits } from "../services/scope";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
 import { requireFeature } from "../services/plan";
@@ -122,6 +123,19 @@ export async function consoleRoutes(app: FastifyInstance) {
     if (!scope.studentIds.includes(id)) throw notFound("Student");
     const tenant = await getTenant(db, scope.tenantId);
     return studentDetail(db, { userId: id, today: tenantToday(tenant, app.now()), rules: streakRules(tenant) });
+  });
+
+  // ---------- Mock interviews ----------
+  app.get("/interviews", { preHandler: anyAnalytics }, async (req) => {
+    const { unitId } = parse(unitQuery, req.query);
+    return interviewsFor(db, (await resolveScope(req, unitId)).studentIds);
+  });
+
+  app.get("/interviews/:id", { preHandler: anyAnalytics }, async (req) => {
+    const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+    const interview = await interviewForStaff(db, tenantOf(req), id);
+    if (!(await resolveScope(req)).studentIds.includes(interview.userId)) throw notFound("Interview");
+    return interview;
   });
 
   app.post("/students/import", { preHandler: requirePermission("users.manage") }, async (req) => {

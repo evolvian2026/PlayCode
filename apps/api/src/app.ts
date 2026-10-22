@@ -16,6 +16,7 @@ import { billingRoutes } from "./routes/billing";
 import { consoleRoutes } from "./routes/console";
 import { developerRoutes } from "./routes/developers";
 import { driveRoutes } from "./routes/drives";
+import { interviewRoutes } from "./routes/interviews";
 import { ltiRoutes } from "./routes/lti";
 import { pathRoutes } from "./routes/paths";
 import { placementRoutes } from "./routes/placements";
@@ -107,5 +108,6 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(billingRoutes);
   await app.register(accountRoutes);
   await app.register(placementRoutes);
+  await app.register(interviewRoutes);
   return app;
 }

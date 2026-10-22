@@ -17,7 +17,7 @@ import { createPath } from "../services/paths";
 import { requestErasure } from "../services/privacy";
 import { db, pool, type Db } from "./client";
 import { runMigrations } from "./migrate";
-import { seedPlacements } from "./seed-placements";
+import { seedInterview, seedPlacements } from "./seed-placements";
 import { assessments, assignments, competitions, memberships, orgUnits, packs, questions, skills, tenants, users } from "./schema";
 
 export const DEMO_PASSWORD = "playcode123";
@@ -252,6 +252,7 @@ export async function seedDemo(now = new Date()): Promise<void> {
     cseUnitId: cse.id,
     now,
   });
+  await seedInterview({ tenantId, userId: demoStudent.id, now });
   // A student who never started has asked for their data to be deleted.
   await requestErasure(db, { tenantId, userId: students[26]!.id, reason: "I have left the college.", now: new Date(now.getTime() - 2 * 86_400_000) });
   // A training partner reselling PlayCode under its own brand, with one college.

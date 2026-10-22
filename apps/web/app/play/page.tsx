@@ -73,6 +73,7 @@ export default function PlayHome() {
   const paths = useApi<{ paths: StudentPath[] }>("/student/paths");
   const events = useApi<{ events: EventItem[] }>("/student/competitions");
   const placements = useApi<{ drives: PlacementDrive[] }>("/student/placements");
+  const interviews = useApi<{ available: boolean; active: string | null }>("/student/interviews");
   const liveEvent = events.data?.events.find((e) => e.state === "live");
   const [startError, setStartError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -162,6 +163,16 @@ export default function PlayHome() {
       )}
 
       <PlacementCard drives={placements.data?.drives ?? []} />
+
+      {interviews.data?.available && (
+        <Link href="/play/interview" className="card spread" style={{ color: "inherit" }}>
+          <div>
+            <div className="muted small">{t("Mock interview")}</div>
+            <b>{t(interviews.data.active ? "Continue your interview" : "Practise a technical interview with AI")}</b>
+          </div>
+          <Icon name="chat" />
+        </Link>
+      )}
 
       {paths.data?.paths
         .filter((path) => path.done < path.steps.length)

@@ -1,7 +1,7 @@
 import { checkEligibility, seededRandom, type AcademicRecord, type PlacementCriteria } from "@playcode/core";
 import { createDrive } from "../services/placements";
 import { db } from "./client";
-import { academicRecords, placementApplications, placementDrives, type ApplicationStatus } from "./schema";
+import { academicRecords, interviews, placementApplications, placementDrives, type ApplicationStatus, type InterviewTurn } from "./schema";
 
 const DAY_MS = 86_400_000;
 
@@ -160,5 +160,39 @@ export async function seedPlacements(args: {
     criteria: { unitIds: [args.cseUnitId], minCgpa: 7.5, maxBacklogs: 0, graduationYears: [2027], allowPlaced: true },
     rounds: ["Online DSA test", "Technical interview 1", "Technical interview 2", "Hiring manager round"],
     packId: "mission-product-dsa",
+  });
+}
+
+/** One finished mock interview for the demo student, so the scorecard and the teachers' view have data. */
+export async function seedInterview(args: { tenantId: string; userId: string; now: Date }) {
+  const at = new Date(args.now.getTime() - 9 * DAY_MS);
+  const lines: [InterviewTurn["role"], string][] = [
+    ["interviewer", "Hi Riya, thanks for joining. Let's start simple: what is the difference between a `while` loop and a `do-while` loop?"],
+    ["candidate", "A while loop checks the condition first, so it may not run at all. A do-while runs the body once and then checks, so it always runs at least once. I'd use do-while for a menu that must show once."],
+    ["interviewer", "Good example. Now, how would you reverse an array in place? What is the time and space complexity?"],
+    ["candidate", "Use two pointers, one at the start and one at the end, swap and move them inward until they meet. It is O(n) time and O(1) extra space."],
+    ["interviewer", "Nice. What happens with your approach if the array has an odd length?"],
+    ["candidate", "The middle element stays where it is, the loop stops when start equals end. I think the condition should be start < end."],
+    ["interviewer", "Correct. Last one: in pseudocode, what does this print? `x = 5; for i = 1 to 3: x = x + i; print x`"],
+    ["candidate", "It adds 1, 2 and 3, so 11."],
+    ["interviewer", "That's right. Thanks Riya, that's all for today. Your scorecard is below."],
+  ];
+  await db.insert(interviews).values({
+    tenantId: args.tenantId,
+    userId: args.userId,
+    track: "service",
+    focusSkills: ["loops.while", "arrays.basics", "pseudocode.basics"],
+    status: "finished",
+    turns: lines.map(([role, text], i) => ({ role, text, at: new Date(at.getTime() + i * 60_000).toISOString() })),
+    scorecard: {
+      scores: { problemSolving: 4, fundamentals: 4, communication: 4, code: 3 },
+      overall: 4,
+      strengths: ["Gave a real use case for do-while (a menu that must show once).", "Stated the time and space complexity of the two-pointer reversal unprompted."],
+      improvements: ["Think about edge cases before being asked: odd lengths, empty arrays.", "Write the loop condition precisely the first time (start < end)."],
+      summary: "You answered clearly and in order, and your fundamentals are solid for service-company interviews. Push yourself to cover edge cases on your own.",
+      practise: ["arrays.basics", "loops.while"],
+    },
+    startedAt: at,
+    finishedAt: new Date(at.getTime() + 9 * 60_000),
   });
 }

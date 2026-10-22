@@ -16,6 +16,8 @@ const fakeAi: AiProvider = {
   reviewSnapshot: async () => ({ value: { faces: 1, phone: false, otherPerson: false, note: "" }, usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 } }),
   draftCodingProblems: async () => ({ value: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 } }),
   draftSqlProblems: async () => ({ value: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 } }),
+  interviewTurn: async () => { throw new Error("not used"); },
+  interviewScorecard: async () => { throw new Error("not used"); },
 };
 
 function pdfText(pdf: Buffer): string {
