@@ -40,6 +40,7 @@ export async function seedContent(database: Db = db): Promise<void> {
       explanation: q.explanation,
       hints: q.hints,
       tags: q.tags ?? [],
+      solutions: q.solutions ?? null,
     };
     await database
       .insert(questions)

@@ -17,6 +17,7 @@ const NAV = [
   { href: "/console/engage", label: "Engagement", icon: "megaphone", perm: null },
   { href: "/console/batches", label: "Batches", icon: "layers", perm: null },
   { href: "/console/content", label: "Question bank", icon: "book", perm: "content.view" },
+  { href: "/console/studio", label: "Content studio", icon: "spark", perm: ["content.private.manage", "content.global.manage"] },
   { href: "/console/integrations", label: "Integrations", icon: "layers", perm: "api.manage" },
   { href: "/console/privacy", label: "Privacy requests", icon: "shield", perm: "users.manage" },
   { href: "/console/audit", label: "Audit log", icon: "list", perm: "audit.view" },
@@ -39,7 +40,7 @@ function Side() {
           </span>
         </Link>
       )}
-      {NAV.filter((n) => !n.perm || me.permissions.includes(n.perm)).map((n) => {
+      {NAV.filter((n) => !n.perm || [n.perm].flat().some((p) => me.permissions.includes(p))).map((n) => {
         const active = n.href === "/console" ? path === "/console" : path.startsWith(n.href);
         return (
           <Link key={n.href} href={n.href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>

@@ -38,6 +38,11 @@ export function queueDepth(): number {
 
 export const MAX_SOURCE_BYTES = 20_000;
 
+/** Run a whole program (authoring checks): one compile, one run per stdin input. */
+export function runProgram(language: CodeLanguage, source: string, inputs: string[] = [""], priority: Priority = "practice"): Promise<RunOutcome[]> {
+  return queue.run(priority, () => getRunner().run(language, source, inputs));
+}
+
 export interface TestResult {
   passed: boolean;
   status: RunOutcome["status"];

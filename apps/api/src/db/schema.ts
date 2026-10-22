@@ -11,7 +11,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, Division, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, CodeLanguage, Division, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -124,10 +124,27 @@ export const questions = pgTable(
     attempts: integer("attempts").notNull().default(0),
     correctCount: integer("correct_count").notNull().default(0),
     version: integer("version").notNull().default(1),
+    /** Where it came from: the bundled bank, the content studio, or an AI draft accepted in the studio. */
+    origin: text("origin").$type<"seed" | "studio" | "ai">().notNull().default("seed"),
+    /** Write code: a reference solution per language, run against every test when checking. Never sent to students. */
+    solutions: jsonb("solutions").$type<Partial<Record<CodeLanguage, string>>>(),
+    /** "run": the studio runs the code and compares its output with the answer. "manual": an author vouches for it. */
+    checkMode: text("check_mode").$type<"run" | "manual">().notNull().default("manual"),
+    lastCheck: jsonb("last_check").$type<QuestionCheck>(),
+    createdBy: uuid("created_by"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
-  (t) => [index("questions_skill_idx").on(t.skillId)],
+  (t) => [index("questions_skill_idx").on(t.skillId), index("questions_tenant_status_idx").on(t.tenantId, t.status)],
 );
+
+export interface QuestionCheck {
+  ok: boolean;
+  problems: string[];
+  /** What running the code printed, for output questions. */
+  output?: string;
+  at: string;
+}
 
 export const packs = pgTable("packs", {
   id: text("id").primaryKey(),

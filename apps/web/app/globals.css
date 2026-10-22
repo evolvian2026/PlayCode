@@ -648,3 +648,24 @@ input {
     box-shadow: none;
   }
 }
+
+/* ---------- Content studio ---------- */
+.studio-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+@media (min-width: 1100px) {
+  .studio-grid {
+    grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+    align-items: start;
+  }
+  .studio-preview {
+    position: sticky;
+    top: 16px;
+  }
+}
+textarea.mono {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.88rem;
+}
