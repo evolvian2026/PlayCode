@@ -202,6 +202,10 @@ export const playerProfiles = pgTable("player_profiles", {
   division: text("division").$type<Division>().notNull().default("bronze"),
   repeatXpDay: text("repeat_xp_day"),
   repeatXpToday: integer("repeat_xp_today").notNull().default(0),
+  duelRating: integer("duel_rating").notNull().default(1000),
+  duelWins: integer("duel_wins").notNull().default(0),
+  duelLosses: integer("duel_losses").notNull().default(0),
+  duelDraws: integer("duel_draws").notNull().default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -261,4 +265,42 @@ export const auditLogs = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("audit_logs_tenant_idx").on(t.tenantId, t.createdAt)],
+);
+
+export type DuelStatus = "waiting" | "active" | "finished" | "expired" | "declined" | "cancelled";
+
+export const duels = pgTable(
+  "duels",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    status: text("status").$type<DuelStatus>().notNull().default("waiting"),
+    challengerId: uuid("challenger_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    /** Set for a direct challenge; null while an open duel waits for a match. */
+    opponentId: uuid("opponent_id").references(() => users.id, { onDelete: "cascade" }),
+    questionIds: jsonb("question_ids").$type<string[]>().notNull().default([]),
+    createdAt: createdAt(),
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    winnerId: uuid("winner_id"),
+  },
+  (t) => [index("duels_tenant_status_idx").on(t.tenantId, t.status), index("duels_opponent_idx").on(t.opponentId)],
+);
+
+export const duelPlayers = pgTable(
+  "duel_players",
+  {
+    duelId: uuid("duel_id").notNull().references(() => duels.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    answers: jsonb("answers").$type<{ questionId: string; correct: boolean; timeMs: number }[]>().notNull().default([]),
+    correct: integer("correct").notNull().default(0),
+    timeMs: integer("time_ms").notNull().default(0),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    outcome: text("outcome").$type<"win" | "loss" | "draw">(),
+    ratingBefore: integer("rating_before").notNull(),
+    ratingAfter: integer("rating_after"),
+    xp: integer("xp").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.duelId, t.userId] }), index("duel_players_user_idx").on(t.userId)],
 );

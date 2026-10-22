@@ -17,6 +17,7 @@ interface Home {
   assignments: { id: string; title: string; questionCount: number; closeAt: string; status: string }[];
   league: { division: Division; rank: number | null; groupSize: number; weeklyXp: number; zone: string | null };
   openMistakes: number;
+  duelInvites: number;
   suggestedSkill: { id: string; name: string; topicName: string } | null;
 }
 
@@ -63,6 +64,14 @@ export default function PlayHome() {
         </div>
       )}
       {startError && <ErrorBox message={startError} />}
+      {data.duelInvites > 0 && (
+        <button className="card spread" style={{ background: "var(--accent-soft)", borderColor: "transparent", font: "inherit", color: "inherit", cursor: "pointer" }} onClick={() => router.push("/play/duels")}>
+          <span className="row">
+            <Icon name="bolt" /> <b>{data.duelInvites === 1 ? "A classmate challenged you to a duel" : `${data.duelInvites} duel challenges waiting`}</b>
+          </span>
+          <Icon name="arrow" />
+        </button>
+      )}
 
       <div className="card accent stack">
         <div className="spread">

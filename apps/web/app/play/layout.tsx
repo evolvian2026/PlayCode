@@ -12,15 +12,19 @@ const NAV = [
   { href: "/play", label: "Home", icon: "home" },
   { href: "/play/learn", label: "Learn", icon: "map" },
   { href: "/play/missions", label: "Missions", icon: "flag" },
+  { href: "/play/duels", label: "Duels", icon: "bolt" },
   { href: "/play/league", label: "League", icon: "trophy" },
   { href: "/play/me", label: "Me", icon: "user" },
 ];
 
+/** The question player and a live duel take the whole screen. */
+const isFullScreen = (path: string) => path.startsWith("/play/session") || /^\/play\/duels\/[^/]+/.test(path);
+
 function TopBar() {
   const { profile } = usePlayer();
   const path = usePathname();
-  // The question player shows its own progress and hearts.
-  if (path.startsWith("/play/session")) return <div style={{ height: 12 }} />;
+  // The question player and live duels show their own progress.
+  if (isFullScreen(path)) return <div style={{ height: 12 }} />;
   if (!profile) return <div className="play-top" style={{ height: 52 }} />;
   return (
     <div className="play-top spread" aria-label="Your stats">
@@ -44,8 +48,7 @@ function TopBar() {
 
 function BottomNav() {
   const path = usePathname();
-  // The question player is full screen.
-  if (path.startsWith("/play/session")) return null;
+  if (isFullScreen(path)) return null;
   return (
     <nav className="play-nav" aria-label="Main">
       <div className="play-nav-inner">

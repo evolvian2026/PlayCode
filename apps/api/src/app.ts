@@ -1,7 +1,10 @@
 import cors from "@fastify/cors";
+import websocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
 import { env } from "./env";
+import { verifyToken } from "./lib/auth";
 import { HttpError } from "./lib/errors";
+import { subscribe } from "./lib/realtime";
 import { adminRoutes } from "./routes/admin";
 import { authRoutes } from "./routes/auth";
 import { consoleRoutes } from "./routes/console";
@@ -31,6 +34,27 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   });
 
   app.get("/health", async () => ({ ok: true }));
+
+  // Live events (duels, proctoring). Browsers cannot set headers on a
+  // WebSocket, so the token comes as a query parameter.
+  await app.register(websocket);
+  app.get("/ws", { websocket: true }, async (socket, req) => {
+    const token = (req.query as { token?: string }).token;
+    let userId: string;
+    try {
+      userId = (await verifyToken(token ?? "")).sub;
+    } catch {
+      socket.close(4401, "unauthorized");
+      return;
+    }
+    const unsubscribe = subscribe(userId, socket);
+    const ping = setInterval(() => socket.ping(), 25_000);
+    socket.on("close", () => {
+      clearInterval(ping);
+      unsubscribe();
+    });
+    socket.send(JSON.stringify({ type: "hello" }));
+  });
   await app.register(authRoutes);
   await app.register(studentRoutes, { prefix: "/student" });
   await app.register(consoleRoutes, { prefix: "/console" });

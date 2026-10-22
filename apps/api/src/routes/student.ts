@@ -3,10 +3,11 @@ import type { FastifyInstance } from "fastify";
 import { isoWeekKey, masteryFromRating, QUESTION_TYPES } from "@playcode/core";
 import { z } from "zod";
 import { db } from "../db/client";
-import { assignments, mistakes, packs, questions, sessions, skillRatings, skills } from "../db/schema";
+import { assignments, duels, mistakes, packs, questions, sessions, skillRatings, skills } from "../db/schema";
 import { notFound } from "../lib/errors";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { studentDetail } from "../services/analytics";
+import { answerDuel, cancelDuel, createDuel, duelLobby, getDuel, respondToInvite } from "../services/duels";
 import { leagueStandings } from "../services/leagues";
 import { answerQuestion, getSession, runCurrent, sessionScore, startSession, takeHint, visibleTo, type StudentCtx } from "../services/practice";
 import { getOrCreateProfile, profileSummary } from "../services/profile";
@@ -102,6 +103,10 @@ export async function studentRoutes(app: FastifyInstance) {
     const weakest = [...ratings].sort((a, b) => a.rating - b.rating)[0];
     const suggestedId = weakest && masteryFromRating(weakest.rating) < 50 ? weakest.skillId : (untouched?.id ?? weakest?.skillId);
     const suggested = skillRows.find((s) => s.id === suggestedId) ?? null;
+    const [{ count: duelInvites } = { count: 0 }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(duels)
+      .where(and(eq(duels.opponentId, ctx.userId), eq(duels.status, "waiting"), gte(duels.createdAt, new Date(ctx.now.getTime() - 2 * 60_000))));
     return {
       tenant: { name: tenant.name },
       today,
@@ -112,6 +117,7 @@ export async function studentRoutes(app: FastifyInstance) {
       assignments: (await studentAssignments(ctx)).filter((a) => a.open && a.status !== "completed"),
       league: { division: league.division, rank: me?.rank ?? null, groupSize: league.members.length, weeklyXp: me?.weeklyXp ?? 0, zone: me?.zone ?? null },
       openMistakes,
+      duelInvites,
       suggestedSkill: suggested ? { id: suggested.id, name: suggested.name, topicName: suggested.topicName } : null,
     };
   });
@@ -238,6 +244,18 @@ export async function studentRoutes(app: FastifyInstance) {
   });
 
   app.get("/assignments", async (req) => ({ assignments: await studentAssignments(ctxOf(req)) }));
+
+  // ---------- Duels ----------
+  const duelId = z.object({ id: z.string().uuid() });
+  app.get("/duels", async (req) => duelLobby(db, ctxOf(req)));
+  app.post("/duels", async (req) => createDuel(db, ctxOf(req), parse(z.object({ opponentId: z.string().uuid().optional() }), req.body ?? {})));
+  app.get("/duels/:id", async (req) => getDuel(db, ctxOf(req), parse(duelId, req.params).id));
+  app.post("/duels/:id/accept", async (req) => respondToInvite(db, ctxOf(req), parse(duelId, req.params).id, true));
+  app.post("/duels/:id/decline", async (req) => respondToInvite(db, ctxOf(req), parse(duelId, req.params).id, false));
+  app.post("/duels/:id/cancel", async (req) => cancelDuel(db, ctxOf(req), parse(duelId, req.params).id));
+  app.post("/duels/:id/answer", async (req) =>
+    answerDuel(db, ctxOf(req), parse(duelId, req.params).id, parse(z.object({ questionId: z.string(), response: responseSchema }), req.body)),
+  );
 
   app.get("/profile", async (req) => {
     const ctx = ctxOf(req);
