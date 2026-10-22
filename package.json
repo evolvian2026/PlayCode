@@ -1,0 +1,19 @@
+{
+  "name": "playcode",
+  "private": true,
+  "version": "0.1.0",
+  "description": "PlayCode: gamified coding practice and assessment for institutions",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:api": "pnpm --filter @playcode/api dev",
+    "dev:web": "pnpm --filter @playcode/web dev",
+    "db:migrate": "pnpm --filter @playcode/api db:migrate",
+    "db:seed": "pnpm --filter @playcode/api db:seed",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "verify:content": "pnpm --filter @playcode/api verify:content"
+  }
+}
