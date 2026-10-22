@@ -9,6 +9,7 @@ import { authenticate, parse, requireAny, requirePermission, tenantOf } from "..
 import { competitionState, getCompetition, leaderboard, studentCompetitions, tenantCompetitions, unitNames } from "../services/competitions";
 import { inbox, markRead, processOutbox, whatsappConfigured } from "../services/notifications";
 import { audienceIds, runNudges, sendAnnouncement } from "../services/nudges";
+import { recordConsent } from "../services/privacy";
 import { assertUnitsInScope, scopedUnitIds } from "../services/scope";
 import { getTenant, tenantToday } from "../services/tenant";
 
@@ -147,6 +148,7 @@ export async function engageRoutes(app: FastifyInstance) {
     if (body.phone !== undefined) set.phone = body.phone ? body.phone.replace(/[^\d+]/g, "") : null;
     if (body.whatsapp !== undefined) set.notifyPrefs = { whatsapp: body.whatsapp };
     if (Object.keys(set).length) await db.update(users).set(set).where(eq(users.id, req.auth.userId));
+    if (body.whatsapp !== undefined) await recordConsent(db, { tenantId: req.auth.tenantId, userId: req.auth.userId, purpose: "whatsapp", granted: body.whatsapp, source: "settings", now: app.now() });
     const [u] = await db.select({ phone: users.phone, prefs: users.notifyPrefs }).from(users).where(eq(users.id, req.auth.userId));
     return { phone: u?.phone ?? null, whatsapp: u?.prefs.whatsapp !== false };
   });

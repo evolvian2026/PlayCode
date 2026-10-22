@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, normalize } from "node:path";
 import { env } from "../env";
 
@@ -25,4 +25,8 @@ export async function getObject(key: string): Promise<Buffer | null> {
   } catch {
     return null;
   }
+}
+
+export async function deleteObject(key: string): Promise<void> {
+  await rm(pathFor(key), { force: true });
 }

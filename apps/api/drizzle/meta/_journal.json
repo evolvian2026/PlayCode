@@ -64,6 +64,13 @@
       "when": 1792661438525,
       "tag": "0008_sso",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792661869837,
+      "tag": "0009_privacy",
+      "breakpoints": true
     }
   ]
 }

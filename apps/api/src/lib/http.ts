@@ -1,6 +1,9 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { can, type Permission } from "@playcode/core";
 import type { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db } from "../db/client";
+import { users } from "../db/schema";
 import { verifyToken } from "./auth";
 import { badRequest, forbidden, unauthorized } from "./errors";
 import type { AuthContext } from "../services/scope";
@@ -28,12 +31,16 @@ export function parse<T extends z.ZodTypeAny>(schema: T, data: unknown): z.infer
 export async function authenticate(req: FastifyRequest, _reply: FastifyReply): Promise<void> {
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) throw unauthorized();
+  let claims: Awaited<ReturnType<typeof verifyToken>>;
   try {
-    const claims = await verifyToken(header.slice(7));
-    req.auth = { userId: claims.sub, tenantId: claims.tenantId, roles: claims.roles };
+    claims = await verifyToken(header.slice(7));
   } catch {
     throw unauthorized("Your session has expired. Please sign in again.");
   }
+  // Tokens outlive account changes, so check the account is still active (disabled or erased users are cut off at once).
+  const [u] = await db.select({ status: users.status }).from(users).where(eq(users.id, claims.sub));
+  if (u?.status !== "active") throw unauthorized("This account is no longer active.");
+  req.auth = { userId: claims.sub, tenantId: claims.tenantId, roles: claims.roles };
 }
 
 export function requirePermission(permission: Permission) {

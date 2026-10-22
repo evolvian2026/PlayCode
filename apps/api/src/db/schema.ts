@@ -67,7 +67,7 @@ export const users = pgTable(
     /** E.164 phone number for WhatsApp nudges (optional). */
     phone: text("phone"),
     notifyPrefs: jsonb("notify_prefs").$type<{ whatsapp?: boolean }>().notNull().default({}),
-    status: text("status").$type<"active" | "disabled">().notNull().default("active"),
+    status: text("status").$type<"active" | "disabled" | "erased">().notNull().default("active"),
     lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
@@ -528,6 +528,7 @@ export const WEBHOOK_EVENTS = [
   "user.created",
   "candidate.registered",
   "candidate.status_changed",
+  "user.erased",
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
@@ -622,3 +623,43 @@ export const ssoConnections = pgTable("sso_connections", {
   enabled: boolean("enabled").notNull().default(true),
   createdAt: createdAt(),
 });
+
+// ---------- Privacy ----------
+
+export const CONSENT_PURPOSES = ["privacy_notice", "whatsapp"] as const;
+export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
+
+/** Append-only ledger: every grant and withdrawal, with the notice version shown at the time. */
+export const consents = pgTable(
+  "consents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    purpose: text("purpose").$type<ConsentPurpose>().notNull(),
+    granted: boolean("granted").notNull(),
+    noticeVersion: text("notice_version").notNull(),
+    source: text("source").$type<"app" | "drive_apply" | "settings">().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("consents_user_idx").on(t.userId, t.purpose, t.createdAt)],
+);
+
+export type ErasureStatus = "pending" | "completed" | "rejected" | "cancelled";
+
+export const erasureRequests = pgTable(
+  "erasure_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    /** Kept after erasure: the user row survives, anonymised, so this stays as the record. */
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    reason: text("reason"),
+    status: text("status").$type<ErasureStatus>().notNull().default("pending"),
+    resolution: text("resolution"),
+    resolvedBy: uuid("resolved_by"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("erasure_requests_tenant_idx").on(t.tenantId, t.status, t.createdAt)],
+);

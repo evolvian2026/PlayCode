@@ -13,6 +13,7 @@ import { saveAnswer, startAttempt, submitOwn } from "../services/assessments";
 import { applyToDrive, createDrive } from "../services/drives";
 import { closeLeagueWeek } from "../services/leagues";
 import { answerQuestion, startSession, type StartInput } from "../services/practice";
+import { requestErasure } from "../services/privacy";
 import { db, pool, type Db } from "./client";
 import { runMigrations } from "./migrate";
 import { assessments, assignments, competitions, memberships, orgUnits, packs, questions, skills, tenants, users } from "./schema";
@@ -224,6 +225,8 @@ export async function seedDemo(now = new Date()): Promise<void> {
     endsAt: new Date(now.getTime() + 4 * 86_400_000),
     createdBy: tpoUser.id,
   });
+  // A student who never started has asked for their data to be deleted.
+  await requestErasure(db, { tenantId, userId: students[26]!.id, reason: "I have left the college.", now: new Date(now.getTime() - 2 * 86_400_000) });
   // A training partner reselling PlayCode under its own brand, with one college.
   const [partner] = await db
     .insert(tenants)

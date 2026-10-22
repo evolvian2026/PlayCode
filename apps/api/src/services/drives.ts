@@ -7,6 +7,7 @@ import { conflict, notFound } from "../lib/errors";
 import { resolveSections, sweepExpired, type SectionInput } from "./assessments";
 import { effectiveBranding } from "./branding";
 import { certificateCode } from "./certificates";
+import { recordConsent } from "./privacy";
 import { importStudents, type StudentRow } from "./students";
 import { emitAndDeliver } from "./webhooks";
 
@@ -209,6 +210,7 @@ export async function applyToDrive(db: Db, code: string, input: { name: string; 
   });
   const created = result.created[0];
   if (!created) throw conflict("email_taken", "This email already has a PlayCode account. Use another email, or ask the recruiter to add your existing account.");
+  await recordConsent(db, { tenantId: row.d.tenantId, userId: created.id, purpose: "privacy_notice", granted: true, source: "drive_apply", now });
   const token = await signToken({ sub: created.id, tenantId: row.d.tenantId, roles: ["student"] });
   return { token, assessmentId: row.d.assessmentId };
 }

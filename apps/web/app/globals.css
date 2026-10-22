@@ -178,6 +178,11 @@ p {
   background: transparent;
   border-color: transparent;
 }
+.btn.danger {
+  background: var(--bad);
+  color: #fff;
+  border-color: var(--bad);
+}
 .btn.small {
   padding: 6px 10px;
   font-size: 0.85rem;

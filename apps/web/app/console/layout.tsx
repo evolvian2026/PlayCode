@@ -18,6 +18,8 @@ const NAV = [
   { href: "/console/batches", label: "Batches", icon: "layers", perm: null },
   { href: "/console/content", label: "Question bank", icon: "book", perm: "content.view" },
   { href: "/console/integrations", label: "Integrations", icon: "layers", perm: "api.manage" },
+  { href: "/console/privacy", label: "Privacy requests", icon: "shield", perm: "users.manage" },
+  { href: "/console/audit", label: "Audit log", icon: "list", perm: "audit.view" },
   { href: "/console/settings", label: "Settings", icon: "settings", perm: "tenant.settings" },
 ];
 
