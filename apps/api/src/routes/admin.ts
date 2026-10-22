@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { addDays, isoWeekKey } from "@playcode/core";
 import { z } from "zod";
 import { db } from "../db/client";
@@ -8,6 +8,7 @@ import { audit } from "../lib/audit";
 import { hashPassword } from "../lib/auth";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { authenticate, parse, requirePermission } from "../lib/http";
+import { customerHealth, healthCsv } from "../services/health";
 import { closeLeagueWeek } from "../services/leagues";
 import { getTenant, tenantToday } from "../services/tenant";
 import { PLANS, type Plan } from "@playcode/core";
@@ -132,6 +133,17 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   /** Partner dashboard: seat pool and each sub-tenant's usage. */
+  // Customer health: every customer for PlayCode staff, a partner's own colleges for the partner.
+  const healthFor = (req: FastifyRequest) => {
+    if (!req.auth.roles.includes("super_admin") && !req.auth.tenantId) throw badRequest("Sign in with a partner account");
+    return customerHealth(db, { partnerId: req.auth.roles.includes("super_admin") ? null : req.auth.tenantId, now: app.now() });
+  };
+  app.get("/health", { preHandler: requirePermission("tenants.manage") }, async (req) => healthFor(req));
+  app.get("/health/export", { preHandler: [requirePermission("tenants.manage"), requirePermission("reports.export")] }, async (req, reply) => {
+    reply.header("content-type", "text/csv; charset=utf-8").header("content-disposition", `attachment; filename="customer-health.csv"`);
+    return healthCsv(await healthFor(req));
+  });
+
   app.get("/partner/overview", { preHandler: requirePermission("tenants.manage") }, async (req) => {
     const partnerId = req.auth.tenantId;
     if (!partnerId) throw badRequest("Sign in with a partner account");
