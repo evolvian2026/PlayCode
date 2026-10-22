@@ -21,7 +21,9 @@
     "@anthropic-ai/sdk": "1.1.0",
     "@fastify/cors": "11.3.1",
     "@fastify/websocket": "11.3.4",
+    "@node-saml/node-saml": "5.1.0",
     "@playcode/core": "workspace:*",
+    "@xmldom/xmldom": "0.8.15",
     "bcryptjs": "3.0.3",
     "drizzle-orm": "0.45.4",
     "fastify": "5.12.7",
@@ -41,6 +43,7 @@
     "tsx": "4.23.15",
     "typescript": "5.9.3",
     "vitest": "3.2.7",
-    "ws": "8.22.0"
+    "ws": "8.22.0",
+    "xml-crypto": "6.4.0"
   }
 }

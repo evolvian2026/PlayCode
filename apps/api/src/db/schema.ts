@@ -893,3 +893,30 @@ export const reportSubscriptions = pgTable(
   },
   (t) => [uniqueIndex("report_subscriptions_user_uq").on(t.userId, t.tenantId)],
 );
+
+// ---------- SAML 2.0 single sign-on ----------
+
+/** An institution's SAML identity provider (ADFS, Okta, Shibboleth, Google Workspace SAML, ...). */
+export const samlConnections = pgTable("saml_connections", {
+  tenantId: uuid("tenant_id")
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  idpEntityId: text("idp_entity_id").notNull(),
+  /** HTTP-Redirect single sign-on URL. */
+  ssoUrl: text("sso_url").notNull(),
+  /** IdP signing certificates (base64 DER bodies); several are allowed during a rollover. */
+  certificates: jsonb("certificates").$type<string[]>().notNull(),
+  /** Attribute holding the email; when unset, the NameID (email format) is used. */
+  emailAttribute: text("email_attribute"),
+  emailDomains: jsonb("email_domains").$type<string[]>().notNull(),
+  autoProvisionUnitId: uuid("auto_provision_unit_id").references(() => orgUnits.id, { onDelete: "set null" }),
+  enabled: boolean("enabled").notNull().default(true),
+  createdAt: createdAt(),
+});
+
+/** Outstanding AuthnRequest ids, so each response must answer a request we sent (shared by all API instances). */
+export const samlRequests = pgTable("saml_requests", {
+  id: text("id").primaryKey(),
+  value: text("value").notNull(),
+  createdAt: createdAt(),
+});

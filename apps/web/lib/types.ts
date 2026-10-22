@@ -9,7 +9,7 @@ export interface Branding {
   certificateSignatory: string | null;
 }
 
-export type SsoProvider = "google" | "microsoft" | "oidc";
+export type SsoProvider = "google" | "microsoft" | "oidc" | "saml";
 
 /** Branding as the public sign-in page sees it, plus whether single sign-on is on. */
 export interface PublicBranding extends Branding {

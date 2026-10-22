@@ -176,6 +176,151 @@ function AiSettings() {
   );
 }
 
+interface SamlInfo {
+  connection: { idpEntityId: string; ssoUrl: string; certificates: string[]; emailAttribute: string | null; emailDomains: string[]; autoProvisionUnitId: string | null; enabled: boolean } | null;
+  sp: { entityId: string; acsUrl: string; metadataUrl: string };
+}
+
+function SamlSettings() {
+  const { data, error, reload } = useApi<SamlInfo>("/console/saml");
+  const units = useApi<{ units: { id: string; name: string }[] }>("/console/org-units");
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ idpEntityId: "", ssoUrl: "", cert: "", emailAttribute: "", emailDomains: "", autoProvisionUnitId: "", enabled: true });
+  const [metadata, setMetadata] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const c = data?.connection;
+    if (!c) return;
+    setF({ idpEntityId: c.idpEntityId, ssoUrl: c.ssoUrl, cert: c.certificates[0] ?? "", emailAttribute: c.emailAttribute ?? "", emailDomains: c.emailDomains.join(", "), autoProvisionUnitId: c.autoProvisionUnitId ?? "", enabled: c.enabled });
+  }, [data]);
+
+  if (error) return <ErrorBox message={error.message} onRetry={reload} />;
+  if (!data) return null;
+
+  async function importMetadata() {
+    setSaveError(null);
+    try {
+      const m = await api<{ idpEntityId: string; ssoUrl: string; certificates: string[] }>("/console/saml/metadata", { body: { xml: metadata } });
+      setF({ ...f, idpEntityId: m.idpEntityId, ssoUrl: m.ssoUrl, cert: m.certificates[0] ?? "" });
+      setMsg("Read the metadata. Check the fields and save.");
+    } catch (e) {
+      setSaveError(errorMessage(e));
+    }
+  }
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setSaveError(null);
+    setMsg(null);
+    try {
+      await api("/console/saml", {
+        method: "PUT",
+        body: {
+          idpEntityId: f.idpEntityId.trim(),
+          ssoUrl: f.ssoUrl.trim(),
+          certificates: [f.cert],
+          emailAttribute: f.emailAttribute.trim() || null,
+          emailDomains: f.emailDomains.split(/[\s,]+/).filter(Boolean),
+          autoProvisionUnitId: f.autoProvisionUnitId || null,
+          enabled: f.enabled,
+        },
+      });
+      setMsg(f.enabled ? "Saved. The sign-in page now uses SAML." : "Saved. SAML is off.");
+      reload();
+    } catch (err) {
+      setSaveError(errorMessage(err));
+    }
+  }
+
+  return (
+    <div className="card stack">
+      <div className="spread">
+        <h2 style={{ margin: 0 }}>SAML 2.0</h2>
+        {data.connection?.enabled && <span className="pill good">On</span>}
+      </div>
+      <p className="muted small" style={{ margin: 0 }}>
+        For identity providers such as ADFS, Shibboleth or Okta. When SAML is on, the sign-in page uses it instead of OpenID Connect. Give your IdP admin these
+        details (or the metadata URL):
+      </p>
+      <div className="stack small" style={{ gap: 4 }}>
+        <div>
+          Entity ID: <code className="inline-code">{data.sp.entityId}</code>
+        </div>
+        <div>
+          Assertion consumer service (HTTP-POST): <code className="inline-code">{data.sp.acsUrl}</code>
+        </div>
+        <div>
+          Metadata: <code className="inline-code">{data.sp.metadataUrl}</code>
+        </div>
+        <div className="muted">Sign assertions, and send the email as the NameID (email format) or as an attribute.</div>
+      </div>
+      {!open ? (
+        <button className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setOpen(true)}>
+          {data.connection ? "Edit SAML settings" : "Set up SAML"}
+        </button>
+      ) : (
+        <form className="stack" onSubmit={save}>
+          <div>
+            <label htmlFor="saml-md">Paste your IdP&apos;s metadata XML (optional, fills the fields below)</label>
+            <textarea id="saml-md" rows={3} className="mono" value={metadata} onChange={(e) => setMetadata(e.target.value)} />
+            <button type="button" className="btn small" disabled={!metadata.trim()} onClick={importMetadata}>
+              Read metadata
+            </button>
+          </div>
+          <div className="row wrap">
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <label htmlFor="saml-entity">IdP entity ID</label>
+              <input id="saml-entity" value={f.idpEntityId} onChange={(e) => setF({ ...f, idpEntityId: e.target.value })} required />
+            </div>
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <label htmlFor="saml-sso">Single sign-on URL (HTTP-Redirect)</label>
+              <input id="saml-sso" type="url" value={f.ssoUrl} onChange={(e) => setF({ ...f, ssoUrl: e.target.value })} required />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="saml-cert">IdP signing certificate</label>
+            <textarea id="saml-cert" rows={4} className="mono" value={f.cert} onChange={(e) => setF({ ...f, cert: e.target.value })} required placeholder="-----BEGIN CERTIFICATE-----" />
+          </div>
+          <div className="row wrap">
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <label htmlFor="saml-domains">Allowed email domains</label>
+              <input id="saml-domains" value={f.emailDomains} onChange={(e) => setF({ ...f, emailDomains: e.target.value })} required placeholder="college.edu" />
+            </div>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <label htmlFor="saml-attr">Email attribute (optional)</label>
+              <input id="saml-attr" value={f.emailAttribute} onChange={(e) => setF({ ...f, emailAttribute: e.target.value })} placeholder="Leave empty to use the NameID" />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="saml-unit">New accounts</label>
+            <select id="saml-unit" value={f.autoProvisionUnitId} onChange={(e) => setF({ ...f, autoProvisionUnitId: e.target.value })}>
+              <option value="">Only people already added to PlayCode can sign in</option>
+              {(units.data?.units ?? []).map((u) => (
+                <option key={u.id} value={u.id}>
+                  Create student accounts automatically in {u.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <label className="row" style={{ gap: 6, fontWeight: 500 }}>
+            <input type="checkbox" style={{ width: "auto" }} checked={f.enabled} onChange={(e) => setF({ ...f, enabled: e.target.checked })} /> Use SAML on the sign-in page
+          </label>
+          {saveError && <ErrorBox message={saveError} />}
+          {msg && <span className="pill good" style={{ alignSelf: "flex-start" }}>{msg}</span>}
+          <div className="row">
+            <button className="btn primary">Save SAML</button>
+            <button type="button" className="btn ghost" onClick={() => setOpen(false)}>
+              Close
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
 interface LtiPlatform {
   id: string;
   name: string;
@@ -449,6 +594,7 @@ export default function Settings() {
       </div>
       <AiSettings />
       <SsoSettings />
+      <SamlSettings />
       <LtiSettings />
     </div>
   );

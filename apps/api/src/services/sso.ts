@@ -141,19 +141,32 @@ export async function finishLogin(db: Db, params: { code: string; state: string 
   const email = String(payload.email ?? payload.preferred_username ?? "").toLowerCase();
   // Google sends email_verified; Microsoft work accounts are verified by the directory.
   if (!email || payload.email_verified === false) throw forbidden("Your account has no verified email address");
+  return signInByEmail(db, { tenantId: st.t, email, name: payload.name ? String(payload.name) : null, emailDomains: conn.emailDomains, autoProvisionUnitId: conn.autoProvisionUnitId, via: "sso.login" }, now);
+}
+
+/**
+ * The account rules every single sign-on method shares (OpenID Connect, SAML):
+ * the email must be on an allowed domain and belong to this institution; new
+ * people get a student account only if the institution chose a batch for them.
+ */
+export async function signInByEmail(
+  db: Db,
+  args: { tenantId: string; email: string; name: string | null; emailDomains: string[]; autoProvisionUnitId: string | null; via: string },
+  now: Date,
+) {
+  const email = args.email.trim().toLowerCase();
   const domain = email.split("@")[1] ?? "";
-  if (!conn.emailDomains.includes(domain)) throw forbidden(`Sign in with your ${conn.emailDomains.map((d) => `@${d}`).join(" or ")} account`);
+  if (!args.emailDomains.includes(domain)) throw forbidden(`Sign in with your ${args.emailDomains.map((d) => `@${d}`).join(" or ")} account`);
 
   let [user] = await db.select().from(users).where(eq(users.email, email));
-  if (user && user.tenantId !== st.t) throw forbidden("This email belongs to another institution");
+  if (user && user.tenantId !== args.tenantId) throw forbidden("This email belongs to another institution");
   if (!user) {
-    if (!conn.autoProvisionUnitId) throw forbidden("There is no PlayCode account for this email. Ask your institution to add you.");
-    const name = String(payload.name ?? email.split("@")[0]);
-    const created = await importStudents(db, { tenantId: st.t, actorId: null, unitId: conn.autoProvisionUnitId, rows: [{ name, email, rollNo: null, phone: null }], now });
+    if (!args.autoProvisionUnitId) throw forbidden("There is no PlayCode account for this email. Ask your institution to add you.");
+    const created = await importStudents(db, { tenantId: args.tenantId, actorId: null, unitId: args.autoProvisionUnitId, rows: [{ name: args.name ?? email.split("@")[0]!, email, rollNo: null, phone: null }], now });
     [user] = await db.select().from(users).where(eq(users.id, created.created[0]!.id));
   }
   if (user!.status !== "active") throw forbidden("Your account is disabled");
   const roles = [...new Set((await db.select({ role: memberships.role }).from(memberships).where(eq(memberships.userId, user!.id))).map((r) => r.role))];
-  await audit(db, { tenantId: st.t, actorId: user!.id, action: "sso.login", data: { email } });
+  await audit(db, { tenantId: args.tenantId, actorId: user!.id, action: args.via, data: { email } });
   return signToken({ sub: user!.id, tenantId: user!.tenantId, roles });
 }

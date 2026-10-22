@@ -20,6 +20,7 @@ const SSO_LABEL: Record<SsoProvider, string> = {
   google: "Sign in with Google",
   microsoft: "Sign in with Microsoft",
   oidc: "Sign in with your institution account",
+  saml: "Sign in with your institution account",
 };
 
 function LoginForm() {

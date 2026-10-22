@@ -8,6 +8,7 @@ import { parse } from "../lib/http";
 import { getObject } from "../lib/storage";
 import { effectiveBranding } from "../services/branding";
 import { verifyCertificate } from "../services/certificates";
+import { getSamlConnection } from "../services/saml";
 import { getConnection } from "../services/sso";
 
 /** Unauthenticated routes: branded sign-in pages, logos and certificate verification. */
@@ -16,8 +17,8 @@ export async function publicRoutes(app: FastifyInstance) {
     const { slug } = parse(z.object({ slug: z.string().max(60) }), req.params);
     const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, slug.toLowerCase()));
     if (!tenant) throw notFound("Institution");
-    const sso = await getConnection(db, tenant.id);
-    return { ...(await effectiveBranding(db, tenant)), sso: sso?.enabled ? { provider: sso.provider } : null };
+    const [saml, sso] = await Promise.all([getSamlConnection(db, tenant.id), getConnection(db, tenant.id)]);
+    return { ...(await effectiveBranding(db, tenant)), sso: saml?.enabled ? { provider: "saml" } : sso?.enabled ? { provider: sso.provider } : null };
   });
 
   app.get("/public/logo/:tenantId", async (req, reply) => {

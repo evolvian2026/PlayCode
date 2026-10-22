@@ -10,6 +10,7 @@ import { checkPassword, signToken } from "../lib/auth";
 import { forbidden, notFound, unauthorized } from "../lib/errors";
 import { env } from "../env";
 import { effectiveBranding } from "../services/branding";
+import { startSaml } from "../services/saml";
 import { finishLogin, startLogin } from "../services/sso";
 import { authenticate, parse } from "../lib/http";
 
@@ -76,7 +77,9 @@ export async function authRoutes(app: FastifyInstance) {
   // ---------- Single sign-on ----------
   app.get("/auth/sso/start", async (req, reply) => {
     const { org } = parse(z.object({ org: z.string().min(1).max(60) }), req.query);
-    return reply.redirect(await startLogin(db, org, app.now()));
+    // An institution on SAML goes to its SAML identity provider; otherwise OpenID Connect.
+    const saml = await startSaml(db, org);
+    return reply.redirect(saml ?? (await startLogin(db, org, app.now())));
   });
 
   app.get("/auth/sso/callback", async (req, reply) => {
