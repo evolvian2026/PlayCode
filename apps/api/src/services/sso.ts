@@ -10,6 +10,7 @@ import { decrypt, encrypt } from "../lib/crypto";
 import { badRequest, forbidden, HttpError, notFound } from "../lib/errors";
 import { importStudents } from "./students";
 import { assertPublicUrl } from "./webhooks";
+import { hasFeature } from "./plan";
 
 // OpenID Connect sign-in (Google Workspace, Microsoft Entra ID, or any OIDC
 // provider), authorization-code flow with PKCE. The login state (nonce, PKCE
@@ -82,7 +83,7 @@ export async function startLogin(db: Db, slug: string, now: Date) {
   const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, slug.toLowerCase()));
   if (!tenant) throw notFound("Institution");
   const conn = await getConnection(db, tenant.id);
-  if (!conn?.enabled) throw badRequest("Single sign-on is not set up for this institution");
+  if (!conn?.enabled || !(await hasFeature(db, tenant.id, "sso"))) throw badRequest("Single sign-on is not set up for this institution");
   const { doc } = await discover(conn.issuer);
   const verifier = b64url(randomBytes(32));
   const nonce = b64url(randomBytes(16));

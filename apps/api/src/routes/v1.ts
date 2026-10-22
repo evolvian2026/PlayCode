@@ -14,6 +14,7 @@ import { sessionScore } from "../services/practice";
 import { descendants, studentIdsInUnits, tenantUnits } from "../services/scope";
 import { importStudents } from "../services/students";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
+import { hasFeature } from "../services/plan";
 
 // Public REST API for ERPs, LMSs and ATSs. Clients use OAuth 2.0 client
 // credentials: POST /v1/oauth/token, then send "Authorization: Bearer <token>".
@@ -61,6 +62,9 @@ export async function v1Routes(app: FastifyInstance) {
     const [client] = await db.select().from(apiClients).where(eq(apiClients.clientId, client_id));
     if (!client || client.revokedAt || !safeEqual(client.secretHash, sha256(client_secret))) {
       return reply.status(401).send({ error: "invalid_client" });
+    }
+    if (!(await hasFeature(db, client.tenantId, "api"))) {
+      return reply.status(403).send({ error: "unauthorized_client", error_description: "The public API is not included in this institution's plan" });
     }
     await db.update(apiClients).set({ lastUsedAt: app.now() }).where(eq(apiClients.id, client.id));
     const token = await signApiToken({ clientId: client.id, tenantId: client.tenantId, scopes: client.scopes });

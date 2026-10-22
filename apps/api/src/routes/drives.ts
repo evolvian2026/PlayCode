@@ -8,6 +8,7 @@ import { rateLimit } from "../lib/rate-limit";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { applyToDrive, candidatesCsv, createDrive, driveDetail, getDrive, importCandidates, listDrives, publicDrive, setCandidateStatus } from "../services/drives";
 import { parseStudentCsv } from "./console";
+import { assertFeature } from "../services/plan";
 
 const sectionSchema = z.object({
   title: z.string().min(1).max(80),
@@ -69,6 +70,8 @@ export async function driveRoutes(app: FastifyInstance) {
           .refine((b) => b.closeAt > b.openAt, { message: "Close time must be after open time" }),
         req.body,
       );
+      await assertFeature(db, tenantId, "hiring_drives");
+      if (body.proctorLevel >= 2) await assertFeature(db, tenantId, body.proctorLevel === 3 ? "ai_proctoring" : "proctoring_camera");
       const drive = await createDrive(db, {
         ...body,
         tenantId,

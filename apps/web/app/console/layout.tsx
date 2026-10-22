@@ -3,28 +3,40 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { ROLE_LABELS } from "@playcode/core";
+import { planHas, ROLE_LABELS, type Feature, type Plan } from "@playcode/core";
 import { AuthGate, signOut, switchTenant, useMe } from "@/components/Auth";
 import { Icon } from "@/components/Icon";
 import { logoSrc } from "@/lib/branding";
 
-const NAV = [
+type NavItem = { href: string; label: string; icon: string; perm: string | string[] | null; feature?: Feature; superAdmin?: boolean };
+
+const NAV: NavItem[] = [
   { href: "/console", label: "Overview", icon: "chart", perm: null },
   { href: "/console/students", label: "Students", icon: "users", perm: null },
   { href: "/console/assignments", label: "Assignments", icon: "clipboard", perm: "assignments.manage" },
-  { href: "/console/paths", label: "Learning paths", icon: "map", perm: "assignments.manage" },
+  { href: "/console/paths", label: "Learning paths", icon: "map", perm: "assignments.manage", feature: "learning_paths" },
   { href: "/console/tests", label: "Tests", icon: "flag", perm: "assessments.proctor" },
-  { href: "/console/drives", label: "Hiring drives", icon: "users", perm: "drives.manage" },
+  { href: "/console/drives", label: "Hiring drives", icon: "users", perm: "drives.manage", feature: "hiring_drives" },
   { href: "/console/engage", label: "Engagement", icon: "megaphone", perm: null },
   { href: "/console/batches", label: "Batches", icon: "layers", perm: null },
   { href: "/console/reports", label: "Reports", icon: "chart", perm: ["analytics.institution", "analytics.department", "analytics.own_units"] },
   { href: "/console/content", label: "Question bank", icon: "book", perm: "content.view" },
-  { href: "/console/studio", label: "Content studio", icon: "spark", perm: ["content.private.manage", "content.global.manage"] },
-  { href: "/console/integrations", label: "Integrations", icon: "layers", perm: "api.manage" },
+  { href: "/console/studio", label: "Content studio", icon: "spark", perm: ["content.private.manage", "content.global.manage"], feature: "content_studio" },
+  { href: "/console/integrations", label: "Integrations", icon: "layers", perm: "api.manage", feature: "api" },
   { href: "/console/privacy", label: "Privacy requests", icon: "shield", perm: "users.manage" },
   { href: "/console/audit", label: "Audit log", icon: "list", perm: "audit.view" },
   { href: "/console/settings", label: "Settings", icon: "settings", perm: "tenant.settings" },
+  { href: "/console/billing", label: "Plan & billing", icon: "clipboard", perm: "tenant.settings" },
+  { href: "/console/billing", label: "Invoicing", icon: "clipboard", perm: null, superAdmin: true },
 ];
+
+/** Hide what the role can't use, and what the institution's plan doesn't include (PlayCode staff outside an institution see everything). */
+function visible(n: NavItem, me: { permissions: string[]; user: { roles: string[] }; tenant: { plan: string } | null }) {
+  if (n.superAdmin) return me.user.roles.includes("super_admin") && !me.tenant;
+  if (n.perm && ![n.perm].flat().some((p) => me.permissions.includes(p))) return false;
+  if (n.feature && me.tenant && !planHas(me.tenant.plan as Plan, n.feature)) return false;
+  return true;
+}
 
 function Side() {
   const me = useMe();
@@ -42,10 +54,10 @@ function Side() {
           </span>
         </Link>
       )}
-      {NAV.filter((n) => !n.perm || [n.perm].flat().some((p) => me.permissions.includes(p))).map((n) => {
+      {NAV.filter((n) => visible(n, me)).map((n) => {
         const active = n.href === "/console" ? path === "/console" : path.startsWith(n.href);
         return (
-          <Link key={n.href} href={n.href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
+          <Link key={n.label} href={n.href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
             <span className="row" style={{ gap: 10 }}>
               <Icon name={n.icon} size={18} /> {n.label}
             </span>

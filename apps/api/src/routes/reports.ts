@@ -4,6 +4,7 @@ import { db } from "../db/client";
 import { authenticate, parse, requireAny, tenantOf } from "../lib/http";
 import { mailer } from "../lib/mailer";
 import { getSubscription, renderReportPdf, reportData, saveSubscription, unitOptions } from "../services/reports";
+import { assertFeature } from "../services/plan";
 
 const anyAnalytics = requireAny("analytics.institution", "analytics.department", "analytics.own_units");
 
@@ -35,6 +36,7 @@ export async function reportRoutes(app: FastifyInstance) {
       z.object({ enabled: z.boolean(), unitId: z.string().uuid().nullable(), weekday: z.number().int().min(0).max(6), hour: z.number().int().min(0).max(23) }),
       req.body,
     );
+    if (body.enabled) await assertFeature(db, tenantOf(req), "reports_email");
     return { subscription: await saveSubscription(db, req.auth, body) };
   });
 }

@@ -19,6 +19,7 @@ import { audit } from "../lib/audit";
 import { badRequest, conflict, HttpError, notFound } from "../lib/errors";
 import { recordAiUsage } from "./coach";
 import { toCoreQuestion } from "./practice";
+import { aiAllowed } from "./plan";
 
 // The content studio: institutions write private questions for their own
 // students, and PlayCode's content team writes the global bank. Every
@@ -300,6 +301,10 @@ export async function draftWithAi(
 ) {
   const provider = aiProvider();
   if (!provider) throw badRequest("AI drafting is not set up on this server");
+  if (args.tenantId) {
+    const allowed = await aiAllowed(db, args.tenantId, "ai_drafting", args.now);
+    if (!allowed.ok) throw new HttpError(402, "plan_upgrade", allowed.reason);
+  }
   if (!DRAFTABLE.includes(args.type)) throw badRequest("AI can draft quick question types only. Write coding and SQL problems by hand.");
   const [skill] = await db.select().from(skills).where(eq(skills.id, args.skillId));
   if (!skill) throw badRequest("Unknown skill");

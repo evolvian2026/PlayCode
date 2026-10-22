@@ -125,7 +125,7 @@ export async function seedDemo(now = new Date()): Promise<void> {
 
   const [tenant] = await db
     .insert(tenants)
-    .values({ name: "Demo Institute of Technology", slug: "demo-tech", plan: "pro", seats: 500, validUntil: "2027-07-31" })
+    .values({ name: "Demo Institute of Technology", slug: "demo-tech", plan: "enterprise", seats: 500, validUntil: "2027-07-31" })
     .returning();
   const tenantId = tenant!.id;
   const unit = async (name: string, kind: "department" | "batch" | "section", parentId: string | null) =>
@@ -248,7 +248,7 @@ export async function seedDemo(now = new Date()): Promise<void> {
   // A training partner reselling PlayCode under its own brand, with one college.
   const [partner] = await db
     .insert(tenants)
-    .values({ name: "SkillBridge Training Partners", slug: "skillbridge", type: "partner", seats: 2000, branding: { appName: "SkillBridge Code", primaryColor: "#0f766e", certificateSignatory: "Head of Academics, SkillBridge" } })
+    .values({ name: "SkillBridge Training Partners", slug: "skillbridge", type: "partner", plan: "enterprise", seats: 2000, branding: { appName: "SkillBridge Code", primaryColor: "#0f766e", certificateSignatory: "Head of Academics, SkillBridge" } })
     .returning();
   await createUser(partner!.id, "SkillBridge Admin", "partner@skillbridge.in", passwordHash, [{ role: "partner_admin", orgUnitId: null }]);
   const [sunrise] = await db.insert(tenants).values({ name: "Sunrise Engineering College", slug: "sunrise", parentId: partner!.id, seats: 300 }).returning();

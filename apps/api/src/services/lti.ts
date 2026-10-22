@@ -10,6 +10,7 @@ import { decrypt, encrypt, sha256 } from "../lib/crypto";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { importStudents } from "./students";
 import { assertPublicUrl } from "./webhooks";
+import { hasFeature } from "./plan";
 
 // LTI 1.3 tool: an LMS (Moodle, Canvas, Blackboard, D2L) launches PlayCode
 // assignments from inside a course, signs the student in, and receives the
@@ -106,6 +107,7 @@ export async function startLaunch(db: Db, p: Record<string, string | undefined>,
   if (candidates.length === 0) throw badRequest("This LMS is not registered with PlayCode. Ask your PlayCode admin to add it under Settings.");
   if (candidates.length > 1) throw badRequest("Several PlayCode registrations match this LMS; it must send client_id");
   const platform = candidates[0]!;
+  if (!(await hasFeature(db, platform.tenantId, "lti"))) throw badRequest("LMS integration is not included in this institution's PlayCode plan");
   const nonce = randomBytes(16).toString("base64url");
   const state = encrypt(JSON.stringify({ p: platform.id, n: nonce, exp: now.getTime() + STATE_TTL_MS }));
   const url = new URL(platform.authLoginUrl);

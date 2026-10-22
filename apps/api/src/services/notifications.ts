@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { planHas } from "@playcode/core";
 import { env } from "../env";
 import type { Db, DbOrTx } from "../db/client";
 import { notifications, tenants, users, type NotificationTemplate } from "../db/schema";
@@ -26,6 +27,9 @@ export async function enqueue(db: DbOrTx, items: NewNotification[]): Promise<num
   const userIds = [...new Set(items.map((i) => i.userId))];
   const people = await db.select({ id: users.id, phone: users.phone, prefs: users.notifyPrefs }).from(users).where(inArray(users.id, userIds));
   const whatsapp = new Map(people.map((p) => [p.id, Boolean(p.phone) && p.prefs.whatsapp !== false]));
+  // WhatsApp delivery is a plan feature; in-app messages always go out.
+  const tenantIds = [...new Set(items.map((i) => i.tenantId))];
+  const whatsappTenants = new Set((await db.select({ id: tenants.id, plan: tenants.plan }).from(tenants).where(inArray(tenants.id, tenantIds))).filter((t) => planHas(t.plan, "whatsapp")).map((t) => t.id));
   let created = 0;
   // Insert in chunks to stay under parameter limits.
   for (let i = 0; i < items.length; i += 500) {
@@ -36,7 +40,7 @@ export async function enqueue(db: DbOrTx, items: NewNotification[]): Promise<num
           ...n,
           link: n.link ?? null,
           sentBy: n.sentBy ?? null,
-          channel: whatsapp.get(n.userId) && whatsappConfigured() ? ("whatsapp" as const) : ("none" as const),
+          channel: whatsapp.get(n.userId) && whatsappTenants.has(n.tenantId) && whatsappConfigured() ? ("whatsapp" as const) : ("none" as const),
           status: "pending" as const,
         })),
       )

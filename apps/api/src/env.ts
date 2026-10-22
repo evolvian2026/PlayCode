@@ -26,6 +26,11 @@ const schema = z.object({
   API_PUBLIC_URL: z.string().default("http://localhost:4000"),
   /** Encrypts stored secrets (webhook signing keys, SSO client secrets). Defaults to a key derived from JWT_SECRET. */
   DATA_KEY: z.string().min(16).optional(),
+  /** The supplier on GST invoices (PlayCode's own company details). */
+  BILLING_LEGAL_NAME: z.string().default("PlayCode Learning Pvt Ltd"),
+  BILLING_GSTIN: z.string().default("29AAAAA0000A1Z5"),
+  BILLING_ADDRESS: z.string().default("Bengaluru, Karnataka"),
+  BILLING_STATE_CODE: z.string().default("29"),
   /** "postgres": live events reach browsers connected to any API instance (LISTEN/NOTIFY). "off": this instance only. */
   REALTIME_FANOUT: z.enum(["postgres", "off"]).default("postgres"),
   /** Outgoing email for scheduled reports, e.g. smtps://user:pass@smtp.example.com:465. */

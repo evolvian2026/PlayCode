@@ -7,6 +7,7 @@ import { forbidden } from "../lib/errors";
 import { authenticate, parse, requireAny } from "../lib/http";
 import { rateLimit } from "../lib/rate-limit";
 import { checkQuestion, createQuestion, DRAFTABLE, draftWithAi, getStudio, listStudio, runCheck, setStatus, updateQuestion, type Bank } from "../services/studio";
+import { assertFeature } from "../services/plan";
 
 const codeLanguage = z.enum(["c", "java", "python"]);
 const option = z.object({ id: z.string().min(1).max(4), text: z.string().min(1).max(4000), code: z.boolean().optional() });
@@ -66,6 +67,10 @@ const idParam = z.object({ id: z.string().min(1).max(80) });
 export async function studioRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
   app.addHook("preHandler", requireAny("content.private.manage", "content.global.manage"));
+  // An institution's own bank needs the content studio in its plan; PlayCode's content team (no institution) always has it.
+  app.addHook("preHandler", async (req) => {
+    if (req.auth.tenantId) await assertFeature(db, req.auth.tenantId, "content_studio");
+  });
 
   app.get("/studio", async (req) => ({ bank: bankOf(req).tenantId ? "institution" : "global", ai: Boolean(aiProvider()), draftable: DRAFTABLE }));
 

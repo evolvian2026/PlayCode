@@ -11,6 +11,7 @@ import { startFanout, stopFanout, subscribe } from "./lib/realtime";
 import { adminRoutes } from "./routes/admin";
 import { assessmentConsoleRoutes } from "./routes/assessments-console";
 import { authRoutes } from "./routes/auth";
+import { billingRoutes } from "./routes/billing";
 import { consoleRoutes } from "./routes/console";
 import { developerRoutes } from "./routes/developers";
 import { driveRoutes } from "./routes/drives";
@@ -101,5 +102,6 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(pathRoutes);
   await app.register(reportRoutes);
   await app.register(samlRoutes);
+  await app.register(billingRoutes);
   return app;
 }

@@ -19,6 +19,7 @@ import {
 } from "../services/assessments";
 import { assertUnitsInScope, scopedUnitIds } from "../services/scope";
 import { emitAndDeliver } from "../services/webhooks";
+import { assertFeature } from "../services/plan";
 
 const sectionSchema = z
   .object({
@@ -102,6 +103,7 @@ export async function assessmentConsoleRoutes(app: FastifyInstance) {
   app.post("/assessments", { preHandler: manage }, async (req) => {
     const tenantId = tenantOf(req);
     const body = parse(createSchema, req.body);
+    if (body.proctorLevel >= 2) await assertFeature(db, tenantOf(req), body.proctorLevel === 3 ? "ai_proctoring" : "proctoring_camera");
     await assertUnitsInScope(db, req.auth, body.unitIds);
     const sections = await resolveSections(db, tenantId, body.sections, async (packId) => {
       const [p] = await db.select().from(packs).where(eq(packs.id, packId));

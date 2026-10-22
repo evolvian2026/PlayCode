@@ -10,6 +10,7 @@ import { badRequest, forbidden, notFound } from "../lib/errors";
 import { authenticate, parse, requirePermission } from "../lib/http";
 import { closeLeagueWeek } from "../services/leagues";
 import { getTenant, tenantToday } from "../services/tenant";
+import { PLANS, type Plan } from "@playcode/core";
 
 /** Seats a partner has left to hand out: its pool minus what its sub-tenants hold. */
 async function partnerPool(partnerId: string, excludeChildId?: string) {
@@ -20,6 +21,12 @@ async function partnerPool(partnerId: string, excludeChildId?: string) {
     .from(tenants)
     .where(and(eq(tenants.parentId, partnerId), excludeChildId ? ne(tenants.id, excludeChildId) : undefined));
   return { partner, total: partner.seats, allocated, available: partner.seats - allocated };
+}
+
+/** A partner can give its colleges any plan up to its own. */
+async function assertPlanWithinPartner(partnerId: string, plan: Plan) {
+  const [partner] = await db.select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, partnerId));
+  if (!partner || PLANS.indexOf(plan) > PLANS.indexOf(partner.plan)) throw forbidden(`Your partner plan allows colleges up to ${partner?.plan ?? "starter"}`);
 }
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -57,6 +64,7 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!isSuper) {
       // Partners create institutions and companies under themselves, from their own seat pool.
       if (body.type === "partner") throw forbidden("Only PlayCode can create partners");
+      await assertPlanWithinPartner(req.auth.tenantId!, body.plan);
       const pool = await partnerPool(req.auth.tenantId!);
       if (body.seats > pool.available) throw badRequest(`Only ${pool.available} seats are left in your pool`);
     }
@@ -105,6 +113,7 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!target) throw notFound("Institution");
     if (!req.auth.roles.includes("super_admin")) {
       if (target.parentId !== req.auth.tenantId) throw forbidden("You can only change your own institutions");
+      if (body.plan) await assertPlanWithinPartner(req.auth.tenantId!, body.plan);
       if (body.seats !== undefined) {
         const pool = await partnerPool(req.auth.tenantId!, target.id);
         if (body.seats > pool.available) throw badRequest(`Only ${pool.available} seats are left in your pool`);

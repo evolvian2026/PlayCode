@@ -6,6 +6,7 @@ import { AI_MODEL, aiProvider, AiUnavailableError, type AiUsage } from "../lib/a
 import { badRequest, conflict, HttpError, notFound } from "../lib/errors";
 import type { StudentCtx } from "./practice";
 import { getTenant } from "./tenant";
+import { aiAllowed } from "./plan";
 
 // The AI coach: when the written hints are not enough, a student can ask for
 // a hint tailored to the question (and, for code, to their own attempt).
@@ -27,9 +28,10 @@ export async function recordAiUsage(db: DbOrTx, entry: { tenantId: string | null
   });
 }
 
-export async function coachAvailable(db: DbOrTx, tenantId: string): Promise<boolean> {
+export async function coachAvailable(db: DbOrTx, tenantId: string, now = new Date()): Promise<boolean> {
   if (!aiProvider()) return false;
-  return (await getTenant(db, tenantId)).settings.aiHints !== false;
+  if ((await getTenant(db, tenantId)).settings.aiHints === false) return false;
+  return (await aiAllowed(db, tenantId, "ai_coach", now)).ok;
 }
 
 /** A hint gives the answer away if it contains an accepted answer or the right option's text. */
@@ -46,7 +48,9 @@ function leaksAnswer(hint: string, q: typeof questions.$inferSelect): boolean {
 
 export async function coachHint(db: Db, ctx: StudentCtx, sessionId: string, input: { questionId: string; draft?: string }) {
   const provider = aiProvider();
-  if (!provider || !(await coachAvailable(db, ctx.tenantId))) throw badRequest("The AI coach is not switched on for your institution");
+  if (!provider || (await getTenant(db, ctx.tenantId)).settings.aiHints === false) throw badRequest("The AI coach is not switched on for your institution");
+  const allowed = await aiAllowed(db, ctx.tenantId, "ai_coach", ctx.now);
+  if (!allowed.ok) throw badRequest(allowed.reason);
 
   const [s] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
   if (!s || s.userId !== ctx.userId) throw notFound("Session");

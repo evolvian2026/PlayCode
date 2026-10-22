@@ -8,6 +8,7 @@ import { audit } from "../lib/audit";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { signInByEmail } from "./sso";
 import { assertPublicUrl } from "./webhooks";
+import { hasFeature } from "./plan";
 
 // SAML 2.0 single sign-on for institutions whose identity provider does not
 // speak OpenID Connect (ADFS, Shibboleth, Okta, Google Workspace SAML apps).
@@ -127,7 +128,7 @@ export async function spMetadata(db: Db, slug: string) {
 export async function startSaml(db: Db, slug: string) {
   const tenant = await tenantBySlug(db, slug);
   const conn = await getSamlConnection(db, tenant.id);
-  if (!conn?.enabled) return null;
+  if (!conn?.enabled || !(await hasFeature(db, tenant.id, "saml"))) return null;
   return client(db, conn, tenant.slug).getAuthorizeUrlAsync("", undefined, {});
 }
 

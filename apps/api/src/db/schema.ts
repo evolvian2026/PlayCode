@@ -948,3 +948,55 @@ export const rateLimits = pgTable(
   },
   (t) => [primaryKey({ columns: [t.key, t.windowStart] }), index("rate_limits_window_idx").on(t.windowStart)],
 );
+
+// ---------- Billing ----------
+
+/** Who an institution's invoices are made out to (GST details). */
+export const billingProfiles = pgTable("billing_profiles", {
+  tenantId: uuid("tenant_id")
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  legalName: text("legal_name").notNull(),
+  gstin: text("gstin"),
+  address: text("address").notNull(),
+  /** GST state code, e.g. "29" for Karnataka; decides CGST+SGST or IGST. */
+  stateCode: text("state_code"),
+  email: text("email").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export interface InvoiceLine {
+  description: string;
+  /** SAC code for the service (998431: online software services). */
+  sac: string;
+  quantity: number;
+  unitPricePaise: number;
+  amountPaise: number;
+}
+
+export const invoices = pgTable(
+  "invoices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    /** e.g. PC/2026-27/0007, sequential within the Indian financial year. */
+    number: text("number").notNull().unique(),
+    /** Billing month, "2026-10". */
+    period: text("period").notNull(),
+    plan: text("plan").$type<"starter" | "pro" | "enterprise">().notNull(),
+    lines: jsonb("lines").$type<InvoiceLine[]>().notNull(),
+    subtotalPaise: integer("subtotal_paise").notNull(),
+    cgstPaise: integer("cgst_paise").notNull(),
+    sgstPaise: integer("sgst_paise").notNull(),
+    igstPaise: integer("igst_paise").notNull(),
+    totalPaise: integer("total_paise").notNull(),
+    /** The customer's details as they were when the invoice was issued. */
+    billTo: jsonb("bill_to").$type<{ legalName: string; gstin: string | null; address: string; stateCode: string | null; email: string }>().notNull(),
+    status: text("status").$type<"issued" | "paid" | "void">().notNull().default("issued"),
+    issuedAt: timestamp("issued_at", { withTimezone: true }).notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("invoices_tenant_period_uq").on(t.tenantId, t.period)],
+);

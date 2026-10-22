@@ -16,6 +16,7 @@ import { getConnection, PRESET_ISSUERS, redirectUri, saveConnection } from "../s
 import { importStudents } from "../services/students";
 import { assertUnitsInScope, descendants, scopedUnitIds, studentIdsInUnits, tenantUnits } from "../services/scope";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
+import { requireFeature } from "../services/plan";
 
 const anyAnalytics = requireAny("analytics.institution", "analytics.department", "analytics.own_units");
 
@@ -140,7 +141,7 @@ export async function consoleRoutes(app: FastifyInstance) {
     return { own: tenant.branding, effective: await effectiveBranding(db, tenant) };
   });
 
-  app.put("/branding", { preHandler: requirePermission("tenant.settings"), bodyLimit: 400 * 1024 }, async (req) => {
+  app.put("/branding", { preHandler: [requirePermission("tenant.settings"), requireFeature("white_label")], bodyLimit: 400 * 1024 }, async (req) => {
     const tenant = await getTenant(db, tenantOf(req));
     const body = parse(
       z.object({
@@ -183,7 +184,7 @@ export async function consoleRoutes(app: FastifyInstance) {
     };
   });
 
-  app.put("/sso", { preHandler: requirePermission("tenant.settings") }, async (req) => {
+  app.put("/sso", { preHandler: [requirePermission("tenant.settings"), requireFeature("sso")] }, async (req) => {
     const tenantId = tenantOf(req);
     const body = parse(
       z.object({

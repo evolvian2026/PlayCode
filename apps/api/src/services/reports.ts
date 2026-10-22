@@ -11,6 +11,7 @@ import { effectiveBranding } from "./branding";
 import { listPaths } from "./paths";
 import { descendants, scopedUnitIds, studentIdsInUnits, tenantUnits, type AuthContext } from "./scope";
 import { getTenant, streakRules, tenantToday } from "./tenant";
+import { hasFeature } from "./plan";
 
 // The weekly report a TPO, HOD or L&D manager gets as a PDF: activity,
 // placement readiness, weakest skills, learning paths and who needs help.
@@ -217,6 +218,7 @@ export async function sendDueReports(db: Db, now: Date) {
     const local = localWeekdayHour(now, timeZone);
     const recentlySent = sub.lastSentAt && now.getTime() - sub.lastSentAt.getTime() < 6 * 86_400_000;
     if (local.weekday !== sub.weekday || local.hour < sub.hour || recentlySent) continue;
+    if (!(await hasFeature(db, sub.tenantId, "reports_email"))) continue;
     try {
       const auth = await authFor(db, sub.userId, sub.tenantId);
       if (!auth) {

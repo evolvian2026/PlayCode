@@ -11,3 +11,4 @@ export * from "./game/badges";
 export * from "./code";
 export * from "./assessment";
 export * from "./game/duel";
+export * from "./plans";

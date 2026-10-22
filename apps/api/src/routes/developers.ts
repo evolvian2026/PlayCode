@@ -8,11 +8,13 @@ import { encrypt, randomToken, sha256 } from "../lib/crypto";
 import { notFound } from "../lib/errors";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { assertPublicUrl, deliverDue, deliveryStats } from "../services/webhooks";
+import { requireFeature } from "../services/plan";
 
 /** Console: API clients and webhooks for an institution's integrations. */
 export async function developerRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
   app.addHook("preHandler", requirePermission("api.manage"));
+  app.addHook("preHandler", requireFeature("api"));
   const idParam = z.object({ id: z.string().uuid() });
 
   app.get("/api-clients", async (req) => {

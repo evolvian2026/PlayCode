@@ -7,6 +7,7 @@ import { rateLimit } from "../lib/rate-limit";
 import { acsUrl, finishSaml, getSamlConnection, parseIdpMetadata, saveSamlConnection, spEntityId, spMetadata } from "../services/saml";
 import { assertUnitsInScope } from "../services/scope";
 import { getTenant } from "../services/tenant";
+import { requireFeature } from "../services/plan";
 
 /** SAML 2.0: service-provider metadata, the assertion consumer service, and console settings. */
 export async function samlRoutes(app: FastifyInstance) {
@@ -47,7 +48,7 @@ export async function samlRoutes(app: FastifyInstance) {
 
     c.post("/console/saml/metadata", async (req) => parseIdpMetadata(parse(z.object({ xml: z.string().min(1).max(200_000) }), req.body).xml));
 
-    c.put("/console/saml", async (req) => {
+    c.put("/console/saml", { preHandler: requireFeature("saml") }, async (req) => {
       const body = parse(
         z.object({
           idpEntityId: z.string().min(1).max(500),

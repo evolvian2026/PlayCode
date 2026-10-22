@@ -10,6 +10,7 @@ import { effectiveBranding } from "../services/branding";
 import { verifyCertificate } from "../services/certificates";
 import { getSamlConnection } from "../services/saml";
 import { getConnection } from "../services/sso";
+import { planHas } from "@playcode/core";
 
 /** Unauthenticated routes: branded sign-in pages, logos and certificate verification. */
 export async function publicRoutes(app: FastifyInstance) {
@@ -18,7 +19,9 @@ export async function publicRoutes(app: FastifyInstance) {
     const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, slug.toLowerCase()));
     if (!tenant) throw notFound("Institution");
     const [saml, sso] = await Promise.all([getSamlConnection(db, tenant.id), getConnection(db, tenant.id)]);
-    return { ...(await effectiveBranding(db, tenant)), sso: saml?.enabled ? { provider: "saml" } : sso?.enabled ? { provider: sso.provider } : null };
+    const samlOn = saml?.enabled && planHas(tenant.plan, "saml");
+    const ssoOn = sso?.enabled && planHas(tenant.plan, "sso");
+    return { ...(await effectiveBranding(db, tenant)), sso: samlOn ? { provider: "saml" } : ssoOn ? { provider: sso!.provider } : null };
   });
 
   app.get("/public/logo/:tenantId", async (req, reply) => {

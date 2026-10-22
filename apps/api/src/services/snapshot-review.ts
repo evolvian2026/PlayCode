@@ -6,6 +6,7 @@ import { aiProvider } from "../lib/ai";
 import { getObject } from "../lib/storage";
 import { recordEvents } from "./assessments";
 import { recordAiUsage } from "./coach";
+import { aiAllowed } from "./plan";
 
 // Level 3 proctoring: every webcam snapshot is looked at by an AI model that
 // counts faces and spots phones or a second person. Findings become integrity
@@ -32,6 +33,7 @@ export async function reviewSnapshot(db: Db, snapshotId: string, tenantId: strin
   if (!provider) return;
   const [tenant] = await db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, tenantId));
   if (tenant?.settings.aiProctoring === false) return;
+  if (!(await aiAllowed(db, tenantId, "ai_proctoring", now)).ok) return;
   const [snap] = await db.select().from(attemptSnapshots).where(eq(attemptSnapshots.id, snapshotId));
   if (!snap || snap.reviewedAt) return;
   const image = await getObject(snap.storageKey);

@@ -6,6 +6,7 @@ import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { rateLimit } from "../lib/rate-limit";
 import { bindLink, completeDeepLink, deepLinkDetail, deletePlatform, finishLaunch, linkDetail, listLinks, listPlatforms, publicJwks, savePlatform, startLaunch, toolUrls } from "../services/lti";
 import { assertUnitsInScope } from "../services/scope";
+import { requireFeature } from "../services/plan";
 
 const platformInput = z.object({
   name: z.string().min(1).max(80),
@@ -56,12 +57,12 @@ export async function ltiRoutes(app: FastifyInstance) {
       tool: toolUrls(),
       platforms: (await listPlatforms(db, tenantOf(req))).map((p) => ({ ...p, tenantId: undefined })),
     }));
-    c.post("/console/lti/platforms", { preHandler: requirePermission("tenant.settings") }, async (req) => {
+    c.post("/console/lti/platforms", { preHandler: [requirePermission("tenant.settings"), requireFeature("lti")] }, async (req) => {
       const body = parse(platformInput, req.body);
       if (body.autoProvisionUnitId) await assertUnitsInScope(db, req.auth, [body.autoProvisionUnitId]);
       return { platform: await savePlatform(db, tenantOf(req), req.auth.userId, body) };
     });
-    c.put("/console/lti/platforms/:id", { preHandler: requirePermission("tenant.settings") }, async (req) => {
+    c.put("/console/lti/platforms/:id", { preHandler: [requirePermission("tenant.settings"), requireFeature("lti")] }, async (req) => {
       const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
       const body = parse(platformInput, req.body);
       if (body.autoProvisionUnitId) await assertUnitsInScope(db, req.auth, [body.autoProvisionUnitId]);

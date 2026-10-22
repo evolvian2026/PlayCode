@@ -5,6 +5,7 @@ import { forbidden } from "../lib/errors";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { archivePath, createPath, listPaths, pathCsv, pathDetail, studentPaths } from "../services/paths";
 import { assertUnitsInScope, scopedUnitIds } from "../services/scope";
+import { requireFeature } from "../services/plan";
 
 const idParam = z.object({ id: z.string().uuid() });
 
@@ -22,7 +23,7 @@ export async function pathRoutes(app: FastifyInstance) {
     paths: await listPaths(db, tenantOf(req), await scopedUnitIds(db, req.auth), app.now()),
   }));
 
-  app.post("/console/paths", { preHandler: requirePermission("assignments.manage") }, async (req) => {
+  app.post("/console/paths", { preHandler: [requirePermission("assignments.manage"), requireFeature("learning_paths")] }, async (req) => {
     const body = parse(
       z.object({
         title: z.string().min(1).max(120),
