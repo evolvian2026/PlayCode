@@ -134,6 +134,7 @@ export function TwoFactorCard({ onEnabled }: { onEnabled?: () => void }) {
                       const r = await api<{ recoveryCodes: string[] }>("/auth/2fa/enable", { body: { code } });
                       setCodes(r.recoveryCodes);
                       setSetup(null);
+                      setCode("");
                       reload();
                       onEnabled?.();
                     })

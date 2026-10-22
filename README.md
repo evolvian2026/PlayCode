@@ -47,6 +47,15 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - LTI deep linking: teachers pick PlayCode assignments from inside Moodle or Canvas; each becomes a course activity with a gradebook column.
 - Several API instances can run behind a load balancer: live events reach browsers on any instance (Postgres LISTEN/NOTIFY) and rate limits are shared (Postgres counters).
 
+**Phase 6 additions**
+- Plans: Starter, Pro and Enterprise decide which features an institution gets (camera and AI proctoring, content studio, AI coach and drafting, learning paths, report emails, SSO and SAML, LTI, API, white label, WhatsApp, hiring drives). Locked features are hidden in the console and refused by the API with a "part of the Pro plan" message. Partners can't give a college a higher plan than their own.
+- Billing: the institution admin sees their plan, seats, AI tokens used this month against the plan's allowance (AI pauses at the limit on Pro; Enterprise is billed for overage) and their invoices, and keeps their GSTIN and billing address. The PlayCode super admin issues monthly GST tax invoices for every customer in one step (numbered `PC/2026-27/0001` by financial year, CGST and SGST within the state, IGST otherwise, SAC 998431, amount in words) as PDFs, and marks them paid or void.
+- Sign-in codes: anyone can sign in with a 6-digit code sent by email or WhatsApp instead of a password (10 minutes, 5 tries, one use).
+- Two-factor sign-in for staff with an authenticator app (TOTP) and 8 one-time recovery codes. An institution admin can require it for all staff; staff without it are sent to set it up before they can do anything else. Admins can reset a colleague's two-factor.
+- Signed-in devices: every sign-in is a session that shows its device and last activity; sign out one device or all the others. Signing out ends the session on the server.
+- AI drafting for coding and SQL problems: Claude writes the problem, tests, reference solutions in C, Java and Python and starter code; expected outputs come from running the Python solution, then every solution is run against every test before the author sees the draft. SQL drafts come with a schema, sample rows and a model query that must return rows.
+- Hindi: students can switch menus, buttons and messages to Hindi from their profile (questions and code stay in English, as in placement tests). The choice is saved on the account and remembered on the device for the sign-in page.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -83,7 +92,7 @@ pnpm dev:web                            # http://localhost:3000
 ```
 
 The demo seed creates "Demo Institute of Technology" with 31 students and two
-weeks of simulated practice. Every account's password is `playcode123`.
+weeks of simulated practice, on the Enterprise plan so every feature is on. Every account's password is `playcode123`.
 
 | Role | Email |
 | --- | --- |
@@ -150,6 +159,10 @@ SAML: under Settings, paste the identity provider's metadata (or enter its entit
 
 Email: set `SMTP_URL` (for example `smtps://user:pass@smtp.example.com:465`) and `MAIL_FROM` for the weekly report emails. Without it, reports can still be downloaded.
 
+Plans and billing: set the plan for each customer under Admin when creating or editing a tenant (colleges under a partner are billed through the partner, so only top-level customers get invoices). Prices, AI allowances and the features of each plan are in `packages/core/src/plans.ts`. Invoices use the supplier details in `BILLING_LEGAL_NAME`, `BILLING_GSTIN`, `BILLING_ADDRESS` and `BILLING_STATE_CODE` (two-digit GST state code; customers in the same state get CGST and SGST, the rest IGST). Issue a month's invoices from Invoicing in the console after the month ends; re-running skips customers already invoiced. Payment collection is not built: mark invoices paid by hand.
+
+Sign-in codes go by email when `SMTP_URL` is set and by WhatsApp when WhatsApp is configured and the account has a phone number; without either, the option is hidden. For WhatsApp, create an Authentication template named `playcode_login_code` with a copy-code button. Two-factor secrets are encrypted with `DATA_KEY`; recovery codes are stored hashed.
+
 Running several API instances: put them behind a load balancer (WebSocket upgrades must be allowed); they share Postgres for live events (each instance keeps one extra LISTEN connection), rate limits, webhook and grade outboxes and SAML request ids. Run the scheduled jobs from one place only. The code-execution queue limits concurrency per instance, so size `EXECUTION_CONCURRENCY` per instance against your Judge0 capacity. `REALTIME_FANOUT=off` keeps live events within one instance.
 
 Other operations:
@@ -162,12 +175,13 @@ Other operations:
 
 - **Fastify instead of NestJS**: lighter for a modular monolith of this size; modules live in `apps/api/src/routes` and `services`.
 - **Leaderboards from PostgreSQL**, no Redis yet: group sizes are 30, so queries stay cheap. Add Redis with realtime duels.
-- **Email and password sign-in, plus OpenID Connect and SAML SSO**: OTP sign-in is not built. Imported students get a starting password from the import screen.
-- **Tenant isolation in the API layer**: every query is scoped by tenant and org unit. PostgreSQL row-level security is the next hardening step.
+- **Password, sign-in code, OpenID Connect or SAML sign-in, with optional TOTP for staff**: imported students get a starting password from the import screen and can use sign-in codes from then on. Two-factor is for staff accounts; students are not asked for it.
+- **Tenant isolation in the API layer**: every query is scoped by tenant and org unit. PostgreSQL row-level security was considered and left out: it needs every request wrapped in a transaction that sets the tenant, which touches every route for little gain over the scoped queries and tests already in place.
+- **Hindi through a small dictionary** keyed on the English text, not a translation platform: untranslated strings fall back to English, so screens can be translated one at a time. The console stays in English.
 
 - **Postgres instead of Redis for cross-instance state**: live events, rate limits and outboxes all use Postgres, so there is one less service to run. At very high event volume, move the fan-out to Redis pub/sub behind the same `publish()`.
 - **Camera checks are snapshots, reviewed by AI at level 3**: there is no continuous video or in-browser face tracking.
 
-- **Sessions are checked against the account on every request**, so disabling or erasing an account signs it out at once. This costs one primary-key lookup per request.
+- **Sessions are checked against the account and its device session on every request**, so disabling or erasing an account, or signing a device out, takes effect at once. This costs one indexed lookup per request.
 
-Not built yet: OTP sign-in, SAML single logout and encrypted assertions, PostgreSQL row-level security, AI drafting of coding and SQL problems (written by hand in the studio), and native mobile apps (the web app is an installable PWA).
+Not built yet: online payment collection for invoices, SAML single logout and encrypted assertions, PostgreSQL row-level security, languages other than English and Hindi, and native mobile apps (the web app is an installable PWA).

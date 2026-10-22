@@ -8,7 +8,7 @@ import { AuthGate, signOut, switchTenant, useMe } from "@/components/Auth";
 import { Icon } from "@/components/Icon";
 import { logoSrc } from "@/lib/branding";
 
-type NavItem = { href: string; label: string; icon: string; perm: string | string[] | null; feature?: Feature; superAdmin?: boolean };
+type NavItem = { href: string; label: string; icon: string; perm: string | string[] | null; feature?: Feature; tenantOnly?: boolean; superAdmin?: boolean };
 
 const NAV: NavItem[] = [
   { href: "/console", label: "Overview", icon: "chart", perm: null },
@@ -26,13 +26,14 @@ const NAV: NavItem[] = [
   { href: "/console/privacy", label: "Privacy requests", icon: "shield", perm: "users.manage" },
   { href: "/console/audit", label: "Audit log", icon: "list", perm: "audit.view" },
   { href: "/console/settings", label: "Settings", icon: "settings", perm: "tenant.settings" },
-  { href: "/console/billing", label: "Plan & billing", icon: "clipboard", perm: "tenant.settings" },
+  { href: "/console/billing", label: "Plan & billing", icon: "clipboard", perm: "tenant.settings", tenantOnly: true },
   { href: "/console/billing", label: "Invoicing", icon: "clipboard", perm: null, superAdmin: true },
 ];
 
 /** Hide what the role can't use, and what the institution's plan doesn't include (PlayCode staff outside an institution see everything). */
 function visible(n: NavItem, me: { permissions: string[]; user: { roles: string[] }; tenant: { plan: string } | null }) {
   if (n.superAdmin) return me.user.roles.includes("super_admin") && !me.tenant;
+  if (n.tenantOnly && !me.tenant) return false;
   if (n.perm && ![n.perm].flat().some((p) => me.permissions.includes(p))) return false;
   if (n.feature && me.tenant && !planHas(me.tenant.plan as Plan, n.feature)) return false;
   return true;

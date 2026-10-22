@@ -59,7 +59,9 @@ export function whatsappConfigured(): boolean {
 /**
  * Send one WhatsApp template message through the Cloud API. Templates must be
  * approved in WhatsApp Manager under the same names (playcode_<template>),
- * with two body parameters: the title and the message.
+ * with two body parameters: the title and the message. The sign-in code
+ * template (playcode_login_code) is an Authentication template: the code fills
+ * its body and its copy-code button.
  */
 export async function sendWhatsApp(phone: string, template: string, params: string[], fetchImpl: typeof fetch = fetch): Promise<void> {
   const res = await fetchImpl(`https://graph.facebook.com/v20.0/${env.WHATSAPP_PHONE_ID}/messages`, {
@@ -72,7 +74,10 @@ export async function sendWhatsApp(phone: string, template: string, params: stri
       template: {
         name: `playcode_${template}`,
         language: { code: env.WHATSAPP_TEMPLATE_LANG },
-        components: [{ type: "body", parameters: params.map((text) => ({ type: "text", text: text.slice(0, 900) })) }],
+        components: [
+          { type: "body", parameters: params.map((text) => ({ type: "text", text: text.slice(0, 900) })) },
+          ...(template === "login_code" ? [{ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: params[0] }] }] : []),
+        ],
       },
     }),
   });

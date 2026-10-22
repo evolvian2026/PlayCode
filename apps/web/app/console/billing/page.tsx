@@ -83,20 +83,22 @@ function InvoiceTable({ invoices, admin, onChange }: { invoices: Invoice[]; admi
               <td>
                 <span className={`pill ${STATUS_TONE[i.status]}`}>{i.status}</span>
               </td>
-              <td className="row" style={{ gap: 4 }}>
-                <button className="btn small" onClick={() => downloadPdf(`${admin ? "/admin" : "/console"}/billing/invoices/${i.id}/pdf`, `${i.number.replace(/\//g, "-")}.pdf`)}>
-                  PDF
-                </button>
-                {admin && i.status === "issued" && (
-                  <>
-                    <button className="btn small ghost" onClick={() => mark(i.id, "paid")}>
-                      Mark paid
-                    </button>
-                    <button className="btn small ghost" onClick={() => mark(i.id, "void")}>
-                      Void
-                    </button>
-                  </>
-                )}
+              <td>
+                <div className="row" style={{ gap: 4 }}>
+                  <button className="btn small" onClick={() => downloadPdf(`${admin ? "/admin" : "/console"}/billing/invoices/${i.id}/pdf`, `${i.number.replace(/\//g, "-")}.pdf`)}>
+                    PDF
+                  </button>
+                  {admin && i.status === "issued" && (
+                    <>
+                      <button className="btn small ghost" onClick={() => mark(i.id, "paid")}>
+                        Mark paid
+                      </button>
+                      <button className="btn small ghost" onClick={() => mark(i.id, "void")}>
+                        Void
+                      </button>
+                    </>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
