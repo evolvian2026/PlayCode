@@ -4,7 +4,7 @@ import { db } from "../db/client";
 import { env } from "../env";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { rateLimit } from "../lib/rate-limit";
-import { bindLink, deletePlatform, finishLaunch, linkDetail, listLinks, listPlatforms, publicJwks, savePlatform, startLaunch, toolUrls } from "../services/lti";
+import { bindLink, completeDeepLink, deepLinkDetail, deletePlatform, finishLaunch, linkDetail, listLinks, listPlatforms, publicJwks, savePlatform, startLaunch, toolUrls } from "../services/lti";
 import { assertUnitsInScope } from "../services/scope";
 
 const platformInput = z.object({
@@ -70,6 +70,15 @@ export async function ltiRoutes(app: FastifyInstance) {
     c.delete("/console/lti/platforms/:id", { preHandler: requirePermission("tenant.settings") }, async (req) => {
       await deletePlatform(db, tenantOf(req), req.auth.userId, parse(z.object({ id: z.string().uuid() }), req.params).id);
       return { ok: true };
+    });
+
+    c.get("/console/lti/deep-link/:id", { preHandler: requirePermission("assignments.manage") }, async (req) => ({
+      request: await deepLinkDetail(db, tenantOf(req), req.auth.userId, parse(z.object({ id: z.string().uuid() }), req.params).id, app.now()),
+    }));
+    c.post("/console/lti/deep-link/:id", { preHandler: requirePermission("assignments.manage") }, async (req) => {
+      const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+      const { assignmentIds } = parse(z.object({ assignmentIds: z.array(z.string().uuid()).min(1).max(20) }), req.body);
+      return completeDeepLink(db, tenantOf(req), req.auth.userId, id, assignmentIds, app.now());
     });
 
     c.get("/console/lti/links", { preHandler: requirePermission("assignments.manage") }, async (req) => ({ links: await listLinks(db, tenantOf(req)) }));

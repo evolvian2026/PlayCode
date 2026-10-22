@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { and, asc, eq, inArray, lt, sql } from "drizzle-orm";
 import { createRemoteJWKSet, exportJWK, exportPKCS8, generateKeyPair, importPKCS8, jwtVerify, SignJWT, type JWTVerifyGetKey } from "jose";
 import type { Db, DbOrTx } from "../db/client";
-import { assignments, ltiAccounts, ltiKeys, ltiLinks, ltiNonces, ltiPlatforms, ltiScores, memberships, users } from "../db/schema";
+import { assignments, ltiAccounts, ltiDeepLinks, ltiKeys, ltiLinks, ltiNonces, ltiPlatforms, ltiScores, memberships, users } from "../db/schema";
 import { env } from "../env";
 import { audit } from "../lib/audit";
 import { signToken } from "../lib/auth";
@@ -22,6 +22,8 @@ import { assertPublicUrl } from "./webhooks";
 
 const CLAIM = "https://purl.imsglobal.org/spec/lti/claim/";
 const AGS_CLAIM = "https://purl.imsglobal.org/spec/lti-ags/claim/endpoint";
+const DL = "https://purl.imsglobal.org/spec/lti-dl/claim/";
+const DL_SETTINGS = `${DL}deep_linking_settings`;
 export const SCORE_SCOPE = "https://purl.imsglobal.org/spec/lti-ags/scope/score";
 const STATE_TTL_MS = 10 * 60_000;
 const MAX_ATTEMPTS = 7;
@@ -157,13 +159,29 @@ export async function finishLaunch(db: Db, form: { id_token?: string; state?: st
 
   const claim = <T>(name: string) => c[`${CLAIM}${name}`] as T | undefined;
   if (claim<string>("version") !== "1.3.0") throw badRequest("Only LTI 1.3 launches are supported");
-  if (claim<string>("message_type") !== "LtiResourceLinkRequest") throw badRequest("PlayCode supports activity launches only (not content selection)");
+  const messageType = claim<string>("message_type");
+  if (messageType !== "LtiResourceLinkRequest" && messageType !== "LtiDeepLinkingRequest") throw badRequest("PlayCode does not support this kind of LMS launch");
   const deployment = claim<string>("deployment_id");
   if (!deployment || (platform.deploymentIds.length > 0 && !platform.deploymentIds.includes(deployment))) throw forbidden("This LMS deployment is not allowed");
   const sub = String(c.sub ?? "");
   if (!sub) throw badRequest("The launch has no user");
   const roles = claim<string[]>("roles") ?? [];
   const instructor = isInstructor(roles);
+
+  if (messageType === "LtiDeepLinkingRequest") {
+    // A teacher adding PlayCode to a course: let them pick assignments, then post the choice back.
+    if (!instructor) throw forbidden("Only teachers can add PlayCode activities to a course");
+    const settings = c[DL_SETTINGS] as { deep_link_return_url?: string; accept_types?: string[]; accept_multiple?: boolean; data?: string } | undefined;
+    if (!settings?.deep_link_return_url) throw badRequest("The LMS did not say where to return the selection");
+    if (settings.accept_types && !settings.accept_types.includes("ltiResourceLink")) throw badRequest("The LMS does not accept activity links here");
+    const userId = await resolveUser(db, platform, { sub, email: typeof c.email === "string" ? c.email : null, name: typeof c.name === "string" ? c.name : null, instructor, now });
+    const [req] = await db
+      .insert(ltiDeepLinks)
+      .values({ platformId: platform.id, userId, deploymentId: deployment, returnUrl: settings.deep_link_return_url, data: settings.data ?? null, acceptMultiple: Boolean(settings.accept_multiple), expiresAt: new Date(now.getTime() + 60 * 60_000), createdAt: now })
+      .returning();
+    return { token: await tokenFor(db, userId), next: `/console/lti/pick?request=${req!.id}` };
+  }
+
   const resource = claim<{ id: string; title?: string }>("resource_link");
   if (!resource?.id) throw badRequest("The launch has no activity");
   const context = claim<{ title?: string }>("context");
@@ -191,14 +209,18 @@ export async function finishLaunch(db: Db, form: { id_token?: string; state?: st
     .onConflictDoUpdate({ target: [ltiLinks.platformId, ltiLinks.resourceLinkId], set: linkValues })
     .returning();
 
-  const [user] = await db.select().from(users).where(eq(users.id, userId));
-  const userRoles = [...new Set((await db.select({ role: memberships.role }).from(memberships).where(eq(memberships.userId, userId))).map((r) => r.role))];
   await audit(db, { tenantId: platform.tenantId, actorId: userId, action: "lti.launch", target: link!.id, data: { platform: platform.name, instructor } });
-  const token = await signToken({ sub: userId, tenantId: user!.tenantId, roles: userRoles });
+  const token = await tokenFor(db, userId);
 
   if (instructor) return { token, next: link!.assignmentId ? "/console/assignments" : `/console/lti/link?id=${link!.id}` };
   if (!link!.assignmentId) throw badRequest("Your teacher has not connected this activity to a PlayCode assignment yet");
   return { token, next: `/play/start?assignment=${link!.assignmentId}` };
+}
+
+async function tokenFor(db: Db, userId: string) {
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  const roles = [...new Set((await db.select({ role: memberships.role }).from(memberships).where(eq(memberships.userId, userId))).map((r) => r.role))];
+  return signToken({ sub: userId, tenantId: user!.tenantId, roles });
 }
 
 async function resolveUser(db: Db, platform: Platform, u: { sub: string; email: string | null; name: string | null; instructor: boolean; now: Date }) {
@@ -228,6 +250,67 @@ async function resolveUser(db: Db, platform: Platform, u: { sub: string; email: 
   }
   await db.insert(ltiAccounts).values({ platformId: platform.id, sub: u.sub, userId }).onConflictDoNothing();
   return userId;
+}
+
+// ---------- Deep linking: the teacher picks content inside the LMS ----------
+
+async function loadDeepLink(db: Db, tenantId: string, userId: string, id: string, now: Date) {
+  const [row] = await db
+    .select({ req: ltiDeepLinks, platform: ltiPlatforms })
+    .from(ltiDeepLinks)
+    .innerJoin(ltiPlatforms, eq(ltiPlatforms.id, ltiDeepLinks.platformId))
+    .where(and(eq(ltiDeepLinks.id, id), eq(ltiPlatforms.tenantId, tenantId)));
+  if (!row || row.req.userId !== userId) throw notFound("Selection request");
+  if (row.req.usedAt) throw badRequest("This selection was already sent to the LMS. Start again from your course.");
+  if (row.req.expiresAt < now) throw badRequest("This selection has expired. Start again from your course.");
+  return row;
+}
+
+export async function deepLinkDetail(db: Db, tenantId: string, userId: string, id: string, now: Date) {
+  const { req, platform } = await loadDeepLink(db, tenantId, userId, id, now);
+  return { id: req.id, platform: platform.name, acceptMultiple: req.acceptMultiple };
+}
+
+/**
+ * Build the signed LtiDeepLinkingResponse for the chosen assignments. The
+ * browser posts it to the LMS, which creates one activity (with a gradebook
+ * column) per assignment; each launches with custom assignment_id.
+ */
+export async function completeDeepLink(db: Db, tenantId: string, userId: string, id: string, assignmentIds: string[], now: Date) {
+  const { req, platform } = await loadDeepLink(db, tenantId, userId, id, now);
+  if (assignmentIds.length === 0) throw badRequest("Choose an assignment");
+  if (assignmentIds.length > 1 && !req.acceptMultiple) throw badRequest("Your LMS accepts one activity at a time here");
+  const chosen = await db.select().from(assignments).where(and(inArray(assignments.id, assignmentIds), eq(assignments.tenantId, tenantId)));
+  if (chosen.length !== new Set(assignmentIds).size) throw notFound("Assignment");
+  const { kid, key } = await signingKey(db);
+  const iat = Math.floor(now.getTime() / 1000);
+  const jwt = await new SignJWT({
+    nonce: randomBytes(16).toString("hex"),
+    [`${CLAIM}message_type`]: "LtiDeepLinkingResponse",
+    [`${CLAIM}version`]: "1.3.0",
+    [`${CLAIM}deployment_id`]: req.deploymentId,
+    [`${DL}content_items`]: assignmentIds.map((aid) => {
+      const a = chosen.find((x) => x.id === aid)!;
+      return {
+        type: "ltiResourceLink",
+        title: a.title,
+        text: `PlayCode assignment: ${a.questionIds.length} questions`,
+        url: toolUrls().launchUrl,
+        custom: { assignment_id: a.id },
+        lineItem: { label: a.title, scoreMaximum: a.questionIds.length, resourceId: a.id },
+      };
+    }),
+    ...(req.data ? { [`${DL}data`]: req.data } : {}),
+  })
+    .setProtectedHeader({ alg: "RS256", kid, typ: "JWT" })
+    .setIssuer(platform.clientId)
+    .setAudience(platform.issuer)
+    .setIssuedAt(iat)
+    .setExpirationTime(iat + 600)
+    .sign(key);
+  await db.update(ltiDeepLinks).set({ usedAt: now }).where(eq(ltiDeepLinks.id, req.id));
+  await audit(db, { tenantId, actorId: userId, action: "lti.deep_link", target: req.id, data: { assignments: assignmentIds } });
+  return { returnUrl: req.returnUrl, jwt };
 }
 
 // ---------- Teacher binding an activity ----------

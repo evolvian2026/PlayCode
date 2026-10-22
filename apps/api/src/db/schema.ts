@@ -920,3 +920,18 @@ export const samlRequests = pgTable("saml_requests", {
   value: text("value").notNull(),
   createdAt: createdAt(),
 });
+
+/** A teacher choosing PlayCode content from inside the LMS (LTI deep linking), waiting for their pick. */
+export const ltiDeepLinks = pgTable("lti_deep_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  platformId: uuid("platform_id").notNull().references(() => ltiPlatforms.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  deploymentId: text("deployment_id").notNull(),
+  returnUrl: text("return_url").notNull(),
+  /** Opaque value the LMS asked us to send back. */
+  data: text("data"),
+  acceptMultiple: boolean("accept_multiple").notNull().default(false),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});

@@ -172,7 +172,8 @@ describe("LTI 1.3", () => {
     expect((await launch(learner("moodle-user-7"), { replay: true })).error).toContain("already used");
     expect((await launch(learner("moodle-user-7"), { badKey: true })).error).toContain("Could not verify");
     expect((await launch({ ...learner("moodle-user-7"), [`${LTI}deployment_id`]: "dep-x" })).error).toContain("deployment is not allowed");
-    expect((await launch({ ...learner("moodle-user-7"), [`${LTI}message_type`]: "LtiDeepLinkingRequest" })).error).toContain("activity launches only");
+    expect((await launch({ ...learner("moodle-user-7"), [`${LTI}message_type`]: "LtiDeepLinkingRequest" })).error).toContain("Only teachers");
+    expect((await launch({ ...learner("moodle-user-7"), [`${LTI}message_type`]: "LtiSubmissionReviewRequest" })).error).toContain("does not support");
     const student = { ...teacher, sub: "moodle-teacher-2", email: "student@demo.edu" };
     expect((await launch(student)).error).toContain("student account");
     const login = await t.app.inject({ method: "GET", url: `/lti/login?iss=${encodeURIComponent("https://unknown.example")}&login_hint=x` });
@@ -198,5 +199,38 @@ describe("LTI 1.3", () => {
 
     const links = (await t.get(faculty, "/console/lti/links")).body.links;
     expect(links[0]).toMatchObject({ assignment: "LMS loops", scores: { sent: 1 } });
+  });
+
+  it("lets a teacher pick assignments from inside the LMS (deep linking)", async () => {
+    const dl = "https://purl.imsglobal.org/spec/lti-dl/claim/";
+    const r = await launch({
+      ...teacher,
+      [`${LTI}message_type`]: "LtiDeepLinkingRequest",
+      [`${dl}deep_linking_settings`]: { deep_link_return_url: `${issuer}/deep-link-return`, accept_types: ["ltiResourceLink"], accept_multiple: true, data: "opaque-123" },
+    });
+    expect(r.error).toBeNull();
+    expect(r.next).toMatch(/^\/console\/lti\/pick\?request=/);
+    const requestId = r.next!.split("request=")[1]!;
+    expect((await t.get(r.token!, `/console/lti/deep-link/${requestId}`)).body.request).toMatchObject({ platform: "College Moodle", acceptMultiple: true });
+    // Another teacher can't use someone else's selection.
+    expect((await t.get(admin, `/console/lti/deep-link/${requestId}`)).status).toBe(404);
+
+    const res = await t.post(r.token!, `/console/lti/deep-link/${requestId}`, { assignmentIds: [assignmentId] });
+    expect(res.status).toBe(200);
+    expect(res.body.returnUrl).toBe(`${issuer}/deep-link-return`);
+    // The LMS verifies the response against PlayCode's published keys.
+    const jwks = (await t.app.inject({ method: "GET", url: "/lti/jwks" })).json() as JSONWebKeySet;
+    const { payload } = await jwtVerify(res.body.jwt, createLocalJWKSet(jwks), { issuer: "moodle-client", audience: issuer, currentDate: t.clock.now });
+    expect(payload[`${LTI}message_type`]).toBe("LtiDeepLinkingResponse");
+    expect(payload[`${LTI}deployment_id`]).toBe("dep-1");
+    expect(payload[`${dl}data`]).toBe("opaque-123");
+    const [item] = payload[`${dl}content_items`] as { type: string; title: string; custom: Record<string, string>; lineItem: { scoreMaximum: number } }[];
+    expect(item).toMatchObject({ type: "ltiResourceLink", title: "LMS loops", custom: { assignment_id: assignmentId }, lineItem: { scoreMaximum: 3 } });
+    // One use only.
+    expect((await t.post(r.token!, `/console/lti/deep-link/${requestId}`, { assignmentIds: [assignmentId] })).status).toBe(400);
+
+    // The LMS then launches the new activity with the custom parameter: it opens the assignment straight away.
+    const learnerLaunch = await launch({ ...learner("moodle-user-7"), [`${LTI}resource_link`]: { id: "rl-new" }, [`${LTI}custom`]: { assignment_id: assignmentId } });
+    expect(learnerLaunch.next).toBe(`/play/start?assignment=${assignmentId}`);
   });
 });

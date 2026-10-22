@@ -407,7 +407,10 @@ function LtiSettings() {
         <div>
           Public keyset (JWKS) URL: <code className="inline-code">{data.tool.jwksUrl}</code>
         </div>
-        <div className="muted">Turn on the Assignment and Grade Services (scores) and share name and email. Open the tool in a new window.</div>
+        <div>
+          Content selection (deep linking) URL: <code className="inline-code">{data.tool.launchUrl}</code>
+        </div>
+        <div className="muted">Turn on Assignment and Grade Services (scores) and content selection, share name and email, and open the tool in a new window.</div>
       </div>
       {data.platforms.map((p) => (
         <div key={p.id} className="spread wrap" style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
