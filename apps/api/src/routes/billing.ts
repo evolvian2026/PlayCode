@@ -3,18 +3,34 @@ import { z } from "zod";
 import { db } from "../db/client";
 import { forbidden } from "../lib/errors";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
+import { confirmCallback, handleWebhook, onlinePaymentsEnabled, paymentLink } from "../services/payments";
 import { generateInvoices, getInvoice, getProfile, listInvoices, renderInvoicePdf, saveProfile, setInvoiceStatus, usage } from "../services/billing";
 
 const idParam = z.object({ id: z.string().uuid() });
 
 /** Plan, usage and invoices for institution admins; invoicing for PlayCode admins. */
 export async function billingRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", authenticate);
+  // Razorpay webhook: no user session; the signature covers the raw body, so keep it unparsed.
+  app.register(async (hook) => {
+    hook.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => done(null, body));
+    hook.post("/webhooks/razorpay", async (req) => {
+      const signature = req.headers["x-razorpay-signature"];
+      return handleWebhook(db, String(req.body ?? ""), typeof signature === "string" ? signature : undefined, app.now());
+    });
+  });
 
+  app.register(async (app2) => {
+    app2.addHook("preHandler", authenticate);
+    await signedInRoutes(app2);
+  });
+}
+
+async function signedInRoutes(app: FastifyInstance) {
   app.get("/console/billing", { preHandler: requirePermission("tenant.settings") }, async (req) => {
     const tenantId = tenantOf(req);
     return {
       usage: await usage(db, tenantId, app.now()),
+      onlinePayments: onlinePaymentsEnabled(),
       profile: await getProfile(db, tenantId),
       invoices: (await listInvoices(db, { tenantId })).map((r) => r.invoice),
     };
@@ -32,6 +48,24 @@ export async function billingRoutes(app: FastifyInstance) {
       req.body,
     );
     return { profile: await saveProfile(db, tenantOf(req), req.auth.userId, body) };
+  });
+
+  app.post("/console/billing/invoices/:id/pay", { preHandler: requirePermission("tenant.settings") }, async (req) =>
+    paymentLink(db, { invoiceId: parse(idParam, req.params).id, tenantId: tenantOf(req), actorId: req.auth.userId, now: app.now() }),
+  );
+
+  app.post("/console/billing/payments/confirm", { preHandler: requirePermission("tenant.settings") }, async (req) => {
+    const body = parse(
+      z.object({
+        razorpay_payment_id: z.string().max(100),
+        razorpay_payment_link_id: z.string().max(100),
+        razorpay_payment_link_reference_id: z.string().max(100),
+        razorpay_payment_link_status: z.string().max(40),
+        razorpay_signature: z.string().max(200),
+      }),
+      req.body,
+    );
+    return confirmCallback(db, tenantOf(req), body, app.now());
   });
 
   app.get("/console/billing/invoices/:id/pdf", { preHandler: requirePermission("tenant.settings") }, async (req, reply) => {

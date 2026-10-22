@@ -152,7 +152,10 @@ export async function getInvoice(db: Db, id: string, tenantId?: string) {
 export async function setInvoiceStatus(db: Db, id: string, status: "paid" | "void", actorId: string, now: Date) {
   const inv = await getInvoice(db, id);
   if (inv.status === "void") throw badRequest("A void invoice can't be changed; issue a new one");
-  await db.update(invoices).set({ status, paidAt: status === "paid" ? now : null }).where(eq(invoices.id, id));
+  await db
+    .update(invoices)
+    .set({ status, paidAt: status === "paid" ? now : null, paidVia: status === "paid" ? "manual" : null })
+    .where(eq(invoices.id, id));
   await audit(db, { tenantId: inv.tenantId, actorId, action: `billing.invoice_${status}`, target: inv.number });
   return getInvoice(db, id);
 }

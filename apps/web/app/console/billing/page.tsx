@@ -13,6 +13,7 @@ interface Invoice {
   plan: string;
   totalPaise: number;
   status: "issued" | "paid" | "void";
+  paidVia: "razorpay" | "manual" | null;
   issuedAt: string;
   dueAt: string;
   tenantName?: string;
@@ -31,6 +32,7 @@ interface BillingInfo {
   };
   profile: { legalName: string; gstin: string | null; address: string; stateCode: string | null; email: string } | null;
   invoices: Invoice[];
+  onlinePayments: boolean;
 }
 
 const STATUS_TONE = { issued: "warn", paid: "good", void: "" } as const;
@@ -45,8 +47,20 @@ async function downloadPdf(path: string, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-function InvoiceTable({ invoices, admin, onChange }: { invoices: Invoice[]; admin: boolean; onChange?: () => void }) {
+function InvoiceTable({ invoices, admin, onlinePayments = false, onChange }: { invoices: Invoice[]; admin: boolean; onlinePayments?: boolean; onChange?: () => void }) {
   const [error, setError] = useState<string | null>(null);
+  const [paying, setPaying] = useState<string | null>(null);
+  async function pay(id: string) {
+    setPaying(id);
+    setError(null);
+    try {
+      // Razorpay's payment page; it sends the browser back to /console/billing/paid.
+      window.location.href = (await api<{ url: string }>(`/console/billing/invoices/${id}/pay`, { body: {} })).url;
+    } catch (e) {
+      setError(errorMessage(e));
+      setPaying(null);
+    }
+  }
   if (invoices.length === 0) return <div className="muted small">No invoices yet.</div>;
   async function mark(id: string, status: "paid" | "void") {
     try {
@@ -81,14 +95,19 @@ function InvoiceTable({ invoices, admin, onChange }: { invoices: Invoice[]; admi
               <td>{i.period}</td>
               <td>{formatRupees(i.totalPaise)}</td>
               <td>
-                <span className={`pill ${STATUS_TONE[i.status]}`}>{i.status}</span>
+                <span className={`pill ${STATUS_TONE[i.status]}`}>{i.status === "paid" && i.paidVia === "razorpay" ? "paid online" : i.status}</span>
               </td>
               <td>
                 <div className="row" style={{ gap: 4 }}>
                   <button className="btn small" onClick={() => downloadPdf(`${admin ? "/admin" : "/console"}/billing/invoices/${i.id}/pdf`, `${i.number.replace(/\//g, "-")}.pdf`)}>
                     PDF
                   </button>
-                  {admin && i.status === "issued" && (
+                  {!admin && onlinePayments && i.status === "issued" && (
+                  <button className="btn small primary" disabled={paying !== null} onClick={() => pay(i.id)}>
+                    {paying === i.id ? "Opening..." : "Pay online"}
+                  </button>
+                )}
+                {admin && i.status === "issued" && (
                     <>
                       <button className="btn small ghost" onClick={() => mark(i.id, "paid")}>
                         Mark paid
@@ -241,7 +260,7 @@ function TenantBilling() {
           </form>
           <div className="card stack">
             <h2 style={{ margin: 0 }}>Invoices</h2>
-            <InvoiceTable invoices={data.invoices} admin={false} />
+            <InvoiceTable invoices={data.invoices} admin={false} onlinePayments={data.onlinePayments} onChange={reload} />
           </div>
         </>
       )}

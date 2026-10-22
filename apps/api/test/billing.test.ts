@@ -4,6 +4,8 @@ import { db, pool } from "../src/db/client";
 import { aiUsage, tenants } from "../src/db/schema";
 import { setAiProvider, type AiProvider } from "../src/lib/ai";
 import { renderInvoicePdf, rupeesInWords } from "../src/services/billing";
+import { setPaymentFetch } from "../src/services/payments";
+import { createHmac } from "node:crypto";
 import { setup, type TestApp } from "./helpers";
 
 let t: TestApp;
@@ -136,3 +138,69 @@ describe("billing", () => {
     expect(rupeesInWords(1_00_00_000_00)).toBe("One Crore Rupees Only");
   });
 });
+
+describe("online payments", () => {
+  const links: { body: Record<string, unknown> }[] = [];
+  const sign = (secret: string, data: string) => createHmac("sha256", secret).update(data).digest("hex");
+  const webhook = (body: string, signature: string) =>
+    t.app.inject({ method: "POST", url: "/webhooks/razorpay", payload: body, headers: { "content-type": "application/json", "x-razorpay-signature": signature } });
+
+  beforeAll(() => {
+    setPaymentFetch((async (_url: string, init: { body: string }) => {
+      const body = JSON.parse(init.body);
+      links.push({ body });
+      return new Response(JSON.stringify({ id: `plink_${links.length}`, short_url: `https://rzp.io/i/test${links.length}` }), { status: 200 });
+    }) as unknown as typeof fetch);
+  });
+
+  afterAll(() => {
+    setPaymentFetch(undefined);
+    for (const k of ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET"]) delete process.env[k];
+  });
+
+  it("pays an invoice through a Razorpay payment link", async () => {
+    await t.post(superAdmin, "/admin/billing/run", { period: "2026-08" });
+    const inv = (await t.get(admin, "/console/billing")).body.invoices.find((i: { period: string }) => i.period === "2026-08");
+    expect((await t.get(admin, "/console/billing")).body.onlinePayments).toBe(false);
+    expect((await t.post(admin, `/console/billing/invoices/${inv.id}/pay`)).status).toBe(400);
+
+    Object.assign(process.env, { RAZORPAY_KEY_ID: "rzp_test_key", RAZORPAY_KEY_SECRET: "key-secret", RAZORPAY_WEBHOOK_SECRET: "hook-secret" });
+    const pay = await t.post(admin, `/console/billing/invoices/${inv.id}/pay`);
+    expect(pay.body.url).toBe("https://rzp.io/i/test1");
+    expect(links[0]!.body).toMatchObject({ amount: inv.totalPaise, currency: "INR", reference_id: inv.number, callback_method: "get" });
+    // The same link is reused.
+    expect((await t.post(admin, `/console/billing/invoices/${inv.id}/pay`)).body.url).toBe("https://rzp.io/i/test1");
+    expect(links).toHaveLength(1);
+
+    const params = { razorpay_payment_id: "pay_1", razorpay_payment_link_id: "plink_1", razorpay_payment_link_reference_id: inv.number, razorpay_payment_link_status: "paid" };
+    const forged = await t.post(admin, "/console/billing/payments/confirm", { ...params, razorpay_signature: "00" });
+    expect(forged.status).toBe(400);
+    const signature = sign("key-secret", `plink_1|${inv.number}|paid|pay_1`);
+    const ok = await t.post(admin, "/console/billing/payments/confirm", { ...params, razorpay_signature: signature });
+    expect(ok.body).toMatchObject({ paid: true, invoice: { status: "paid", paidVia: "razorpay", paymentRef: "pay_1" } });
+    expect((await t.post(admin, `/console/billing/invoices/${inv.id}/pay`)).status).toBe(400); // already paid
+  });
+
+  it("marks invoices paid from Razorpay's signed webhook", async () => {
+    const partner = await t.login("partner@skillbridge.in");
+    const inv = (await t.get(partner, "/console/billing")).body.invoices.find((i: { period: string }) => i.period === "2026-08");
+    await t.post(partner, `/console/billing/invoices/${inv.id}/pay`);
+    const linkId = `plink_${links.length}`;
+    const event = (amount: number) =>
+      JSON.stringify({ event: "payment_link.paid", payload: { payment_link: { entity: { id: linkId, status: "paid", amount_paid: amount } }, payment: { entity: { id: "pay_2" } } } });
+
+    expect((await webhook(event(inv.totalPaise), "bad")).statusCode).toBe(401);
+    // A short payment doesn't settle the invoice.
+    await webhook(event(100), sign("hook-secret", event(100)));
+    expect((await t.get(partner, "/console/billing")).body.invoices.find((i: { id: string }) => i.id === inv.id).status).toBe("issued");
+    const res = await webhook(event(inv.totalPaise), sign("hook-secret", event(inv.totalPaise)));
+    expect(res.json()).toEqual({ handled: true });
+    // Redelivery is harmless.
+    expect((await webhook(event(inv.totalPaise), sign("hook-secret", event(inv.totalPaise)))).statusCode).toBe(200);
+    const after = (await t.get(partner, "/console/billing")).body.invoices.find((i: { id: string }) => i.id === inv.id);
+    expect(after).toMatchObject({ status: "paid", paidVia: "razorpay", paymentRef: "pay_2" });
+    const other = JSON.stringify({ event: "payment.captured", payload: {} });
+    expect((await webhook(other, sign("hook-secret", other))).json()).toEqual({ handled: false });
+  });
+});
+
