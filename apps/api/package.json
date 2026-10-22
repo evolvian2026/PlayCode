@@ -18,7 +18,7 @@
     "webhooks:deliver": "tsx src/scripts/deliver-webhooks.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.1.0",
+    "@anthropic-ai/sdk": "1.1.0",
     "@fastify/cors": "11.3.1",
     "@fastify/websocket": "11.3.4",
     "@playcode/core": "workspace:*",
@@ -26,11 +26,15 @@
     "drizzle-orm": "0.45.4",
     "fastify": "5.12.7",
     "jose": "6.2.13",
+    "nodemailer": "10.2.1",
+    "pdfkit": "0.20.2",
     "pg": "8.23.1",
     "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
+    "@types/nodemailer": "8.0.2",
+    "@types/pdfkit": "0.17.7",
     "@types/pg": "8.23.1",
     "@types/ws": "8.18.2",
     "drizzle-kit": "0.31.11",

@@ -17,6 +17,7 @@ const NAV = [
   { href: "/console/drives", label: "Hiring drives", icon: "users", perm: "drives.manage" },
   { href: "/console/engage", label: "Engagement", icon: "megaphone", perm: null },
   { href: "/console/batches", label: "Batches", icon: "layers", perm: null },
+  { href: "/console/reports", label: "Reports", icon: "chart", perm: ["analytics.institution", "analytics.department", "analytics.own_units"] },
   { href: "/console/content", label: "Question bank", icon: "book", perm: "content.view" },
   { href: "/console/studio", label: "Content studio", icon: "spark", perm: ["content.private.manage", "content.global.manage"] },
   { href: "/console/integrations", label: "Integrations", icon: "layers", perm: "api.manage" },

@@ -871,3 +871,25 @@ export const learningPaths = pgTable(
   },
   (t) => [index("learning_paths_tenant_idx").on(t.tenantId, t.status)],
 );
+
+// ---------- Scheduled reports ----------
+
+/** A staff member's weekly PDF report by email, for their whole scope or one unit. */
+export const reportSubscriptions = pgTable(
+  "report_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    unitId: uuid("unit_id").references(() => orgUnits.id, { onDelete: "cascade" }),
+    /** 0 = Sunday ... 6 = Saturday, in the institution's time zone. */
+    weekday: integer("weekday").notNull().default(1),
+    /** Local hour to send at (0-23). */
+    hour: integer("hour").notNull().default(8),
+    enabled: boolean("enabled").notNull().default(true),
+    lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("report_subscriptions_user_uq").on(t.userId, t.tenantId)],
+);

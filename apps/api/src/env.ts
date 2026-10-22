@@ -26,6 +26,9 @@ const schema = z.object({
   API_PUBLIC_URL: z.string().default("http://localhost:4000"),
   /** Encrypts stored secrets (webhook signing keys, SSO client secrets). Defaults to a key derived from JWT_SECRET. */
   DATA_KEY: z.string().min(16).optional(),
+  /** Outgoing email for scheduled reports, e.g. smtps://user:pass@smtp.example.com:465. */
+  SMTP_URL: z.string().optional(),
+  MAIL_FROM: z.string().default("PlayCode <reports@playcode.local>"),
   /** Allow webhook and SSO URLs on private networks (development and tests only). */
   ALLOW_PRIVATE_URLS: z
     .string()
