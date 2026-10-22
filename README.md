@@ -6,7 +6,7 @@ the bug, reorder the lines and more), wrapped in XP, streaks, hearts, leagues
 and missions. Colleges get assignments, analytics and a readiness score per
 student.
 
-This covers Phases 1, 2 and 3 of the product and architecture spec.
+This covers Phases 1 to 3 of the product and architecture spec, plus Phase 4, which closes the roadmap items they left open.
 
 ## What is in this build
 
@@ -32,6 +32,13 @@ This covers Phases 1, 2 and 3 of the product and architecture spec.
 - Corporate hiring drives: companies publish a drive with a public apply link (`/apply/<code>`), candidates register and take a proctored test, recruiters shortlist, reject or hire and export a CSV.
 - Single sign-on with OpenID Connect: Google Workspace, Microsoft Entra ID or any OIDC provider, with allowed email domains and optional auto-provisioning into a batch.
 - Privacy tools (built for India's DPDP Act 2023): privacy notice and WhatsApp consent in an append-only ledger, "download my data" for students, deletion requests that admins approve or decline, and a filterable audit log.
+
+**Phase 4 additions**
+- AI coach in practice: when written hints aren't enough, students ask for a hint tailored to the question and, for code and SQL, to their own attempt. It never gives the answer (hints that contain it are thrown away and regenerated), costs XP like a written hint, is capped at 3 per question and 25 a day, and is never available in tests or duels. Hints that don't involve the student's code are cached and reused.
+- Content studio (`/console/studio`): institutions write private questions for their own students; the PlayCode content team edits the global bank. Every question is validated and, where possible, run before it can go live: output questions run their code and compare it with the answer, coding problems run each reference solution against every test, and SQL model answers must return rows. Edits to live questions must pass the check too. Live student preview.
+- AI drafting in the studio: Claude drafts quick question types (predict the output, spot the bug, complexity, trace, pseudocode, fill the blank, which snippet) for a chosen skill, language and difficulty; each draft is checked by running it before the author reviews and publishes.
+- Proctoring level 3: every webcam snapshot is reviewed by AI for no face, more than one face, a phone or a second person. Findings become integrity events with the photo as evidence and raise the risk score; proctors see flagged photos first. Nothing is decided automatically.
+- LTI 1.3: Moodle, Canvas or any LTI 1.3 LMS launches PlayCode assignments from inside a course (students are signed in and, optionally, created in a chosen batch), and the score goes to the course gradebook through Assignment and Grade Services. Teachers connect each course activity to an assignment from the console.
 
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
@@ -108,8 +115,8 @@ Scheduled jobs (run them from cron or your scheduler):
 | Job | When | Command |
 | --- | --- | --- |
 | Close league week | Mondays after midnight, tenant time | `pnpm --filter @playcode/api league:close` |
-| Nudges and notification delivery | Hourly (streak reminders only fire 6-9 pm local time) | `pnpm --filter @playcode/api nudges:run` |
-| Webhook retries | Every minute | `pnpm --filter @playcode/api webhooks:deliver` |
+| Nudges, notification delivery, missed snapshot reviews | Hourly (streak reminders only fire 6-9 pm local time) | `pnpm --filter @playcode/api nudges:run` |
+| Webhook and LMS grade retries | Every minute | `pnpm --filter @playcode/api webhooks:deliver` |
 
 Webhooks are sent straight away when an event happens; the job retries failures
 (1, 2, 4, 8, 16 then 32 minutes apart, 7 attempts in all) and picks up anything a crash left behind.
@@ -128,6 +135,10 @@ Outbound URLs: webhook targets and SSO issuers on private networks (localhost, 1
 
 Data erasure: approving a deletion request removes the student's practice history, answers, test attempts with proctoring snapshots, certificates, notifications and hiring-drive records, and anonymises the account (the row stays so cohort totals add up). The consent ledger, the request and the audit trail (with email addresses removed) are kept as the record.
 
+AI features: set `ANTHROPIC_API_KEY` on the API. They use Claude Opus 5.5 (`AI_MODEL` in `apps/api/src/lib/ai.ts`) with server-side refusal fallback; without a key the coach, AI drafting and snapshot review are simply hidden. `AI_ENABLED=false` switches them off for the whole server, and each institution can turn the coach and the snapshot review off under Settings. Token use is recorded per institution in the `ai_usage` table. Snapshot review is the costly one: a strict test takes a photo a minute, so a 60-minute test means about 60 reviews per student.
+
+LMS (LTI 1.3): the institution admin registers the LMS under Settings (Moodle and Canvas URLs are filled in from presets) and gives the LMS admin the tool's login, launch and JWKS URLs shown there. In the LMS, enable "Assignment and Grade Services", share name and email, and open the tool in a new window (browsers block sign-in storage inside cross-site iframes). A teacher's first launch of a new activity asks which assignment it opens; alternatively set the custom parameter `assignment_id=<id>`. Students launching must be in a batch the assignment targets. PlayCode supports resource-link launches; deep linking (choosing content from the LMS) is not built.
+
 Other operations:
 
 - Weekly league close: run `pnpm --filter @playcode/api league:close` every Monday after midnight (tenant time), or call `POST /admin/leagues/close-week`. Re-running is safe.
@@ -142,8 +153,8 @@ Other operations:
 - **Tenant isolation in the API layer**: every query is scoped by tenant and org unit. PostgreSQL row-level security is the next hardening step.
 
 - **Single API instance assumed for live features**: the WebSocket hub and the execution queue are in-process. Running several API instances needs Redis pub/sub and a shared job queue (BullMQ/SQS).
-- **Camera checks are snapshots only**: face detection (no face, multiple faces) is reserved in the integrity model but not implemented.
+- **Camera checks are snapshots, reviewed by AI at level 3**: there is no continuous video or in-browser face tracking.
 
 - **Sessions are checked against the account on every request**, so disabling or erasing an account signs it out at once. This costs one primary-key lookup per request.
 
-Not built yet: LTI 1.3 for LMS launch, SAML, AI hints and question drafting (needs an LLM API key), L3 proctoring (face and phone detection), scheduled PDF reports, and the content studio UI.
+Not built yet: SAML, LTI deep linking, corporate learning and development (L&D) paths, scheduled PDF reports, and AI drafting of coding and SQL problems (these are written by hand in the studio).
