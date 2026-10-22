@@ -4,8 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { ROLE_LABELS } from "@playcode/core";
-import { AuthGate, signOut, useMe } from "@/components/Auth";
+import { AuthGate, signOut, switchTenant, useMe } from "@/components/Auth";
 import { Icon } from "@/components/Icon";
+import { logoSrc } from "@/lib/branding";
 
 const NAV = [
   { href: "/console", label: "Overview", icon: "chart", perm: null },
@@ -15,6 +16,7 @@ const NAV = [
   { href: "/console/engage", label: "Engagement", icon: "megaphone", perm: null },
   { href: "/console/batches", label: "Batches", icon: "layers", perm: null },
   { href: "/console/content", label: "Question bank", icon: "book", perm: "content.view" },
+  { href: "/console/settings", label: "Settings", icon: "settings", perm: "tenant.settings" },
 ];
 
 function Side() {
@@ -23,9 +25,16 @@ function Side() {
   return (
     <nav className="console-side" aria-label="Console">
       <div className="brand">
-        <img src="/icon.svg" alt="" />
-        PlayCode
+        <img src={logoSrc(me.branding)} alt="" style={{ objectFit: "contain" }} />
+        {me.branding?.appName ?? "PlayCode"}
       </div>
+      {me.tenant?.type === "partner" && (
+        <Link href="/console/partner" className={path.startsWith("/console/partner") ? "active" : ""}>
+          <span className="row" style={{ gap: 10 }}>
+            <Icon name="users" size={18} /> Colleges
+          </span>
+        </Link>
+      )}
       {NAV.filter((n) => !n.perm || me.permissions.includes(n.perm)).map((n) => {
         const active = n.href === "/console" ? path === "/console" : path.startsWith(n.href);
         return (
@@ -48,12 +57,28 @@ function Side() {
   );
 }
 
+function SwitchedBanner() {
+  const me = useMe();
+  if (!me.switched) return null;
+  return (
+    <div className="spread" style={{ background: "var(--warn-soft)", color: "var(--warn)", padding: "8px 16px", borderRadius: 10, marginBottom: 16, fontWeight: 600 }}>
+      <span>You are working inside {me.tenant?.name}. Changes are recorded under your name.</span>
+      <button className="btn small" onClick={() => void switchTenant(null)}>
+        Return to my account
+      </button>
+    </div>
+  );
+}
+
 export default function ConsoleLayout({ children }: { children: ReactNode }) {
   return (
     <AuthGate area="console">
       <div className="console-shell">
         <Side />
-        <main className="console-main">{children}</main>
+        <main className="console-main">
+          <SwitchedBanner />
+          {children}
+        </main>
       </div>
     </AuthGate>
   );

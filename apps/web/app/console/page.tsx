@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { ActivityChart } from "@/components/ActivityChart";
 import { useMe } from "@/components/Auth";
 import { UnitPicker } from "@/components/UnitPicker";
@@ -36,6 +37,11 @@ const BANDS = [
 
 export default function Overview() {
   const me = useMe();
+  const router = useRouter();
+  const isPartner = me.tenant?.type === "partner";
+  useEffect(() => {
+    if (isPartner) router.replace("/console/partner");
+  }, [isPartner, router]);
   const [unitId, setUnitId] = useState("");
   const q = unitId ? `?unitId=${unitId}` : "";
   const eng = useApi<Engagement>(`/console/analytics/engagement${q}`);

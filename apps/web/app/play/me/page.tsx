@@ -8,6 +8,32 @@ import { Icon } from "@/components/Icon";
 import { Bar, ErrorBox, Loading, masteryTone } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 
+function Certificates() {
+  const { data } = useApi<{ certificates: { code: string; title: string; scorePct: number; issuedAt: string; revokedAt: string | null }[] }>("/student/certificates");
+  if (!data?.certificates.length) return null;
+  return (
+    <div className="card stack">
+      <h2 style={{ margin: 0 }}>Certificates</h2>
+      {data.certificates.map((c) => (
+        <div key={c.code} className="spread">
+          <div>
+            <b>{c.title}</b>
+            <div className="muted small">
+              {c.scorePct}% · {new Date(c.issuedAt).toLocaleDateString()} · code {c.code}
+            </div>
+          </div>
+          <Link href={`/verify/${c.code}`} className="btn small">
+            View
+          </Link>
+        </div>
+      ))}
+      <p className="muted small" style={{ margin: 0 }}>
+        Share the link with recruiters: it shows the certificate and proves it is genuine.
+      </p>
+    </div>
+  );
+}
+
 function WhatsAppSettings() {
   const [phone, setPhone] = useState("");
   const [enabled, setEnabled] = useState(true);
@@ -90,6 +116,8 @@ export default function MePage() {
           <div className="muted small">correct answers</div>
         </div>
       </div>
+
+      <Certificates />
 
       <WhatsAppSettings />
 

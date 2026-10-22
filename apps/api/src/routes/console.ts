@@ -10,6 +10,7 @@ import { hashPassword } from "../lib/auth";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
 import { engagement, readinessReport, skillsReport, studentDetail, studentList } from "../services/analytics";
+import { effectiveBranding, updateBranding } from "../services/branding";
 import { DEFAULT_PASS_MARK, sessionScore, visibleTo } from "../services/practice";
 import { assertUnitsInScope, descendants, scopedUnitIds, studentIdsInUnits, tenantUnits } from "../services/scope";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
@@ -157,6 +158,28 @@ export async function consoleRoutes(app: FastifyInstance) {
       await audit(tx, { tenantId, actorId: req.auth.userId, action: "students.import", target: body.unitId, data: { created: created.length } });
     });
     return { created, skipped: rows.filter((r) => existing.has(r.email)).map((r) => ({ email: r.email, reason: "already registered" })) };
+  });
+
+  // ---------- Branding ----------
+  app.get("/branding", async (req) => {
+    const tenant = await getTenant(db, tenantOf(req));
+    return { own: tenant.branding, effective: await effectiveBranding(db, tenant) };
+  });
+
+  app.put("/branding", { preHandler: requirePermission("tenant.settings"), bodyLimit: 400 * 1024 }, async (req) => {
+    const tenant = await getTenant(db, tenantOf(req));
+    const body = parse(
+      z.object({
+        appName: z.string().max(40).nullable().optional(),
+        primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+        certificateSignatory: z.string().max(80).nullable().optional(),
+        logo: z.string().max(300_000).nullable().optional(),
+      }),
+      req.body,
+    );
+    const updated = await updateBranding(db, tenant, body);
+    await audit(db, { tenantId: tenant.id, actorId: req.auth.userId, action: "branding.update" });
+    return { own: updated.branding, effective: await effectiveBranding(db, updated) };
   });
 
   // ---------- Content ----------

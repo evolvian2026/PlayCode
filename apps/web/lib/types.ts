@@ -1,8 +1,19 @@
 import type { Answer, Division, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
+export interface Branding {
+  tenantName: string;
+  slug: string;
+  appName: string;
+  primaryColor: string | null;
+  logoUrl: string | null;
+  certificateSignatory: string | null;
+}
+
 export interface Me {
   user: { id: string; name: string; email: string; rollNo: string | null; tenantId: string | null; roles: Role[] };
-  tenant: { id: string; name: string; plan: string } | null;
+  tenant: { id: string; name: string; plan: string; type: "institution" | "partner" | "company"; slug: string } | null;
+  branding: Branding | null;
+  switched: boolean;
   permissions: string[];
   home: "console" | "play";
 }
@@ -82,6 +93,7 @@ export interface AnswerResult {
   streakBroken: boolean;
   freezesUsed: number;
   outOfHearts: boolean;
+  certificate: string | null;
   profile: ProfileSummary;
   session: SessionView;
 }

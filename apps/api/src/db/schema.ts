@@ -29,8 +29,18 @@ export const tenants = pgTable("tenants", {
   validUntil: text("valid_until"),
   timeZone: text("time_zone").notNull().default("Asia/Kolkata"),
   settings: jsonb("settings").$type<{ weekendsOptional?: boolean; nudges?: boolean }>().notNull().default({}),
+  /** White-label: shown on the sign-in page, app header and certificates. Sub-tenants inherit their partner's. */
+  branding: jsonb("branding").$type<TenantBranding>().notNull().default({}),
   createdAt: createdAt(),
 });
+
+export interface TenantBranding {
+  appName?: string;
+  primaryColor?: string; // #rrggbb
+  logoKey?: string;
+  logoType?: string;
+  certificateSignatory?: string;
+}
 
 export const orgUnits = pgTable(
   "org_units",
@@ -466,4 +476,23 @@ export const notifications = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }),
   },
   (t) => [index("notifications_user_idx").on(t.userId, t.createdAt), index("notifications_status_idx").on(t.status)],
+);
+
+// ---------- Certificates ----------
+
+export const certificates = pgTable(
+  "certificates",
+  {
+    /** Short public code printed on the certificate and used in the verification link. */
+    code: text("code").primaryKey(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<"mission">().notNull(),
+    refId: text("ref_id").notNull(),
+    title: text("title").notNull(),
+    scorePct: integer("score_pct").notNull(),
+    issuedAt: timestamp("issued_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("certificates_user_ref_uq").on(t.userId, t.kind, t.refId)],
 );

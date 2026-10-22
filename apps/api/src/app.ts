@@ -10,6 +10,7 @@ import { assessmentConsoleRoutes } from "./routes/assessments-console";
 import { authRoutes } from "./routes/auth";
 import { consoleRoutes } from "./routes/console";
 import { engageRoutes } from "./routes/engage";
+import { publicRoutes } from "./routes/public";
 import { studentRoutes } from "./routes/student";
 
 export interface AppOptions {
@@ -66,6 +67,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     });
     socket.send(JSON.stringify({ type: "hello" }));
   });
+  await app.register(publicRoutes);
   await app.register(authRoutes);
   await app.register(studentRoutes, { prefix: "/student" });
   await app.register(consoleRoutes, { prefix: "/console" });

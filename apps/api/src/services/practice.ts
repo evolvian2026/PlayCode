@@ -38,6 +38,7 @@ import {
 } from "../db/schema";
 import { checkRunRate, evaluate, tryRun, type Evaluation } from "../execution";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
+import { issueMissionCertificate } from "./certificates";
 import { addWeeklyXp } from "./leagues";
 import { getOrCreateProfile, profileSummary, streakColumns, streakState } from "./profile";
 import { studentUnitIdsWithAncestors } from "./scope";
@@ -425,6 +426,16 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
       .returning();
     await tx.update(users).set({ lastActiveAt: ctx.now }).where(eq(users.id, ctx.userId));
 
+    // A passed mission earns a verifiable certificate.
+    let certificate: string | null = null;
+    if (finished && s.kind === "pack" && s.packId) {
+      const [pack] = await tx.select().from(packs).where(eq(packs.id, s.packId));
+      const scorePct = sessionScore(updatedSession!);
+      if (pack && pack.kind === "mission" && scorePct >= pack.passMark) {
+        certificate = await issueMissionCertificate(tx, { tenantId: ctx.tenantId, userId: ctx.userId, packId: pack.id, title: pack.title, scorePct, now: ctx.now });
+      }
+    }
+
     return {
       correct,
       correctAnswer: describeAnswer(toCoreQuestion(q)),
@@ -439,6 +450,7 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
       streakBroken: streak.broken,
       freezesUsed: streak.freezesUsed,
       outOfHearts,
+      certificate,
       profile: profileSummary(updatedProfile!, today, ctx.now, rules),
       session: await sessionView(tx, updatedSession!),
     };

@@ -1,9 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { api, errorMessage, setToken } from "@/lib/api";
-import type { Me } from "@/lib/types";
+import { applyBranding, logoSrc } from "@/lib/branding";
+import type { Branding, Me } from "@/lib/types";
 
 // Quick sign-in buttons for the seeded demo. Set NEXT_PUBLIC_DEMO_LOGINS=false in real deployments.
 const SHOW_DEMO = process.env.NEXT_PUBLIC_DEMO_LOGINS !== "false";
@@ -15,8 +16,19 @@ const DEMO = [
   { label: "Inst. admin", email: "admin@demo.edu" },
 ];
 
-export default function Login() {
+function LoginForm() {
   const router = useRouter();
+  const org = useSearchParams().get("org");
+  const [brand, setBrand] = useState<Branding | null>(null);
+  useEffect(() => {
+    if (!org) return;
+    api<Branding>(`/public/branding/${encodeURIComponent(org)}`)
+      .then((b) => {
+        setBrand(b);
+        applyBranding(b);
+      })
+      .catch(() => setBrand(null));
+  }, [org]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -39,10 +51,10 @@ export default function Login() {
   return (
     <main style={{ maxWidth: 420, margin: "0 auto", padding: "64px 16px" }}>
       <div className="row" style={{ marginBottom: 24 }}>
-        <img src="/icon.svg" alt="" width={40} height={40} />
+        <img src={logoSrc(brand)} alt="" width={40} height={40} style={{ objectFit: "contain" }} />
         <div>
-          <h1 style={{ margin: 0 }}>PlayCode</h1>
-          <div className="muted small">Level up your coding for placements</div>
+          <h1 style={{ margin: 0 }}>{brand?.appName ?? "PlayCode"}</h1>
+          <div className="muted small">{brand ? brand.tenantName : "Level up your coding for placements"}</div>
         </div>
       </div>
       <form className="card stack" onSubmit={signIn}>
@@ -59,7 +71,7 @@ export default function Login() {
           {busy ? "Signing in..." : "Sign in"}
         </button>
       </form>
-      {SHOW_DEMO && (
+      {SHOW_DEMO && !brand && (
       <div className="card stack" style={{ marginTop: 16 }}>
         <div className="muted small">Demo accounts (password playcode123)</div>
         <div className="row wrap">
@@ -72,5 +84,13 @@ export default function Login() {
       </div>
       )}
     </main>
+  );
+}
+
+export default function Login() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -222,6 +222,19 @@ export async function seedDemo(now = new Date()): Promise<void> {
     endsAt: new Date(now.getTime() + 4 * 86_400_000),
     createdBy: tpoUser.id,
   });
+  // A training partner reselling PlayCode under its own brand, with one college.
+  const [partner] = await db
+    .insert(tenants)
+    .values({ name: "SkillBridge Training Partners", slug: "skillbridge", type: "partner", seats: 2000, branding: { appName: "SkillBridge Code", primaryColor: "#0f766e", certificateSignatory: "Head of Academics, SkillBridge" } })
+    .returning();
+  await createUser(partner!.id, "SkillBridge Admin", "partner@skillbridge.in", passwordHash, [{ role: "partner_admin", orgUnitId: null }]);
+  const [sunrise] = await db.insert(tenants).values({ name: "Sunrise Engineering College", slug: "sunrise", parentId: partner!.id, seats: 300 }).returning();
+  await createUser(sunrise!.id, "Sunrise Admin", "admin@sunrise.edu", passwordHash, [{ role: "inst_admin", orgUnitId: null }]);
+  const [sunriseBatch] = await db.insert(orgUnits).values({ tenantId: sunrise!.id, name: "CSE 2027", kind: "batch", parentId: null }).returning();
+  for (let i = 0; i < 4; i++) {
+    await createUser(sunrise!.id, `${FIRST[(i + 11) % FIRST.length]} ${LAST[(i + 3) % LAST.length]}`, `sunrise.student${i + 1}@sunrise.edu`, passwordHash, [{ role: "student", orgUnitId: sunriseBatch!.id }], `SEC27${String(i + 1).padStart(3, "0")}`);
+  }
+
   console.log(`Seeded demo institution with ${students.length} students. Password for every account: ${DEMO_PASSWORD}`);
 }
 

@@ -7,6 +7,7 @@ import { assignments, duels, mistakes, packs, questions, sessions, skillRatings,
 import { notFound } from "../lib/errors";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { studentDetail } from "../services/analytics";
+import { userCertificates } from "../services/certificates";
 import { answerDuel, cancelDuel, createDuel, duelLobby, getDuel, respondToInvite } from "../services/duels";
 import { attemptView, logIntegrity, runInAttempt, saveAnswer, saveSnapshot, startAttempt, studentAssessments, submitOwn } from "../services/assessments";
 import { leagueStandings } from "../services/leagues";
@@ -247,6 +248,8 @@ export async function studentRoutes(app: FastifyInstance) {
   });
 
   app.get("/assignments", async (req) => ({ assignments: await studentAssignments(ctxOf(req)) }));
+
+  app.get("/certificates", async (req) => ({ certificates: await userCertificates(db, req.auth.userId) }));
 
   // ---------- Proctored tests ----------
   const attemptId = z.object({ id: z.string().uuid() });

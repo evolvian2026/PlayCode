@@ -7,7 +7,7 @@
   --border: #e3e1f0;
   --accent: #5b4bff;
   --accent-ink: #ffffff;
-  --accent-soft: #ecebff;
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, #ffffff);
   --good: #1a9e5c;
   --good-soft: #e3f6ec;
   --bad: #d93a3a;
@@ -37,7 +37,7 @@
     --border: #312f52;
     --accent: #8b7fff;
     --accent-ink: #111022;
-    --accent-soft: #2a2752;
+    --accent-soft: color-mix(in srgb, var(--accent) 25%, #1b1a31);
     --good: #43c983;
     --good-soft: #173a29;
     --bad: #ff6b6b;
@@ -630,4 +630,16 @@ input {
 /* Tests use the full width for code and the question palette. */
 .play-shell:has(.exam) {
   max-width: 960px;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  .certificate {
+    box-shadow: none;
+  }
 }

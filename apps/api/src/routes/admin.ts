@@ -1,15 +1,26 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { addDays, isoWeekKey } from "@playcode/core";
 import { z } from "zod";
 import { db } from "../db/client";
-import { memberships, tenants, users } from "../db/schema";
+import { memberships, responses, tenants, users } from "../db/schema";
 import { audit } from "../lib/audit";
 import { hashPassword } from "../lib/auth";
-import { badRequest, forbidden } from "../lib/errors";
+import { badRequest, forbidden, notFound } from "../lib/errors";
 import { authenticate, parse, requirePermission } from "../lib/http";
 import { closeLeagueWeek } from "../services/leagues";
 import { getTenant, tenantToday } from "../services/tenant";
+
+/** Seats a partner has left to hand out: its pool minus what its sub-tenants hold. */
+async function partnerPool(partnerId: string, excludeChildId?: string) {
+  const [partner] = await db.select().from(tenants).where(eq(tenants.id, partnerId));
+  if (!partner) throw notFound("Partner");
+  const [{ allocated } = { allocated: 0 }] = await db
+    .select({ allocated: sql<number>`coalesce(sum(${tenants.seats}), 0)::int` })
+    .from(tenants)
+    .where(and(eq(tenants.parentId, partnerId), excludeChildId ? ne(tenants.id, excludeChildId) : undefined));
+  return { partner, total: partner.seats, allocated, available: partner.seats - allocated };
+}
 
 export async function adminRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
@@ -34,6 +45,7 @@ export async function adminRoutes(app: FastifyInstance) {
       z.object({
         name: z.string().min(2).max(120),
         slug: z.string().regex(/^[a-z0-9-]{3,40}$/, "lowercase letters, digits and dashes"),
+        type: z.enum(["institution", "partner", "company"]).default("institution"),
         plan: z.enum(["starter", "pro", "enterprise"]).default("pro"),
         seats: z.number().int().min(1).max(1_000_000).default(500),
         validUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -42,6 +54,12 @@ export async function adminRoutes(app: FastifyInstance) {
       req.body,
     );
     const isSuper = req.auth.roles.includes("super_admin");
+    if (!isSuper) {
+      // Partners create institutions and companies under themselves, from their own seat pool.
+      if (body.type === "partner") throw forbidden("Only PlayCode can create partners");
+      const pool = await partnerPool(req.auth.tenantId!);
+      if (body.seats > pool.available) throw badRequest(`Only ${pool.available} seats are left in your pool`);
+    }
     const email = body.admin.email.toLowerCase();
     const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
     if (taken) throw badRequest("That admin email is already registered");
@@ -51,6 +69,7 @@ export async function adminRoutes(app: FastifyInstance) {
         .values({
           name: body.name,
           slug: body.slug,
+          type: body.type,
           plan: body.plan,
           seats: body.seats,
           validUntil: body.validUntil ?? null,
@@ -62,7 +81,7 @@ export async function adminRoutes(app: FastifyInstance) {
         .insert(users)
         .values({ tenantId: tenant!.id, name: body.admin.name, email, passwordHash: await hashPassword(body.admin.password) })
         .returning();
-      await tx.insert(memberships).values({ userId: admin!.id, tenantId: tenant!.id, orgUnitId: null, role: "inst_admin" });
+      await tx.insert(memberships).values({ userId: admin!.id, tenantId: tenant!.id, orgUnitId: null, role: body.type === "partner" ? "partner_admin" : "inst_admin" });
       await audit(tx, { tenantId: tenant!.id, actorId: req.auth.userId, action: "tenant.create", target: tenant!.id, data: { name: body.name } });
       return tenant!;
     }).catch((err: { code?: string }) => {
@@ -70,6 +89,76 @@ export async function adminRoutes(app: FastifyInstance) {
       throw err;
     });
     return { tenant: created };
+  });
+
+  app.put("/tenants/:id", { preHandler: requirePermission("tenants.manage") }, async (req) => {
+    const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+    const body = parse(
+      z.object({
+        seats: z.number().int().min(1).max(1_000_000).optional(),
+        plan: z.enum(["starter", "pro", "enterprise"]).optional(),
+        validUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+      }),
+      req.body,
+    );
+    const [target] = await db.select().from(tenants).where(eq(tenants.id, id));
+    if (!target) throw notFound("Institution");
+    if (!req.auth.roles.includes("super_admin")) {
+      if (target.parentId !== req.auth.tenantId) throw forbidden("You can only change your own institutions");
+      if (body.seats !== undefined) {
+        const pool = await partnerPool(req.auth.tenantId!, target.id);
+        if (body.seats > pool.available) throw badRequest(`Only ${pool.available} seats are left in your pool`);
+      }
+    }
+    if (body.seats !== undefined) {
+      const [{ used } = { used: 0 }] = await db
+        .select({ used: sql<number>`count(distinct ${memberships.userId})::int` })
+        .from(memberships)
+        .where(and(eq(memberships.tenantId, id), eq(memberships.role, "student")));
+      if (body.seats < used) throw badRequest(`${used} students already use seats here`);
+    }
+    const [updated] = await db.update(tenants).set(body).where(eq(tenants.id, id)).returning();
+    await audit(db, { tenantId: id, actorId: req.auth.userId, action: "tenant.update", target: id, data: body });
+    return { tenant: updated };
+  });
+
+  /** Partner dashboard: seat pool and each sub-tenant's usage. */
+  app.get("/partner/overview", { preHandler: requirePermission("tenants.manage") }, async (req) => {
+    const partnerId = req.auth.tenantId;
+    if (!partnerId) throw badRequest("Sign in with a partner account");
+    const pool = await partnerPool(partnerId);
+    const children = await db.select().from(tenants).where(eq(tenants.parentId, partnerId)).orderBy(tenants.name);
+    const ids = children.map((c) => c.id);
+    const used = ids.length
+      ? await db
+          .select({ tenantId: memberships.tenantId, n: sql<number>`count(distinct ${memberships.userId})::int` })
+          .from(memberships)
+          .where(and(inArray(memberships.tenantId, ids), eq(memberships.role, "student")))
+          .groupBy(memberships.tenantId)
+      : [];
+    const since = new Date(app.now().getTime() - 7 * 86_400_000);
+    const active = ids.length
+      ? await db
+          .select({ tenantId: responses.tenantId, n: sql<number>`count(distinct ${responses.userId})::int` })
+          .from(responses)
+          .where(and(inArray(responses.tenantId, ids), gte(responses.createdAt, since)))
+          .groupBy(responses.tenantId)
+      : [];
+    return {
+      partner: { id: pool.partner.id, name: pool.partner.name, type: pool.partner.type },
+      seats: { total: pool.total, allocated: pool.allocated, available: pool.available },
+      tenants: children.map((c) => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        type: c.type,
+        plan: c.plan,
+        seats: c.seats,
+        validUntil: c.validUntil,
+        studentsUsed: used.find((u) => u.tenantId === c.id)?.n ?? 0,
+        activeLast7Days: active.find((a) => a.tenantId === c.id)?.n ?? 0,
+      })),
+    };
   });
 
   /** Close a league week. Defaults to last week; meant for a weekly scheduled job. */
