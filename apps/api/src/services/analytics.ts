@@ -44,7 +44,7 @@ export async function engagement(db: DbOrTx, args: { studentIds: string[]; timeZ
   const { studentIds, now } = args;
   const total = studentIds.length;
   if (total === 0) {
-    return { totalStudents: 0, activeLast7Days: 0, weeklyActivePct: 0, answersLast7Days: 0, answersPerActiveStudent: 0, daily: [], streaks: [] };
+    return { timeZone: args.timeZone, totalStudents: 0, activeLast7Days: 0, weeklyActivePct: 0, answersLast7Days: 0, answersPerActiveStudent: 0, daily: [], streaks: [] };
   }
   const since7 = new Date(now.getTime() - 7 * DAY_MS);
   const since14 = new Date(now.getTime() - 14 * DAY_MS);
@@ -75,6 +75,7 @@ export async function engagement(db: DbOrTx, args: { studentIds: string[]; timeZ
   }
   const active = week?.active ?? 0;
   return {
+    timeZone: args.timeZone,
     totalStudents: total,
     activeLast7Days: active,
     weeklyActivePct: Math.round((active / total) * 100),

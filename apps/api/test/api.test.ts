@@ -227,7 +227,8 @@ describe("analytics", () => {
     expect(eng.status, JSON.stringify(eng.body)).toBe(200);
     expect(eng.body.totalStudents).toBeGreaterThan(30);
     expect(eng.body.activeLast7Days).toBeGreaterThan(0);
-    expect(eng.body.daily.length).toBeGreaterThan(0);
+    // The seed simulates two weeks; activity must spread over those days, not land on "now".
+    expect(eng.body.daily.length).toBeGreaterThan(5);
     const skills = await t.get(tpo, "/console/analytics/skills");
     expect(skills.body.weakest).toHaveLength(5);
     const readiness = await t.get(hod, "/console/analytics/readiness");

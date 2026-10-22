@@ -182,7 +182,7 @@ export async function startSession(db: Db, ctx: StudentCtx, input: StartInput) {
       break;
     }
   }
-  const [session] = await db.insert(sessions).values(values).returning();
+  const [session] = await db.insert(sessions).values({ ...values, startedAt: ctx.now }).returning();
   return sessionView(db, session!);
 }
 
@@ -368,6 +368,7 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
       xp: xp.xp,
       timeMs: Math.max(0, Math.round(input.timeMs)),
       hintsUsed,
+      createdAt: ctx.now,
     });
 
     const nextIndex = s.currentIndex + 1;

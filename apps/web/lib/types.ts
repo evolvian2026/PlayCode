@@ -1,0 +1,90 @@
+import type { Answer, Division, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+
+export interface Me {
+  user: { id: string; name: string; email: string; rollNo: string | null; tenantId: string | null; roles: Role[] };
+  tenant: { id: string; name: string; plan: string } | null;
+  permissions: string[];
+  home: "console" | "play";
+}
+
+export interface ProfileSummary {
+  xp: number;
+  level: number;
+  title: string;
+  current: number;
+  needed: number;
+  streak: { days: number; activeToday: boolean; atRisk: boolean; longest: number; freezesLeft: number };
+  hearts: number;
+  nextHeartInMs: number | null;
+  division: Division;
+}
+
+export interface QuestionView {
+  id: string;
+  type: QuestionType;
+  typeLabel: string;
+  skillId: string;
+  difficulty: 1 | 2 | 3;
+  body: QuestionBody;
+  hintCount: number;
+  hintsUsed: number;
+  responseKind: StudentResponse["kind"];
+}
+
+export interface SessionView {
+  id: string;
+  kind: "skill" | "daily" | "pack" | "assignment" | "mistakes";
+  title: string;
+  total: number;
+  answered: number;
+  correctCount: number;
+  xpEarned: number;
+  usesHearts: boolean;
+  finished: boolean;
+  passMark: number | null;
+  score: number | null;
+  passed: boolean | null;
+  question: QuestionView | null;
+}
+
+export interface AnswerResult {
+  correct: boolean;
+  correctAnswer: string;
+  answer: Answer;
+  explanation: string;
+  xp: number;
+  xpBreakdown: { label: string; value: number }[];
+  levelUp: boolean;
+  streakExtended: boolean;
+  streakBroken: boolean;
+  freezesUsed: number;
+  outOfHearts: boolean;
+  profile: ProfileSummary;
+  session: SessionView;
+}
+
+export interface StudentDetail {
+  user: { id: string; name: string; email: string; rollNo: string | null; lastActiveAt: string | null };
+  xp: number;
+  level: number;
+  title: string;
+  current: number;
+  needed: number;
+  streak: number;
+  longestStreak: number;
+  division: Division;
+  correctAnswers: number;
+  openMistakes: number;
+  readiness: { id: string; name: string; score: number }[];
+  skills: { skillId: string; name: string; topic: string; topicName: string; mastery: number; attempts: number; accuracyPct: number | null; lastPractisedAt: string | null }[];
+  badges: { code: string; name: string; description: string; kind: string }[];
+  recentSessions: { id: string; kind: string; startedAt: string; finished: boolean; correctCount: number; total: number; xpEarned: number }[];
+}
+
+export interface OrgUnit {
+  id: string;
+  name: string;
+  kind: "department" | "batch" | "section";
+  parentId: string | null;
+  students: number;
+}

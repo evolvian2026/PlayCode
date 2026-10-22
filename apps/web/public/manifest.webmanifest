@@ -1,0 +1,10 @@
+{
+  "name": "PlayCode",
+  "short_name": "PlayCode",
+  "description": "Gamified coding practice for placements",
+  "start_url": "/play",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#5b4bff",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
