@@ -2,9 +2,9 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
-import { api, errorMessage, setToken } from "@/lib/api";
+import { api, API_URL, errorMessage, setToken } from "@/lib/api";
 import { applyBranding, logoSrc } from "@/lib/branding";
-import type { Branding, Me } from "@/lib/types";
+import type { Me, PublicBranding, SsoProvider } from "@/lib/types";
 
 // Quick sign-in buttons for the seeded demo. Set NEXT_PUBLIC_DEMO_LOGINS=false in real deployments.
 const SHOW_DEMO = process.env.NEXT_PUBLIC_DEMO_LOGINS !== "false";
@@ -16,13 +16,21 @@ const DEMO = [
   { label: "Inst. admin", email: "admin@demo.edu" },
 ];
 
+const SSO_LABEL: Record<SsoProvider, string> = {
+  google: "Sign in with Google",
+  microsoft: "Sign in with Microsoft",
+  oidc: "Sign in with your institution account",
+};
+
 function LoginForm() {
   const router = useRouter();
-  const org = useSearchParams().get("org");
-  const [brand, setBrand] = useState<Branding | null>(null);
+  const params = useSearchParams();
+  const org = params.get("org");
+  const ssoError = params.get("sso_error");
+  const [brand, setBrand] = useState<PublicBranding | null>(null);
   useEffect(() => {
     if (!org) return;
-    api<Branding>(`/public/branding/${encodeURIComponent(org)}`)
+    api<PublicBranding>(`/public/branding/${encodeURIComponent(org)}`)
       .then((b) => {
         setBrand(b);
         applyBranding(b);
@@ -31,7 +39,7 @@ function LoginForm() {
   }, [org]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(ssoError);
   const [busy, setBusy] = useState(false);
 
   async function signIn(e?: FormEvent, override?: { email: string; password: string }) {
@@ -57,6 +65,16 @@ function LoginForm() {
           <div className="muted small">{brand ? brand.tenantName : "Level up your coding for placements"}</div>
         </div>
       </div>
+      {brand?.sso && (
+        <div className="card stack" style={{ marginBottom: 16 }}>
+          <a className="btn primary big" href={`${API_URL}/auth/sso/start?org=${encodeURIComponent(brand.slug)}`}>
+            {SSO_LABEL[brand.sso.provider]}
+          </a>
+          <div className="muted small" style={{ textAlign: "center" }}>
+            or sign in with your PlayCode password below
+          </div>
+        </div>
+      )}
       <form className="card stack" onSubmit={signIn}>
         <div>
           <label htmlFor="email">Email</label>

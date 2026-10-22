@@ -32,7 +32,7 @@ export async function assertPublicUrl(raw: string): Promise<URL> {
   } catch {
     throw badRequest("Enter a valid URL");
   }
-  if (env.WEBHOOKS_ALLOW_PRIVATE) return url;
+  if (env.ALLOW_PRIVATE_URLS) return url;
   if (url.protocol !== "https:") throw badRequest("Webhook URLs must use https");
   const host = url.hostname.replace(/^\[|\]$/g, "");
   const addresses = isIP(host) ? [host] : (await lookup(host, { all: true }).catch(() => [])).map((a) => a.address);

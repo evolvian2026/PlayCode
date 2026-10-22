@@ -4,11 +4,142 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { applyBranding, logoSrc } from "@/lib/branding";
-import type { Branding } from "@/lib/types";
+import type { Branding, SsoProvider } from "@/lib/types";
 
 interface BrandingResponse {
   own: { appName?: string; primaryColor?: string; certificateSignatory?: string; logoKey?: string };
   effective: Branding;
+}
+
+interface SsoResponse {
+  connection: { provider: SsoProvider; issuer: string; clientId: string; emailDomains: string[]; autoProvisionUnitId: string | null; enabled: boolean } | null;
+  redirectUri: string;
+  presets: { google: string; microsoft: string };
+}
+
+function SsoSettings() {
+  const { data, error, loading, reload } = useApi<SsoResponse>("/console/sso");
+  const units = useApi<{ units: { id: string; name: string }[] }>("/console/org-units");
+  const [provider, setProvider] = useState<SsoProvider>("google");
+  const [directory, setDirectory] = useState("");
+  const [issuer, setIssuer] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [secret, setSecret] = useState("");
+  const [domains, setDomains] = useState("");
+  const [unitId, setUnitId] = useState("");
+  const [enabled, setEnabled] = useState(true);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const c = data?.connection;
+    if (!c) return;
+    setProvider(c.provider);
+    setIssuer(c.issuer);
+    setDirectory(c.provider === "microsoft" ? (c.issuer.match(/microsoftonline\.com\/([^/]+)\//)?.[1] ?? "") : "");
+    setClientId(c.clientId);
+    setDomains(c.emailDomains.join(", "));
+    setUnitId(c.autoProvisionUnitId ?? "");
+    setEnabled(c.enabled);
+  }, [data]);
+
+  if (loading && !data) return <Loading />;
+  if (error || !data) return <ErrorBox message={error?.message ?? "Could not load"} onRetry={reload} />;
+
+  const effectiveIssuer = provider === "google" ? data.presets.google : provider === "microsoft" ? data.presets.microsoft.replace("{tenant-id}", directory.trim()) : issuer.trim();
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setSaveError(null);
+    setMsg(null);
+    try {
+      await api("/console/sso", {
+        method: "PUT",
+        body: {
+          provider,
+          issuer: effectiveIssuer,
+          clientId: clientId.trim(),
+          ...(secret ? { clientSecret: secret } : {}),
+          emailDomains: domains.split(/[\s,]+/).filter(Boolean),
+          autoProvisionUnitId: unitId || null,
+          enabled,
+        },
+      });
+      setSecret("");
+      setMsg(enabled ? "Saved. The sign-in page now offers single sign-on." : "Saved. Single sign-on is off.");
+      reload();
+    } catch (err) {
+      setSaveError(errorMessage(err));
+    }
+  }
+
+  return (
+    <form className="card stack" onSubmit={save}>
+      <h2 style={{ margin: 0 }}>Single sign-on</h2>
+      <p className="muted small" style={{ margin: 0 }}>
+        Let students and staff sign in with their college Google or Microsoft account. Register PlayCode as an app with your provider, using this redirect URI:
+      </p>
+      <code className="inline-code" style={{ alignSelf: "flex-start", wordBreak: "break-all" }}>
+        {data.redirectUri}
+      </code>
+      <div className="row wrap">
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <label htmlFor="s-prov">Provider</label>
+          <select id="s-prov" value={provider} onChange={(e) => setProvider(e.target.value as SsoProvider)}>
+            <option value="google">Google Workspace</option>
+            <option value="microsoft">Microsoft Entra ID</option>
+            <option value="oidc">Other OpenID Connect</option>
+          </select>
+        </div>
+        {provider === "microsoft" && (
+          <div style={{ flex: 2, minWidth: 240 }}>
+            <label htmlFor="s-dir">Directory (tenant) ID</label>
+            <input id="s-dir" value={directory} onChange={(e) => setDirectory(e.target.value)} required placeholder="00000000-0000-0000-0000-000000000000" />
+          </div>
+        )}
+        {provider === "oidc" && (
+          <div style={{ flex: 2, minWidth: 240 }}>
+            <label htmlFor="s-iss">Issuer URL</label>
+            <input id="s-iss" type="url" value={issuer} onChange={(e) => setIssuer(e.target.value)} required placeholder="https://login.example.edu" />
+          </div>
+        )}
+      </div>
+      <div className="row wrap">
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <label htmlFor="s-cid">Client ID</label>
+          <input id="s-cid" value={clientId} onChange={(e) => setClientId(e.target.value)} required />
+        </div>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <label htmlFor="s-sec">Client secret</label>
+          <input id="s-sec" type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} required={!data.connection} placeholder={data.connection ? "Leave empty to keep the saved secret" : ""} />
+        </div>
+      </div>
+      <div>
+        <label htmlFor="s-dom">Allowed email domains</label>
+        <input id="s-dom" value={domains} onChange={(e) => setDomains(e.target.value)} required placeholder="college.edu, students.college.edu" />
+      </div>
+      <div>
+        <label htmlFor="s-unit">New accounts</label>
+        <select id="s-unit" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+          <option value="">Only people already added to PlayCode can sign in</option>
+          {(units.data?.units ?? []).map((u) => (
+            <option key={u.id} value={u.id}>
+              Create student accounts automatically in {u.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <label>
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} style={{ width: "auto", marginRight: 6 }} />
+        Show single sign-on on the sign-in page
+      </label>
+      {saveError && <ErrorBox message={saveError} />}
+      {msg && <span className="pill good">{msg}</span>}
+      <button className="btn primary" style={{ alignSelf: "flex-start" }}>
+        Save single sign-on
+      </button>
+    </form>
+  );
 }
 
 function readFile(file: File): Promise<string> {
@@ -122,6 +253,7 @@ export default function Settings() {
           {loginLink}
         </code>
       </div>
+      <SsoSettings />
     </div>
   );
 }

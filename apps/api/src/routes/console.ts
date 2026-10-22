@@ -11,6 +11,7 @@ import { engagement, readinessReport, skillsReport, studentDetail, studentList }
 import { createAssignment } from "../services/assignments";
 import { effectiveBranding, updateBranding } from "../services/branding";
 import { DEFAULT_PASS_MARK, sessionScore, visibleTo } from "../services/practice";
+import { getConnection, PRESET_ISSUERS, redirectUri, saveConnection } from "../services/sso";
 import { importStudents } from "../services/students";
 import { assertUnitsInScope, descendants, scopedUnitIds, studentIdsInUnits, tenantUnits } from "../services/scope";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
@@ -152,6 +153,35 @@ export async function consoleRoutes(app: FastifyInstance) {
     const updated = await updateBranding(db, tenant, body);
     await audit(db, { tenantId: tenant.id, actorId: req.auth.userId, action: "branding.update" });
     return { own: updated.branding, effective: await effectiveBranding(db, updated) };
+  });
+
+  // ---------- Single sign-on ----------
+  app.get("/sso", { preHandler: requirePermission("tenant.settings") }, async (req) => {
+    const c = await getConnection(db, tenantOf(req));
+    return {
+      connection: c ? { provider: c.provider, issuer: c.issuer, clientId: c.clientId, emailDomains: c.emailDomains, autoProvisionUnitId: c.autoProvisionUnitId, enabled: c.enabled, hasSecret: true } : null,
+      redirectUri: redirectUri(),
+      presets: PRESET_ISSUERS,
+    };
+  });
+
+  app.put("/sso", { preHandler: requirePermission("tenant.settings") }, async (req) => {
+    const tenantId = tenantOf(req);
+    const body = parse(
+      z.object({
+        provider: z.enum(["google", "microsoft", "oidc"]),
+        issuer: z.string().url().max(300),
+        clientId: z.string().min(1).max(300),
+        clientSecret: z.string().min(1).max(500).optional(),
+        emailDomains: z.array(z.string().regex(/^@?[a-z0-9.-]+\.[a-z]{2,}$/i, "Use domains like college.edu")).min(1).max(20),
+        autoProvisionUnitId: z.string().uuid().nullable(),
+        enabled: z.boolean(),
+      }),
+      req.body,
+    );
+    if (body.autoProvisionUnitId) await assertUnitsInScope(db, req.auth, [body.autoProvisionUnitId]);
+    await saveConnection(db, tenantId, req.auth.userId, body);
+    return { ok: true };
   });
 
   // ---------- Content ----------

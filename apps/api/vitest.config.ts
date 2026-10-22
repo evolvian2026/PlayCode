@@ -13,7 +13,7 @@ export default defineConfig({
       JWT_SECRET: "test-secret-test-secret-test-secret",
       STORAGE_DIR: join(tmpdir(), "playcode-test-storage"),
       // Webhook tests deliver to a local receiver.
-      WEBHOOKS_ALLOW_PRIVATE: "true",
+      ALLOW_PRIVATE_URLS: "true",
     },
   },
 });

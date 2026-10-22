@@ -8,6 +8,7 @@ import { parse } from "../lib/http";
 import { getObject } from "../lib/storage";
 import { effectiveBranding } from "../services/branding";
 import { verifyCertificate } from "../services/certificates";
+import { getConnection } from "../services/sso";
 
 /** Unauthenticated routes: branded sign-in pages, logos and certificate verification. */
 export async function publicRoutes(app: FastifyInstance) {
@@ -15,7 +16,8 @@ export async function publicRoutes(app: FastifyInstance) {
     const { slug } = parse(z.object({ slug: z.string().max(60) }), req.params);
     const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, slug.toLowerCase()));
     if (!tenant) throw notFound("Institution");
-    return effectiveBranding(db, tenant);
+    const sso = await getConnection(db, tenant.id);
+    return { ...(await effectiveBranding(db, tenant)), sso: sso?.enabled ? { provider: sso.provider } : null };
   });
 
   app.get("/public/logo/:tenantId", async (req, reply) => {

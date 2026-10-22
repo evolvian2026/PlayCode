@@ -17,7 +17,7 @@ export interface StudentRow {
 }
 
 /** Create student accounts in a unit, within the licence's seats. Existing emails are skipped. */
-export async function importStudents(db: Db, args: { tenantId: string; actorId: string; unitId: string; rows: StudentRow[]; defaultPassword?: string; now?: Date }) {
+export async function importStudents(db: Db, args: { tenantId: string; actorId: string | null; unitId: string; rows: StudentRow[]; defaultPassword?: string; now?: Date }) {
   const { tenantId, rows } = args;
   const tenant = await getTenant(db, tenantId);
   const invalid = rows.filter((r) => !r.name || !z.string().email().safeParse(r.email).success);

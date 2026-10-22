@@ -57,6 +57,13 @@
       "when": 1792660905179,
       "tag": "0007_hiring_drives",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792661438525,
+      "tag": "0008_sso",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,13 @@ export interface Branding {
   certificateSignatory: string | null;
 }
 
+export type SsoProvider = "google" | "microsoft" | "oidc";
+
+/** Branding as the public sign-in page sees it, plus whether single sign-on is on. */
+export interface PublicBranding extends Branding {
+  sso: { provider: SsoProvider } | null;
+}
+
 export interface Me {
   user: { id: string; name: string; email: string; rollNo: string | null; tenantId: string | null; roles: Role[] };
   tenant: { id: string; name: string; plan: string; type: "institution" | "partner" | "company"; slug: string } | null;

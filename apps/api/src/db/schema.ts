@@ -604,3 +604,21 @@ export const driveCandidates = pgTable(
   },
   (t) => [primaryKey({ columns: [t.driveId, t.userId] })],
 );
+
+// ---------- Single sign-on ----------
+
+export const ssoConnections = pgTable("sso_connections", {
+  tenantId: uuid("tenant_id")
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  provider: text("provider").$type<"google" | "microsoft" | "oidc">().notNull(),
+  issuer: text("issuer").notNull(),
+  clientId: text("client_id").notNull(),
+  clientSecretEnc: text("client_secret_enc").notNull(),
+  /** Only emails on these domains may sign in through this connection. */
+  emailDomains: jsonb("email_domains").$type<string[]>().notNull(),
+  /** Create a student account on first sign-in, in this unit. */
+  autoProvisionUnitId: uuid("auto_provision_unit_id").references(() => orgUnits.id, { onDelete: "set null" }),
+  enabled: boolean("enabled").notNull().default(true),
+  createdAt: createdAt(),
+});
