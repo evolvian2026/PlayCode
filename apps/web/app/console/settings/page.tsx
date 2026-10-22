@@ -142,6 +142,40 @@ function SsoSettings() {
   );
 }
 
+function AiSettings() {
+  const { data, error, reload, setData } = useApi<{ configured: boolean; hints: boolean; proctoring: boolean }>("/console/ai");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  if (error) return <ErrorBox message={error.message} onRetry={reload} />;
+  if (!data) return null;
+  async function save(next: { hints: boolean; proctoring: boolean }) {
+    setSaveError(null);
+    try {
+      setData(await api<{ configured: boolean; hints: boolean; proctoring: boolean }>("/console/ai", { method: "PUT", body: next }));
+    } catch (e) {
+      setSaveError(errorMessage(e));
+    }
+  }
+  return (
+    <div className="card stack">
+      <h2 style={{ margin: 0 }}>AI features</h2>
+      {!data.configured && (
+        <p className="small muted" style={{ margin: 0 }}>
+          AI is not set up on this PlayCode server yet. These switches take effect once it is.
+        </p>
+      )}
+      <label>
+        <input type="checkbox" checked={data.hints} onChange={(e) => save({ ...data, hints: e.target.checked })} style={{ width: "auto", marginRight: 6 }} />
+        AI coach in practice: students can ask for a hint tailored to the question and their code (costs XP like a written hint; never in tests or duels)
+      </label>
+      <label>
+        <input type="checkbox" checked={data.proctoring} onChange={(e) => save({ ...data, proctoring: e.target.checked })} style={{ width: "auto", marginRight: 6 }} />
+        AI review of webcam snapshots in strict tests: flags no face, more than one person, or a phone for the proctor to check
+      </label>
+      {saveError && <ErrorBox message={saveError} />}
+    </div>
+  );
+}
+
 function readFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -253,6 +287,7 @@ export default function Settings() {
           {loginLink}
         </code>
       </div>
+      <AiSettings />
       <SsoSettings />
     </div>
   );

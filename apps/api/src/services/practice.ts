@@ -235,7 +235,9 @@ export async function sessionView(db: DbOrTx, s: SessionRow) {
     passMark,
     score: s.finishedAt ? score : null,
     passed: s.finishedAt && passMark !== null ? score >= passMark : null,
-    question: current ? { ...toStudentView(toCoreQuestion(current), s.id), hintsUsed: s.hintsUsed[current.id] ?? 0 } : null,
+    question: current
+      ? { ...toStudentView(toCoreQuestion(current), s.id), hintsUsed: s.hintsUsed[current.id] ?? 0, coachUsed: s.hintsUsed[`coach:${current.id}`] ?? 0 }
+      : null,
   };
 }
 
@@ -324,7 +326,8 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
       .where(and(eq(skillRatings.userId, ctx.userId), eq(skillRatings.skillId, q.skillId)))
       .for("update");
     const player = { rating: rating?.rating ?? START_RATING, attempts: rating?.attempts ?? 0 };
-    const hintsUsed = s.hintsUsed[q.id] ?? 0;
+    // Written hints and AI coach hints both cost XP.
+    const hintsUsed = (s.hintsUsed[q.id] ?? 0) + (s.hintsUsed[`coach:${q.id}`] ?? 0);
     const repeatXpToday = profile.repeatXpDay === today ? profile.repeatXpToday : 0;
 
     const xp = computeXp({

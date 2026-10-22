@@ -28,11 +28,20 @@ export const tenants = pgTable("tenants", {
   seats: integer("seats").notNull().default(500),
   validUntil: text("valid_until"),
   timeZone: text("time_zone").notNull().default("Asia/Kolkata"),
-  settings: jsonb("settings").$type<{ weekendsOptional?: boolean; nudges?: boolean }>().notNull().default({}),
+  settings: jsonb("settings").$type<TenantSettings>().notNull().default({}),
   /** White-label: shown on the sign-in page, app header and certificates. Sub-tenants inherit their partner's. */
   branding: jsonb("branding").$type<TenantBranding>().notNull().default({}),
   createdAt: createdAt(),
 });
+
+export interface TenantSettings {
+  weekendsOptional?: boolean;
+  nudges?: boolean;
+  /** AI coach hints in practice (on by default when AI is configured). */
+  aiHints?: boolean;
+  /** AI review of webcam snapshots in strict tests (on by default when AI is configured). */
+  aiProctoring?: boolean;
+}
 
 export interface TenantBranding {
   appName?: string;
@@ -662,4 +671,56 @@ export const erasureRequests = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("erasure_requests_tenant_idx").on(t.tenantId, t.status, t.createdAt)],
+);
+
+// ---------- AI ----------
+
+export type AiFeature = "coach_hint" | "question_draft" | "snapshot_review";
+
+/** Token use per call, for cost reporting per institution. */
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id"),
+    feature: text("feature").$type<AiFeature>().notNull(),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens").notNull(),
+    outputTokens: integer("output_tokens").notNull(),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index("ai_usage_tenant_idx").on(t.tenantId, t.createdAt)],
+);
+
+/** Every coach hint shown, for daily limits and for teachers to see where students get stuck. */
+export const coachHints = pgTable(
+  "coach_hints",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),
+    questionId: text("question_id").notNull(),
+    level: integer("level").notNull(),
+    hint: text("hint").notNull(),
+    /** Served from the shared cache (no student code involved). */
+    cached: boolean("cached").notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [index("coach_hints_user_idx").on(t.userId, t.createdAt), index("coach_hints_question_idx").on(t.questionId)],
+);
+
+/** Generic (not student-specific) coach hints, reused across students. */
+export const coachHintCache = pgTable(
+  "coach_hint_cache",
+  {
+    questionId: text("question_id").notNull().references(() => questions.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    level: integer("level").notNull(),
+    hint: text("hint").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.questionId, t.version, t.level] })],
 );

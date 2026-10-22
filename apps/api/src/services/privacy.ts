@@ -6,6 +6,7 @@ import {
   attemptSnapshots,
   auditLogs,
   certificates,
+  coachHints,
   consents,
   driveCandidates,
   drives,
@@ -112,6 +113,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .from(driveCandidates)
       .innerJoin(drives, eq(drives.id, driveCandidates.driveId))
       .where(eq(driveCandidates.userId, userId)),
+    coachHints: await db.select({ questionId: coachHints.questionId, hint: coachHints.hint, at: coachHints.createdAt }).from(coachHints).where(eq(coachHints.userId, userId)),
     notifications: await db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(notifications.createdAt),
     consents: (await consentState(db, userId)).history,
     erasureRequests: await db.select().from(erasureRequests).where(eq(erasureRequests.userId, userId)),
@@ -195,6 +197,7 @@ export async function resolveErasure(
     await tx.delete(skillRatings).where(eq(skillRatings.userId, user.id));
     await tx.delete(leagueMembers).where(eq(leagueMembers.userId, user.id));
     await tx.delete(notifications).where(eq(notifications.userId, user.id));
+    await tx.delete(coachHints).where(eq(coachHints.userId, user.id));
     await tx.delete(certificates).where(eq(certificates.userId, user.id));
     await tx.delete(driveCandidates).where(eq(driveCandidates.userId, user.id));
     await tx.delete(playerProfiles).where(eq(playerProfiles.userId, user.id));

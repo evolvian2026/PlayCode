@@ -80,7 +80,9 @@ export default function SessionPlayer() {
   const [session, setSession] = useState<SessionView | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [result, setResult] = useState<AnswerResult | null>(null);
-  const [hints, setHints] = useState<string[]>([]);
+  const [hints, setHints] = useState<{ text: string; coach: boolean }[]>([]);
+  const [coaching, setCoaching] = useState(false);
+  const coach = useApi<{ available: boolean }>("/student/coach");
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -165,9 +167,25 @@ export default function SessionPlayer() {
     if (!question) return;
     try {
       const h = await api<{ hint: string }>(`/student/sessions/${session!.id}/hint`, { body: { questionId: question.id } });
-      setHints((prev) => [...prev, h.hint]);
+      setHints((prev) => [...prev, { text: h.hint, coach: false }]);
     } catch (e) {
       setActionError(errorMessage(e));
+    }
+  }
+
+  async function askCoach() {
+    if (!question || !draft) return;
+    setCoaching(true);
+    setActionError(null);
+    try {
+      // For code and SQL the coach looks at the student's attempt so far.
+      const attempt = draft.kind === "code" ? draft.sources[draft.language] : draft.kind === "sql" ? draft.query : undefined;
+      const h = await api<{ hint: string }>(`/student/sessions/${session!.id}/coach`, { body: { questionId: question.id, draft: attempt || undefined } });
+      setHints((prev) => [...prev, { text: h.hint, coach: true }]);
+    } catch (e) {
+      setActionError(errorMessage(e));
+    } finally {
+      setCoaching(false);
     }
   }
 
@@ -178,7 +196,8 @@ export default function SessionPlayer() {
   }
 
   const progress = ((session.answered + (result ? 1 : 0)) / session.total) * 100;
-  const hintsLeft = question.hintCount - question.hintsUsed - hints.length;
+  const hintsLeft = question.hintCount - question.hintsUsed - hints.filter((h) => !h.coach).length;
+  const coachLeft = 3 - question.coachUsed - hints.filter((h) => h.coach).length;
 
   return (
     <div className="stack" style={{ paddingBottom: 24 }}>
@@ -220,9 +239,12 @@ export default function SessionPlayer() {
       {runResult && !result && <EvaluationView evaluation={runResult} title={runResult.kind === "code" ? "Sample tests" : "Your query's result"} />}
 
       {hints.map((h, i) => (
-        <div key={i} className="card tight row" style={{ background: "var(--warn-soft)", borderColor: "transparent" }}>
-          <Icon name="bulb" className="stat-xp" />
-          <span>{h}</span>
+        <div key={i} className="card tight row" style={{ background: h.coach ? "var(--accent-soft)" : "var(--warn-soft)", borderColor: "transparent", alignItems: "flex-start" }}>
+          <Icon name={h.coach ? "spark" : "bulb"} className={h.coach ? "" : "stat-xp"} />
+          <span style={{ whiteSpace: "pre-line" }}>
+            {h.coach && <strong>Coach: </strong>}
+            {h.text.split("`").map((part, j) => (j % 2 ? <code key={j} className="inline-code">{part}</code> : part))}
+          </span>
         </div>
       ))}
 
@@ -267,11 +289,18 @@ export default function SessionPlayer() {
           <button className="btn primary big" disabled={!response || busy || running} onClick={submit}>
             {busy ? (executes ? "Running all tests..." : "Checking...") : executes ? "Submit" : "Check"}
           </button>
-          {hintsLeft > 0 && (
-            <button className="btn ghost small" onClick={hint}>
-              <Icon name="bulb" size={16} /> Use a hint (costs some XP)
-            </button>
-          )}
+          <div className="row wrap" style={{ justifyContent: "center", gap: 4 }}>
+            {hintsLeft > 0 && (
+              <button className="btn ghost small" onClick={hint}>
+                <Icon name="bulb" size={16} /> Use a hint (costs some XP)
+              </button>
+            )}
+            {coach.data?.available && coachLeft > 0 && (
+              <button className="btn ghost small" onClick={askCoach} disabled={coaching}>
+                <Icon name="spark" size={16} /> {coaching ? "Coach is thinking..." : executes ? "Ask the coach about my code" : "Ask the AI coach (costs some XP)"}
+              </button>
+            )}
+          </div>
         </div>
       )}
       <Link href="/play" className="small muted center">

@@ -46,6 +46,7 @@ export interface QuestionView {
   body: QuestionBody;
   hintCount: number;
   hintsUsed: number;
+  coachUsed: number;
   responseKind: StudentResponse["kind"];
 }
 

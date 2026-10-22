@@ -3,7 +3,8 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { QUESTION_TYPES } from "@playcode/core";
 import { z } from "zod";
 import { db } from "../db/client";
-import { assignments, memberships, orgUnits, packs, questions, sessions, skills, users } from "../db/schema";
+import { assignments, memberships, orgUnits, packs, questions, sessions, skills, tenants, users } from "../db/schema";
+import { aiProvider } from "../lib/ai";
 import { audit } from "../lib/audit";
 import { forbidden, notFound } from "../lib/errors";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
@@ -153,6 +154,23 @@ export async function consoleRoutes(app: FastifyInstance) {
     const updated = await updateBranding(db, tenant, body);
     await audit(db, { tenantId: tenant.id, actorId: req.auth.userId, action: "branding.update" });
     return { own: updated.branding, effective: await effectiveBranding(db, updated) };
+  });
+
+  // ---------- AI features ----------
+  app.get("/ai", { preHandler: requirePermission("tenant.settings") }, async (req) => {
+    const tenant = await getTenant(db, tenantOf(req));
+    return { configured: Boolean(aiProvider()), hints: tenant.settings.aiHints !== false, proctoring: tenant.settings.aiProctoring !== false };
+  });
+
+  app.put("/ai", { preHandler: requirePermission("tenant.settings") }, async (req) => {
+    const tenantId = tenantOf(req);
+    const body = parse(z.object({ hints: z.boolean(), proctoring: z.boolean() }), req.body);
+    await db
+      .update(tenants)
+      .set({ settings: sql`${tenants.settings} || ${JSON.stringify({ aiHints: body.hints, aiProctoring: body.proctoring })}::jsonb` })
+      .where(eq(tenants.id, tenantId));
+    await audit(db, { tenantId, actorId: req.auth.userId, action: "settings.ai", data: body });
+    return { configured: Boolean(aiProvider()), ...body };
   });
 
   // ---------- Single sign-on ----------

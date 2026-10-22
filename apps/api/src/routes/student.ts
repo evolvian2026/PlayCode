@@ -6,8 +6,10 @@ import { db } from "../db/client";
 import { assignments, duels, mistakes, packs, questions, sessions, skillRatings, skills } from "../db/schema";
 import { notFound } from "../lib/errors";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
+import { rateLimit } from "../lib/rate-limit";
 import { studentDetail } from "../services/analytics";
 import { userCertificates } from "../services/certificates";
+import { coachAvailable, coachHint } from "../services/coach";
 import { answerDuel, cancelDuel, createDuel, duelLobby, getDuel, respondToInvite } from "../services/duels";
 import { attemptView, logIntegrity, runInAttempt, saveAnswer, saveSnapshot, startAttempt, studentAssessments, submitOwn } from "../services/assessments";
 import { leagueStandings } from "../services/leagues";
@@ -182,6 +184,15 @@ export async function studentRoutes(app: FastifyInstance) {
     const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
     const body = parse(z.object({ questionId: z.string() }), req.body);
     return takeHint(db, ctxOf(req), id, body.questionId);
+  });
+
+  app.get("/coach", async (req) => ({ available: await coachAvailable(db, tenantOf(req)) }));
+
+  app.post("/sessions/:id/coach", async (req) => {
+    const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+    const body = parse(z.object({ questionId: z.string(), draft: z.string().max(20_000).optional() }), req.body);
+    rateLimit(`coach:${req.auth.userId}`, 10, 60_000);
+    return coachHint(db, ctxOf(req), id, body);
   });
 
   app.get("/mistakes", async (req) => {
