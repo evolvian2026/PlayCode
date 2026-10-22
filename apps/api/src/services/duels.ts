@@ -18,6 +18,7 @@ import type { Db, DbOrTx } from "../db/client";
 import { duelPlayers, duels, memberships, playerProfiles, questions, users } from "../db/schema";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { publish } from "../lib/realtime";
+import { appLink, enqueue } from "./notifications";
 import { getOrCreateProfile } from "./profile";
 import { quickVisibleTo, toCoreQuestion, type StudentCtx } from "./practice";
 import { awardActivity } from "./rewards";
@@ -114,7 +115,21 @@ export async function createDuel(db: Db, ctx: StudentCtx, input: { opponentId?: 
     return d!;
   });
   if (result.status === "active") notifyBoth(result, { event: "started" });
-  else if (result.opponentId) publish(result.opponentId, { type: "duel_invite", duelId: result.id });
+  else if (result.opponentId) {
+    publish(result.opponentId, { type: "duel_invite", duelId: result.id });
+    const [challenger] = await db.select({ name: users.name }).from(users).where(eq(users.id, ctx.userId));
+    await enqueue(db, [
+      {
+        tenantId: ctx.tenantId,
+        userId: result.opponentId,
+        template: "duel_invite",
+        title: `${challenger?.name ?? "A classmate"} challenged you to a duel`,
+        body: "Accept within 2 minutes: 5 questions, 3 minutes.",
+        link: appLink("/play/duels"),
+        dedupeKey: `duel:${result.id}`,
+      },
+    ]);
+  }
   return getDuel(db, ctx, result.id);
 }
 

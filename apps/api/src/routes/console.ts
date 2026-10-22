@@ -31,15 +31,16 @@ async function resolveScope(req: FastifyRequest, unitId?: string) {
 
 const unitQuery = z.object({ unitId: z.string().uuid().optional() });
 
-/** Accepts "name,email,roll_no" lines; a header row is skipped. */
-export function parseStudentCsv(csv: string): { name: string; email: string; rollNo: string | null }[] {
-  const rows: { name: string; email: string; rollNo: string | null }[] = [];
+/** Accepts "name,email,roll_no[,phone]" lines; a header row is skipped. */
+export function parseStudentCsv(csv: string): { name: string; email: string; rollNo: string | null; phone: string | null }[] {
+  const rows: { name: string; email: string; rollNo: string | null; phone: string | null }[] = [];
   for (const raw of csv.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line) continue;
-    const [name = "", email = "", rollNo = ""] = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+    const [name = "", email = "", rollNo = "", phone = ""] = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
     if (/^name$/i.test(name) && /^e-?mail$/i.test(email)) continue;
-    rows.push({ name, email: email.toLowerCase(), rollNo: rollNo || null });
+    const digits = phone.replace(/[^\d+]/g, "");
+    rows.push({ name, email: email.toLowerCase(), rollNo: rollNo || null, phone: digits.length >= 10 ? digits : null });
   }
   return rows;
 }
@@ -142,13 +143,13 @@ export async function consoleRoutes(app: FastifyInstance) {
     if (used + toCreate.length > tenant.seats) {
       throw badRequest(`This import needs ${toCreate.length} seats but only ${Math.max(0, tenant.seats - used)} are left on your licence`);
     }
-    const created: { name: string; email: string; rollNo: string | null; password: string }[] = [];
+    const created: { name: string; email: string; rollNo: string | null; phone: string | null; password: string }[] = [];
     await db.transaction(async (tx) => {
       for (const r of toCreate) {
         const password = body.defaultPassword ?? randomBytes(6).toString("base64url");
         const [user] = await tx
           .insert(users)
-          .values({ tenantId, name: r.name, email: r.email, rollNo: r.rollNo, passwordHash: await hashPassword(password) })
+          .values({ tenantId, name: r.name, email: r.email, rollNo: r.rollNo, phone: r.phone, passwordHash: await hashPassword(password) })
           .returning();
         await tx.insert(memberships).values({ userId: user!.id, tenantId, orgUnitId: body.unitId, role: "student" });
         created.push({ ...r, password });

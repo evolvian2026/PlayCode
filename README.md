@@ -6,7 +6,7 @@ the bug, reorder the lines and more), wrapped in XP, streaks, hearts, leagues
 and missions. Colleges get assignments, analytics and a readiness score per
 student.
 
-This is the Phase 1 (MVP) build from the product and architecture spec.
+This covers Phase 1 (MVP) and Phase 2 of the product and architecture spec.
 
 ## What is in this build
 
@@ -17,6 +17,13 @@ This is the Phase 1 (MVP) build from the product and architecture spec.
 - Missions: company-pattern rounds with a pass mark.
 - Weekly leagues (Bronze to Diamond, groups of 30, promotion and demotion zones), streaks with monthly freezes, hearts that refill over time or by fixing a past mistake, levels and badges.
 - Profile: placement readiness (service and product company profiles), skill mastery, badges, mistake notebook.
+
+**Phase 2 additions**
+- Live coding: write-code problems in C, Java and Python run against sample and hidden stdin/stdout tests; SQL questions run against sample tables. CodeMirror editor with run, submit, saved drafts and test-by-test feedback.
+- 1v1 duels: challenge a classmate or get matched by rating; same five questions, three minutes, Elo duel rating, live updates over WebSocket.
+- Proctored tests: sections with marks and negative marking, per-student random questions, server-side timer with autosave and auto-submit, integrity signals (tab switches, focus, full screen, copy/paste, device changes), webcam snapshots and one-device lock for strict tests, code-similarity checks, a live proctor monitor (extra time, force submit, device reset) and a results release step.
+- Events: section-vs-section (run by the institution) and inter-college (run by PlayCode) competitions ranked by XP per member.
+- Nudges: automatic reminders (streak at risk, assignment due, test open) and TPO announcements to filtered groups, delivered in-app and on WhatsApp.
 
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
@@ -80,6 +87,21 @@ With Docker, create it once: `docker compose exec postgres createdb -U playcode 
 
 ## Operations
 
+Scheduled jobs (run them from cron or your scheduler):
+
+| Job | When | Command |
+| --- | --- | --- |
+| Close league week | Mondays after midnight, tenant time | `pnpm --filter @playcode/api league:close` |
+| Nudges and notification delivery | Hourly (streak reminders only fire 6-9 pm local time) | `pnpm --filter @playcode/api nudges:run` |
+
+Code execution:
+- Development and tests use the local runner (`EXECUTION_BACKEND=local`), which needs `gcc`, `javac`/`java` and `python3` and limits CPU, memory and output with `prlimit`. It does not isolate the network or filesystem, so the API refuses it in production.
+- Production: run [Judge0](https://github.com/judge0/judge0) on its own network and set `EXECUTION_BACKEND=judge0` and `JUDGE0_URL`. Assessments get priority over duels and practice in the execution queue.
+
+WhatsApp nudges: set `WHATSAPP_TOKEN` and `WHATSAPP_PHONE_ID` (WhatsApp Cloud API) and create approved templates named `playcode_streak_at_risk`, `playcode_assignment_due`, `playcode_test_open`, `playcode_duel_invite` and `playcode_announcement`, each with two body parameters (title, message). Students add their number on their profile or through the CSV import (fourth column).
+
+Other operations:
+
 - Weekly league close: run `pnpm --filter @playcode/api league:close` every Monday after midnight (tenant time), or call `POST /admin/leagues/close-week`. Re-running is safe.
 - Schema changes: edit `apps/api/src/db/schema.ts`, then `pnpm --filter @playcode/api db:generate` and commit the migration in `apps/api/drizzle`.
 - Content updates: edit `apps/api/src/content/*`, run `pnpm verify:content`, then `pnpm db:seed` (content upserts keep calibration data and bump the question version).
@@ -91,4 +113,7 @@ With Docker, create it once: `docker compose exec postgres createdb -U playcode 
 - **Email and password sign-in**: OTP and SSO are next. Imported students get a starting password from the import screen.
 - **Tenant isolation in the API layer**: every query is scoped by tenant and org unit. PostgreSQL row-level security is the next hardening step.
 
-Phase 2 items not built yet: live coding with a sandbox (Judge0), 1v1 duels, proctored assessments, WhatsApp nudges, SSO, scheduled reports, and the content studio UI.
+- **Single API instance assumed for live features**: the WebSocket hub and the execution queue are in-process. Running several API instances needs Redis pub/sub and a shared job queue (BullMQ/SQS).
+- **Camera checks are snapshots only**: face detection (no face, multiple faces) is reserved in the integrity model but not implemented.
+
+Not built yet: AI hints and question drafting (needs an LLM API key), single sign-on (needs Google/Microsoft app registration), scheduled PDF reports, L3 proctoring, and the content studio UI.

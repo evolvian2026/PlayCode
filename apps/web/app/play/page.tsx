@@ -7,6 +7,7 @@ import { useMe } from "@/components/Auth";
 import { Icon } from "@/components/Icon";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
+import type { EventItem } from "@/components/Events";
 import { startAndOpen, type StartInput } from "@/lib/start";
 import type { ProfileSummary } from "@/lib/types";
 
@@ -33,6 +34,8 @@ export default function PlayHome() {
   const me = useMe();
   const router = useRouter();
   const { data, error, loading, reload } = useApi<Home>("/student/home");
+  const events = useApi<{ events: EventItem[] }>("/student/competitions");
+  const liveEvent = events.data?.events.find((e) => e.state === "live");
   const [startError, setStartError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -92,6 +95,18 @@ export default function PlayHome() {
           </button>
         )}
       </div>
+
+      {liveEvent && (
+        <button className="card spread" style={{ font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }} onClick={() => router.push("/play/league")}>
+          <span>
+            <span className="pill good">Live event</span> <b>{liveEvent.title}</b>
+            <div className="muted small">
+              {liveEvent.myTeam ? `${liveEvent.myTeam.name} is #${liveEvent.myTeam.rank} of ${liveEvent.leaderboard.length}. Every XP you earn counts for your team.` : "Earn XP for your team."}
+            </div>
+          </span>
+          <Icon name="arrow" />
+        </button>
+      )}
 
       {data.tests.length > 0 && (
         <div className="card stack" style={{ borderColor: "var(--accent)" }}>

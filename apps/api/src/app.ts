@@ -9,6 +9,7 @@ import { adminRoutes } from "./routes/admin";
 import { assessmentConsoleRoutes } from "./routes/assessments-console";
 import { authRoutes } from "./routes/auth";
 import { consoleRoutes } from "./routes/console";
+import { engageRoutes } from "./routes/engage";
 import { studentRoutes } from "./routes/student";
 
 export interface AppOptions {
@@ -18,7 +19,16 @@ export interface AppOptions {
 }
 
 export async function buildApp(options: AppOptions = {}): Promise<FastifyInstance> {
-  const app = Fastify({ logger: options.logger ?? false });
+  const app = Fastify({
+    logger: options.logger
+      ? {
+          serializers: {
+            // The WebSocket token travels in the query string; keep it out of logs.
+            req: (req: { method: string; url: string }) => ({ method: req.method, url: req.url.replace(/token=[^&]+/, "token=[redacted]") }),
+          },
+        }
+      : false,
+  });
   app.decorate("now", options.now ?? (() => new Date()));
   await app.register(cors, { origin: env.CORS_ORIGIN.split(","), credentials: true, methods: ["GET", "POST", "PUT", "DELETE"] });
 
@@ -61,5 +71,6 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(consoleRoutes, { prefix: "/console" });
   await app.register(assessmentConsoleRoutes, { prefix: "/console" });
   await app.register(adminRoutes, { prefix: "/admin" });
+  await app.register(engageRoutes);
   return app;
 }

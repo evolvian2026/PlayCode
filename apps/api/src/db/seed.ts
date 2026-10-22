@@ -13,7 +13,7 @@ import { closeLeagueWeek } from "../services/leagues";
 import { answerQuestion, startSession, type StartInput } from "../services/practice";
 import { db, pool, type Db } from "./client";
 import { runMigrations } from "./migrate";
-import { assessments, assignments, memberships, orgUnits, packs, questions, skills, tenants, users } from "./schema";
+import { assessments, assignments, competitions, memberships, orgUnits, packs, questions, skills, tenants, users } from "./schema";
 
 export const DEMO_PASSWORD = "playcode123";
 
@@ -210,6 +210,17 @@ export async function seedDemo(now = new Date()): Promise<void> {
     orgUnitIds: [cse27.id],
     releasePolicy: "manual",
     createdBy: faculty.id,
+  });
+  const tpoUser = (await db.select().from(users).where(eq(users.email, "tpo@demo.edu")))[0]!;
+  await db.insert(competitions).values({
+    tenantId,
+    title: "Code Premier League: Week 43",
+    description: "CSE A vs CSE B vs ECE A. Highest XP per student wins the trophy.",
+    scope: "sections",
+    teamIds: [cseA.id, cseB.id, eceA.id],
+    startsAt: new Date(now.getTime() - 3 * 86_400_000),
+    endsAt: new Date(now.getTime() + 4 * 86_400_000),
+    createdBy: tpoUser.id,
   });
   console.log(`Seeded demo institution with ${students.length} students. Password for every account: ${DEMO_PASSWORD}`);
 }

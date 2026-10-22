@@ -2,6 +2,7 @@
 
 import { DIVISION_LABELS, type Division } from "@playcode/core";
 import { Icon } from "@/components/Icon";
+import { EventCard, type EventItem } from "@/components/Events";
 import { ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
 
@@ -14,6 +15,7 @@ interface League {
 
 export default function LeaguePage() {
   const { data, error, loading, reload } = useApi<League>("/student/league");
+  const events = useApi<{ events: EventItem[] }>("/student/competitions");
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? "Could not load"} onRetry={reload} />;
 
@@ -52,6 +54,7 @@ export default function LeaguePage() {
           </table>
         </div>
       )}
+      {events.data?.events.map((ev) => <EventCard key={ev.id} ev={ev} highlight={ev.myTeam?.name} />)}
       <p className="muted small">
         <span style={{ color: "var(--good)" }}>Green line</span>: promotion zone. <span style={{ color: "var(--bad)" }}>Red line</span>: demotion zone.
       </p>

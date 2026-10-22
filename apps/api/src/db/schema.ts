@@ -28,7 +28,7 @@ export const tenants = pgTable("tenants", {
   seats: integer("seats").notNull().default(500),
   validUntil: text("valid_until"),
   timeZone: text("time_zone").notNull().default("Asia/Kolkata"),
-  settings: jsonb("settings").$type<{ weekendsOptional?: boolean }>().notNull().default({}),
+  settings: jsonb("settings").$type<{ weekendsOptional?: boolean; nudges?: boolean }>().notNull().default({}),
   createdAt: createdAt(),
 });
 
@@ -54,6 +54,9 @@ export const users = pgTable(
     name: text("name").notNull(),
     passwordHash: text("password_hash").notNull(),
     rollNo: text("roll_no"),
+    /** E.164 phone number for WhatsApp nudges (optional). */
+    phone: text("phone"),
+    notifyPrefs: jsonb("notify_prefs").$type<{ whatsapp?: boolean }>().notNull().default({}),
     status: text("status").$type<"active" | "disabled">().notNull().default("active"),
     lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
     createdAt: createdAt(),
@@ -415,4 +418,52 @@ export const plagiarismPairs = pgTable(
     similarityPct: integer("similarity_pct").notNull(),
   },
   (t) => [uniqueIndex("plagiarism_pair_uq").on(t.assessmentId, t.questionId, t.attemptA, t.attemptB)],
+);
+
+// ---------- Events ----------
+
+export const competitions = pgTable(
+  "competitions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** null for platform-run inter-college events. */
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    scope: text("scope").$type<"sections" | "colleges">().notNull(),
+    /** Org unit ids (sections scope) or tenant ids (colleges scope). */
+    teamIds: jsonb("team_ids").$type<string[]>().notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("competitions_tenant_idx").on(t.tenantId)],
+);
+
+// ---------- Notifications ----------
+
+export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement";
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    template: text("template").$type<NotificationTemplate>().notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    link: text("link"),
+    /** In-app is always delivered; external delivery goes through `channel`. */
+    channel: text("channel").$type<"whatsapp" | "none">().notNull().default("none"),
+    status: text("status").$type<"pending" | "sent" | "failed" | "skipped">().notNull().default("pending"),
+    error: text("error"),
+    dedupeKey: text("dedupe_key").notNull().unique(),
+    sentBy: uuid("sent_by"),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (t) => [index("notifications_user_idx").on(t.userId, t.createdAt), index("notifications_status_idx").on(t.status)],
 );

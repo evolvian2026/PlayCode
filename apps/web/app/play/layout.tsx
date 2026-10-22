@@ -2,11 +2,33 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { DIVISION_LABELS } from "@playcode/core";
 import { AuthGate } from "@/components/Auth";
 import { Icon } from "@/components/Icon";
+import { api } from "@/lib/api";
 import { PlayerProvider, usePlayer } from "@/lib/player-state";
+import { useLiveEvents } from "@/lib/realtime";
+
+function InboxBell() {
+  const path = usePathname();
+  const [unread, setUnread] = useState(0);
+  const load = () => void api<{ unread: number }>("/student/notifications").then((r) => setUnread(r.unread)).catch(() => {});
+  useEffect(load, [path]);
+  useLiveEvents((e) => {
+    if (e.type === "notification") load();
+  });
+  return (
+    <Link href="/play/inbox" aria-label={unread ? `${unread} unread messages` : "Messages"} className="row" style={{ gap: 2, color: "var(--muted)", position: "relative" }}>
+      <Icon name="bell" size={20} />
+      {unread > 0 && (
+        <span className="pill bad" style={{ padding: "0 6px", fontSize: "0.7rem", position: "absolute", top: -8, right: -10 }}>
+          {unread}
+        </span>
+      )}
+    </Link>
+  );
+}
 
 const NAV = [
   { href: "/play", label: "Home", icon: "home" },
@@ -41,6 +63,7 @@ function TopBar() {
         <span className="stat-heart row" style={{ gap: 4 }} title="Hearts for Learn practice">
           <Icon name="heart" size={18} /> {profile.hearts}
         </span>
+        <InboxBell />
       </div>
     </div>
   );

@@ -1,11 +1,53 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { DIVISION_LABELS } from "@playcode/core";
 import { signOut, useMe } from "@/components/Auth";
 import { Icon } from "@/components/Icon";
 import { Bar, ErrorBox, Loading, masteryTone } from "@/components/ui";
-import { useApi } from "@/lib/api";
+import { api, errorMessage, useApi } from "@/lib/api";
+
+function WhatsAppSettings() {
+  const [phone, setPhone] = useState("");
+  const [enabled, setEnabled] = useState(true);
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    void api<{ phone: string | null; whatsapp: boolean }>("/student/settings").then((r) => {
+      setPhone(r.phone ?? "");
+      setEnabled(r.whatsapp);
+    });
+  }, []);
+  async function save(next: { phone?: string | null; whatsapp?: boolean }) {
+    try {
+      const r = await api<{ phone: string | null; whatsapp: boolean }>("/student/settings", { method: "PUT", body: next });
+      setPhone(r.phone ?? "");
+      setEnabled(r.whatsapp);
+      setMsg("Saved");
+    } catch (e) {
+      setMsg(errorMessage(e));
+    }
+  }
+  return (
+    <div className="card stack">
+      <h2 style={{ margin: 0 }}>Reminders</h2>
+      <p className="muted small" style={{ margin: 0 }}>
+        Streak, assignment and test reminders always appear in Messages. Add a number to get them on WhatsApp too.
+      </p>
+      <div className="row">
+        <input aria-label="WhatsApp number" placeholder="+91 98765 43210" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <button className="btn small" onClick={() => save({ phone: phone.trim() || null })}>
+          Save
+        </button>
+      </div>
+      <label className="row" style={{ fontWeight: 500, gap: 8 }}>
+        <input type="checkbox" checked={enabled} onChange={(e) => save({ whatsapp: e.target.checked })} style={{ width: "auto" }} />
+        Send me WhatsApp reminders
+      </label>
+      {msg && <span className="small muted">{msg}</span>}
+    </div>
+  );
+}
 import type { StudentDetail } from "@/lib/types";
 
 export default function MePage() {
@@ -48,6 +90,8 @@ export default function MePage() {
           <div className="muted small">correct answers</div>
         </div>
       </div>
+
+      <WhatsAppSettings />
 
       <div className="card stack">
         <h2>Placement readiness</h2>

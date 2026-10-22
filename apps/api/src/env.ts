@@ -17,6 +17,11 @@ const schema = z.object({
   JUDGE0_LANGUAGE_IDS: z.string().optional(),
   /** Local folder for uploaded files (proctoring snapshots). Swap for object storage in production. */
   STORAGE_DIR: z.string().default(".storage"),
+  /** WhatsApp Cloud API. Without these, nudges are in-app only. */
+  WHATSAPP_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_ID: z.string().optional(),
+  WHATSAPP_TEMPLATE_LANG: z.string().default("en"),
+  PUBLIC_APP_URL: z.string().default("http://localhost:3000"),
 });
 
 export const env = schema.parse(process.env);
