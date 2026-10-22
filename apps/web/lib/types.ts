@@ -102,6 +102,8 @@ export interface AnswerResult {
   freezesUsed: number;
   outOfHearts: boolean;
   certificate: string | null;
+  /** Learning paths this answer completed (it finished the last step). */
+  pathsCompleted?: { pathId: string; title: string; code: string }[];
   profile: ProfileSummary;
   session: SessionView;
 }
@@ -144,4 +146,27 @@ export interface TestListItem {
   attemptId: string | null;
   score: number | null;
   maxScore: number | null;
+}
+
+export interface StudentPathStep {
+  id: string;
+  kind: "skill" | "pack";
+  ref: string;
+  title: string;
+  target: number;
+  dueDays: number | null;
+  state: "done" | "current" | "open" | "locked";
+  value: number | null;
+  dueAt: string | null;
+  overdue: boolean;
+}
+
+export interface StudentPath {
+  id: string;
+  title: string;
+  description: string;
+  sequential: boolean;
+  steps: StudentPathStep[];
+  done: number;
+  certificate: string | null;
 }

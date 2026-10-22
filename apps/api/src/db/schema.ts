@@ -516,7 +516,7 @@ export const certificates = pgTable(
     code: text("code").primaryKey(),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    kind: text("kind").$type<"mission">().notNull(),
+    kind: text("kind").$type<"mission" | "path">().notNull(),
     refId: text("ref_id").notNull(),
     title: text("title").notNull(),
     scorePct: integer("score_pct").notNull(),
@@ -558,6 +558,7 @@ export const WEBHOOK_EVENTS = [
   "candidate.registered",
   "candidate.status_changed",
   "user.erased",
+  "path.completed",
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
@@ -832,3 +833,41 @@ export const ltiNonces = pgTable("lti_nonces", {
   nonce: text("nonce").primaryKey(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
+
+// ---------- Learning paths ----------
+
+/** One step of a path: reach a mastery level on a skill, or pass a mission pack. */
+export interface PathStep {
+  id: string;
+  kind: "skill" | "pack";
+  /** Skill id or pack id. */
+  ref: string;
+  title: string;
+  /** Skill: mastery % to reach. Pack: score % to pass. */
+  target: number;
+  /** Due this many days after the path starts (null: no deadline). */
+  dueDays: number | null;
+}
+
+/**
+ * A sequence of skills and missions for a group: a placement-prep track for a
+ * college batch, or an onboarding/upskilling track for a company team.
+ */
+export const learningPaths = pgTable(
+  "learning_paths",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    orgUnitIds: jsonb("org_unit_ids").$type<string[]>().notNull(),
+    steps: jsonb("steps").$type<PathStep[]>().notNull(),
+    /** Steps unlock one after another; otherwise learners take them in any order. */
+    sequential: boolean("sequential").notNull().default(true),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    status: text("status").$type<"active" | "archived">().notNull().default("active"),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("learning_paths_tenant_idx").on(t.tenantId, t.status)],
+);

@@ -12,6 +12,7 @@ const NAV = [
   { href: "/console", label: "Overview", icon: "chart", perm: null },
   { href: "/console/students", label: "Students", icon: "users", perm: null },
   { href: "/console/assignments", label: "Assignments", icon: "clipboard", perm: "assignments.manage" },
+  { href: "/console/paths", label: "Learning paths", icon: "map", perm: "assignments.manage" },
   { href: "/console/tests", label: "Tests", icon: "flag", perm: "assessments.proctor" },
   { href: "/console/drives", label: "Hiring drives", icon: "users", perm: "drives.manage" },
   { href: "/console/engage", label: "Engagement", icon: "megaphone", perm: null },

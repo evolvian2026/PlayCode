@@ -32,7 +32,7 @@ function saveDraft(sessionId: string, questionId: string, d: Draft | null) {
 
 const DIFFICULTY = ["", "Easy", "Medium", "Hard"];
 
-function Summary({ session, onHome, certificate }: { session: SessionView; onHome: () => void; certificate: string | null }) {
+function Summary({ session, onHome, certificate, paths }: { session: SessionView; onHome: () => void; certificate: string | null; paths: { title: string; code: string }[] }) {
   const pct = session.total ? Math.round((session.correctCount / session.total) * 100) : 0;
   const passed = session.passed;
   return (
@@ -60,6 +60,11 @@ function Summary({ session, onHome, certificate }: { session: SessionView; onHom
         </p>
       )}
       {session.answered < session.total && <p className="muted">You ran out of hearts. Review a mistake to earn one back.</p>}
+      {paths.map((p) => (
+        <Link key={p.code} href={`/verify/${p.code}`} className="btn big" style={{ borderColor: "var(--good)" }}>
+          <Icon name="award" /> Path complete: {p.title}. View certificate
+        </Link>
+      ))}
       {certificate && (
         <Link href={`/verify/${certificate}`} className="btn big" style={{ borderColor: "var(--accent)" }}>
           <Icon name="award" /> View your certificate
@@ -88,6 +93,7 @@ export default function SessionPlayer() {
   const [toast, setToast] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<Evaluation | null>(null);
   const [certificate, setCertificate] = useState<string | null>(null);
+  const [pathsDone, setPathsDone] = useState<{ title: string; code: string }[]>([]);
   const [running, setRunning] = useState(false);
   const shownAt = useRef(Date.now());
 
@@ -118,7 +124,7 @@ export default function SessionPlayer() {
   if (!session) return null;
 
   const exit = () => router.push("/play");
-  if (session.finished && !result) return <Summary session={session} onHome={exit} certificate={certificate} />;
+  if (session.finished && !result) return <Summary session={session} onHome={exit} certificate={certificate} paths={pathsDone} />;
   if (!question || !draft) return <Loading />;
 
   const response = draftToResponse(draft);
@@ -153,6 +159,7 @@ export default function SessionPlayer() {
       setResult(r);
       setProfile(r.profile);
       if (r.certificate) setCertificate(r.certificate);
+      if (r.pathsCompleted?.length) setPathsDone(r.pathsCompleted);
       saveDraft(id, question.id, null);
       if (r.levelUp) setToast(`Level up! You are now level ${r.profile.level}`);
       else if (r.streakExtended && r.profile.streak.days > 1) setToast(`${r.profile.streak.days}-day streak!`);

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DIVISION_LABELS, type Division } from "@playcode/core";
@@ -9,7 +10,7 @@ import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
 import type { EventItem } from "@/components/Events";
 import { startAndOpen, type StartInput } from "@/lib/start";
-import type { ProfileSummary } from "@/lib/types";
+import type { ProfileSummary, StudentPath } from "@/lib/types";
 
 interface Home {
   tenant: { name: string };
@@ -34,6 +35,7 @@ export default function PlayHome() {
   const me = useMe();
   const router = useRouter();
   const { data, error, loading, reload } = useApi<Home>("/student/home");
+  const paths = useApi<{ paths: StudentPath[] }>("/student/paths");
   const events = useApi<{ events: EventItem[] }>("/student/competitions");
   const liveEvent = events.data?.events.find((e) => e.state === "live");
   const [startError, setStartError] = useState<string | null>(null);
@@ -126,6 +128,35 @@ export default function PlayHome() {
           ))}
         </div>
       )}
+
+      {paths.data?.paths
+        .filter((path) => path.done < path.steps.length)
+        .slice(0, 2)
+        .map((path) => {
+          const next = path.steps.find((s) => s.state === "current" || s.state === "open");
+          return (
+            <div key={path.id} className="card stack" style={{ gap: 8 }}>
+              <div className="spread">
+                <h2 style={{ margin: 0 }}>{path.title}</h2>
+                <Link href="/play/paths" className="small">
+                  {path.done}/{path.steps.length} steps
+                </Link>
+              </div>
+              <Bar value={(path.done / path.steps.length) * 100} tone="good" />
+              {next && (
+                <div className="spread">
+                  <div className="small">
+                    Next: <b>{next.title}</b>
+                    {next.overdue && <span style={{ color: "var(--bad)" }}> · overdue</span>}
+                  </div>
+                  <button className="btn primary small" disabled={busy} onClick={() => start(next.kind === "skill" ? { kind: "skill", skillId: next.ref } : { kind: "pack", packId: next.ref })}>
+                    Continue
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
 
       {data.assignments.length > 0 && (
         <div className="card stack">

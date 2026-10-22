@@ -13,6 +13,7 @@ import { saveAnswer, startAttempt, submitOwn } from "../services/assessments";
 import { applyToDrive, createDrive } from "../services/drives";
 import { closeLeagueWeek } from "../services/leagues";
 import { answerQuestion, startSession, type StartInput } from "../services/practice";
+import { createPath } from "../services/paths";
 import { requestErasure } from "../services/privacy";
 import { db, pool, type Db } from "./client";
 import { runMigrations } from "./migrate";
@@ -225,6 +226,22 @@ export async function seedDemo(now = new Date()): Promise<void> {
     startsAt: new Date(now.getTime() - 3 * 86_400_000),
     endsAt: new Date(now.getTime() + 4 * 86_400_000),
     createdBy: tpoUser.id,
+  });
+  // A placement-prep learning path for the CSE batch.
+  await createPath(db, {
+    tenantId,
+    actorId: tpoUser.id,
+    title: "Service company placement track",
+    description: "Four weeks to TCS/Infosys/Wipro readiness: loops and arrays first, then the pseudocode mission.",
+    unitIds: [cse27.id],
+    steps: [
+      { kind: "skill", ref: "loops.for", target: 50, dueDays: 7 },
+      { kind: "skill", ref: "arrays.basics", target: 50, dueDays: 14 },
+      { kind: "skill", ref: "pseudocode.basics", target: 50, dueDays: 21 },
+      { kind: "pack", ref: "mission-service-pseudocode", dueDays: 28 },
+    ],
+    sequential: true,
+    startsAt: new Date(now.getTime() - 10 * 86_400_000),
   });
   // A student who never started has asked for their data to be deleted.
   await requestErasure(db, { tenantId, userId: students[26]!.id, reason: "I have left the college.", now: new Date(now.getTime() - 2 * 86_400_000) });

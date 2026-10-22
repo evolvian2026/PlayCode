@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "../src/db/client";
-import { aiUsage, coachHints } from "../src/db/schema";
+import { aiUsage, coachHintCache, coachHints } from "../src/db/schema";
 import { setAiProvider, type AiProvider, type CoachHintInput } from "../src/lib/ai";
 import { rightAnswer, setup, type TestApp } from "./helpers";
 
@@ -88,6 +88,7 @@ describe("AI coach", () => {
   });
 
   it("retries a hint that gives the answer away", async () => {
+    await db.delete(coachHintCache); // a cached hint would skip the AI call this test is about
     const admin = await t.login("admin@demo.edu");
     const bank = (await t.get(admin, "/console/questions")).body.questions as { id: string; skillId: string; body: { options?: { id: string; text: string }[] }; answer: { kind: string; accepted?: string[]; optionId?: string } }[];
     const secretOf = (q: (typeof bank)[number]) =>

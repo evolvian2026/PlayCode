@@ -669,3 +669,26 @@ textarea.mono {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.88rem;
 }
+
+/* ---------- Learning paths ---------- */
+.path-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  margin-top: 2px;
+}
+.path-dot.done {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}
+.path-dot.current,
+.path-dot.open {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}

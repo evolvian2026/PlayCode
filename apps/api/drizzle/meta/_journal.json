@@ -99,6 +99,13 @@
       "when": 1792663683330,
       "tag": "0013_lti",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792677647796,
+      "tag": "0014_paths",
+      "breakpoints": true
     }
   ]
 }

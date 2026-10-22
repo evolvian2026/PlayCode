@@ -41,6 +41,7 @@ import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { issueMissionCertificate } from "./certificates";
 import { addWeeklyXp } from "./leagues";
 import { deliverLtiScores, queueLtiScores } from "./lti";
+import { checkPathCompletion } from "./paths";
 import { deliverDue, emitEvent } from "./webhooks";
 import { getOrCreateProfile, profileSummary, streakColumns, streakState } from "./profile";
 import { studentUnitIdsWithAncestors } from "./scope";
@@ -477,5 +478,7 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
   });
   if (queuedEvents) void deliverDue(db, ctx.now).catch(() => {});
   if (ltiQueued) void deliverLtiScores(db, ctx.now).catch(() => {});
-  return out;
+  // Finishing a session can complete a learning path (a skill reaches its target, a mission is passed).
+  const pathsCompleted = out.session.finished ? await checkPathCompletion(db, ctx) : [];
+  return { ...out, pathsCompleted };
 }
