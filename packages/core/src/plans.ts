@@ -20,6 +20,8 @@ export const FEATURES = [
   "white_label",
   "whatsapp",
   "hiring_drives",
+  "placements",
+  "ai_interviews",
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
@@ -38,6 +40,8 @@ export const FEATURE_LABELS: Record<Feature, string> = {
   white_label: "Your own branding",
   whatsapp: "WhatsApp reminders",
   hiring_drives: "Hiring drives",
+  placements: "Campus placements",
+  ai_interviews: "AI mock interviews",
 };
 
 export interface PlanSpec {
@@ -51,7 +55,19 @@ export interface PlanSpec {
   aiOveragePerMillionPaise: number;
 }
 
-const PRO: Feature[] = ["proctoring_camera", "content_studio", "ai_coach", "learning_paths", "reports_email", "sso", "white_label", "whatsapp", "hiring_drives"];
+const PRO: Feature[] = [
+  "proctoring_camera",
+  "content_studio",
+  "ai_coach",
+  "learning_paths",
+  "reports_email",
+  "sso",
+  "white_label",
+  "whatsapp",
+  "hiring_drives",
+  "placements",
+  "ai_interviews",
+];
 
 export const PLAN_SPECS: Record<Plan, PlanSpec> = {
   starter: { name: "Starter", features: [], seatPricePaise: 2_500, aiTokensPerMonth: 0, aiOveragePerMillionPaise: 0 },

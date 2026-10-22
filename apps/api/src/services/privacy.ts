@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { Db, DbOrTx } from "../db/client";
 import {
+  academicRecords,
   assessmentAttempts,
   assessments,
   attemptSnapshots,
@@ -15,6 +16,7 @@ import {
   duels,
   erasureRequests,
   integrityEvents,
+  interviews,
   leagueMembers,
   loginCodes,
   ltiAccounts,
@@ -23,6 +25,8 @@ import {
   mistakes,
   notifications,
   orgUnits,
+  placementApplications,
+  placementDrives,
   playerProfiles,
   responses,
   sessions,
@@ -118,6 +122,13 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .innerJoin(drives, eq(drives.id, driveCandidates.driveId))
       .where(eq(driveCandidates.userId, userId)),
     coachHints: await db.select({ questionId: coachHints.questionId, hint: coachHints.hint, at: coachHints.createdAt }).from(coachHints).where(eq(coachHints.userId, userId)),
+    academicRecord: (await db.select().from(academicRecords).where(eq(academicRecords.userId, userId)))[0] ?? null,
+    placements: await db
+      .select({ company: placementDrives.company, role: placementDrives.roleTitle, status: placementApplications.status, roundsCleared: placementApplications.roundsCleared, offerCtcRupees: placementApplications.offerCtcRupees, registeredAt: placementApplications.createdAt })
+      .from(placementApplications)
+      .innerJoin(placementDrives, eq(placementDrives.id, placementApplications.driveId))
+      .where(eq(placementApplications.userId, userId)),
+    mockInterviews: await db.select({ track: interviews.track, status: interviews.status, turns: interviews.turns, scorecard: interviews.scorecard, startedAt: interviews.startedAt }).from(interviews).where(eq(interviews.userId, userId)),
     notifications: await db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(notifications.createdAt),
     consents: (await consentState(db, userId)).history,
     erasureRequests: await db.select().from(erasureRequests).where(eq(erasureRequests.userId, userId)),
@@ -208,6 +219,9 @@ export async function resolveErasure(
     await tx.delete(loginCodes).where(eq(loginCodes.userId, user.id));
     await tx.delete(certificates).where(eq(certificates.userId, user.id));
     await tx.delete(driveCandidates).where(eq(driveCandidates.userId, user.id));
+    await tx.delete(placementApplications).where(eq(placementApplications.userId, user.id));
+    await tx.delete(academicRecords).where(eq(academicRecords.userId, user.id));
+    await tx.delete(interviews).where(eq(interviews.userId, user.id));
     await tx.delete(playerProfiles).where(eq(playerProfiles.userId, user.id));
     await tx.delete(memberships).where(eq(memberships.userId, user.id));
     // Duels stay so opponents keep their history; the player now shows as "Deleted user".

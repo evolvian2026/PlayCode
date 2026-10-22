@@ -18,6 +18,7 @@ import { developerRoutes } from "./routes/developers";
 import { driveRoutes } from "./routes/drives";
 import { ltiRoutes } from "./routes/lti";
 import { pathRoutes } from "./routes/paths";
+import { placementRoutes } from "./routes/placements";
 import { privacyRoutes } from "./routes/privacy";
 import { reportRoutes } from "./routes/reports";
 import { samlRoutes } from "./routes/saml";
@@ -105,5 +106,6 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(samlRoutes);
   await app.register(billingRoutes);
   await app.register(accountRoutes);
+  await app.register(placementRoutes);
   return app;
 }

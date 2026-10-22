@@ -11,7 +11,7 @@ import { useApi } from "@/lib/api";
 import type { EventItem } from "@/components/Events";
 import { startAndOpen, type StartInput } from "@/lib/start";
 import type { ProfileSummary, StudentPath } from "@/lib/types";
-import { useT, type Translate } from "@/lib/i18n";
+import { useLocale, useT, type Translate } from "@/lib/i18n";
 
 interface Home {
   tenant: { name: string };
@@ -33,6 +33,38 @@ function timeLeft(iso: string, t: Translate): string {
   return t("in {n} d", { n: Math.round(h / 24) });
 }
 
+interface PlacementDrive {
+  id: string;
+  company: string;
+  registerBy: string;
+  open: boolean;
+  eligibility: { eligible: boolean };
+  application: { status: string } | null;
+}
+
+/** Drives the student can still register for, and how many of their applications are in progress. */
+function PlacementCard({ drives }: { drives: PlacementDrive[] }) {
+  const t = useT();
+  const locale = useLocale();
+  const open = drives.filter((d) => d.open && d.eligibility.eligible && !d.application).sort((a, b) => a.registerBy.localeCompare(b.registerBy));
+  const inProgress = drives.filter((d) => d.application?.status === "registered" || d.application?.status === "shortlisted").length;
+  if (open.length === 0 && inProgress === 0) return null;
+  return (
+    <Link href="/play/placements" className="card spread" style={{ color: "inherit" }}>
+      <div>
+        <div className="muted small">{t("Placements")}</div>
+        <b>{open.length ? t("{n} drives open for you", { n: open.length }) : t("{n} applications in progress", { n: inProgress })}</b>
+        {open[0] && (
+          <div className="small muted">
+            {t("Next: {company}, register by {when}", { company: open[0].company, when: new Date(open[0].registerBy).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" }) })}
+          </div>
+        )}
+      </div>
+      <Icon name="briefcase" />
+    </Link>
+  );
+}
+
 export default function PlayHome() {
   const me = useMe();
   const t = useT();
@@ -40,6 +72,7 @@ export default function PlayHome() {
   const { data, error, loading, reload } = useApi<Home>("/student/home");
   const paths = useApi<{ paths: StudentPath[] }>("/student/paths");
   const events = useApi<{ events: EventItem[] }>("/student/competitions");
+  const placements = useApi<{ drives: PlacementDrive[] }>("/student/placements");
   const liveEvent = events.data?.events.find((e) => e.state === "live");
   const [startError, setStartError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -127,6 +160,8 @@ export default function PlayHome() {
           ))}
         </div>
       )}
+
+      <PlacementCard drives={placements.data?.drives ?? []} />
 
       {paths.data?.paths
         .filter((path) => path.done < path.steps.length)

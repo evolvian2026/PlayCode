@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -11,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, CodeLanguage, Division, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, CodeLanguage, CompanyType, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -492,7 +493,7 @@ export const competitions = pgTable(
 
 // ---------- Notifications ----------
 
-export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement";
+export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement";
 
 export const notifications = pgTable(
   "notifications",
@@ -569,6 +570,7 @@ export const WEBHOOK_EVENTS = [
   "candidate.status_changed",
   "user.erased",
   "path.completed",
+  "placement.offered",
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
@@ -706,7 +708,7 @@ export const erasureRequests = pgTable(
 
 // ---------- AI ----------
 
-export type AiFeature = "coach_hint" | "question_draft" | "snapshot_review";
+export type AiFeature = "coach_hint" | "question_draft" | "snapshot_review" | "mock_interview";
 
 /** Token use per call, for cost reporting per institution. */
 export const aiUsage = pgTable(
@@ -1006,9 +1008,14 @@ export const invoices = pgTable(
     issuedAt: timestamp("issued_at", { withTimezone: true }).notNull(),
     dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
     paidAt: timestamp("paid_at", { withTimezone: true }),
+    /** Online payment (Razorpay payment link), or "manual" when marked paid by PlayCode staff. */
+    paidVia: text("paid_via").$type<"razorpay" | "manual">(),
+    paymentRef: text("payment_ref"),
+    paymentLinkId: text("payment_link_id"),
+    paymentLinkUrl: text("payment_link_url"),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("invoices_tenant_period_uq").on(t.tenantId, t.period)],
+  (t) => [uniqueIndex("invoices_tenant_period_uq").on(t.tenantId, t.period), uniqueIndex("invoices_payment_link_uq").on(t.paymentLinkId)],
 );
 
 // ---------- Sign-in sessions and one-time codes ----------
@@ -1043,4 +1050,107 @@ export const loginCodes = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("login_codes_user_idx").on(t.userId, t.createdAt)],
+);
+
+// ---------- Campus placements ----------
+
+/** A student's academic record, kept by the placement cell for drive eligibility. */
+export const academicRecords = pgTable("academic_records", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  cgpa: doublePrecision("cgpa"),
+  backlogs: integer("backlogs"),
+  tenthPct: doublePrecision("tenth_pct"),
+  twelfthPct: doublePrecision("twelfth_pct"),
+  graduationYear: integer("graduation_year"),
+  updatedBy: uuid("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** A company visiting the campus to recruit. */
+export const placementDrives = pgTable(
+  "placement_drives",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    company: text("company").notNull(),
+    companyType: text("company_type").$type<CompanyType>().notNull(),
+    roleTitle: text("role_title").notNull(),
+    description: text("description").notNull().default(""),
+    /** Annual CTC in rupees. */
+    ctcRupees: integer("ctc_rupees").notNull(),
+    location: text("location").notNull().default(""),
+    /** Day of the drive, "2026-11-20". */
+    driveDate: text("drive_date").notNull(),
+    registerBy: timestamp("register_by", { withTimezone: true }).notNull(),
+    criteria: jsonb("criteria").$type<PlacementCriteria>().notNull(),
+    /** Selection rounds in order, e.g. online test, technical interview, HR. */
+    rounds: jsonb("rounds").$type<string[]>().notNull(),
+    /** Mission pack students can practise to prepare. */
+    packId: text("pack_id"),
+    status: text("status").$type<"open" | "closed" | "completed">().notNull().default("open"),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("placement_drives_tenant_idx").on(t.tenantId, t.driveDate)],
+);
+
+export type ApplicationStatus = "registered" | "shortlisted" | "rejected" | "offered" | "withdrawn";
+
+export const placementApplications = pgTable(
+  "placement_applications",
+  {
+    driveId: uuid("drive_id").notNull().references(() => placementDrives.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    status: text("status").$type<ApplicationStatus>().notNull().default("registered"),
+    /** Selection rounds cleared so far. */
+    roundsCleared: integer("rounds_cleared").notNull().default(0),
+    offerCtcRupees: integer("offer_ctc_rupees"),
+    /** Readiness per company profile and practice days in the previous 60, when the student registered: the "before" for outcome reports. */
+    readiness: jsonb("readiness").$type<Record<string, number>>().notNull(),
+    activeDays60: integer("active_days_60").notNull(),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.driveId, t.userId] }), index("placement_applications_user_idx").on(t.tenantId, t.userId)],
+);
+
+// ---------- AI mock interviews ----------
+
+export interface InterviewTurn {
+  role: "interviewer" | "candidate";
+  text: string;
+  at: string;
+}
+
+export interface InterviewScorecard {
+  /** 1-5 per dimension. */
+  scores: { problemSolving: number; fundamentals: number; communication: number; code: number };
+  overall: number;
+  strengths: string[];
+  improvements: string[];
+  summary: string;
+  /** Skill ids to practise next. */
+  practise: string[];
+}
+
+export const interviews = pgTable(
+  "interviews",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    track: text("track").$type<"service" | "product">().notNull(),
+    /** Skill ids the interview leans on (the student's weakest relevant skills). */
+    focusSkills: jsonb("focus_skills").$type<string[]>().notNull(),
+    status: text("status").$type<"active" | "finished" | "abandoned">().notNull().default("active"),
+    turns: jsonb("turns").$type<InterviewTurn[]>().notNull(),
+    scorecard: jsonb("scorecard").$type<InterviewScorecard>(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [index("interviews_user_idx").on(t.userId, t.startedAt), index("interviews_tenant_idx").on(t.tenantId, t.startedAt)],
 );

@@ -21,6 +21,7 @@ export const PERMISSIONS = [
   "audit.view",
   "api.manage",
   "drives.manage",
+  "placements.manage",
   "practice.play",
 ] as const;
 
@@ -85,6 +86,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "audit.view",
     "leagues.manage",
     "api.manage",
+    "placements.manage",
   ],
   inst_admin: [
     "tenant.settings",
@@ -102,6 +104,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "leagues.manage",
     "api.manage",
     "drives.manage",
+    "placements.manage",
   ],
   tpo: [
     "users.manage",
@@ -115,6 +118,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "analytics.institution",
     "reports.export",
     "leagues.manage",
+    "placements.manage",
   ],
   hod: ["content.private.manage", "content.view", "assignments.manage", "assessments.manage", "assessments.proctor", "events.manage", "nudges.send", "analytics.department", "reports.export"],
   faculty: ["content.view", "assignments.manage", "assessments.manage", "assessments.proctor", "nudges.send", "analytics.own_units", "reports.export"],

@@ -16,6 +16,7 @@ const NAV: NavItem[] = [
   { href: "/console/assignments", label: "Assignments", icon: "clipboard", perm: "assignments.manage" },
   { href: "/console/paths", label: "Learning paths", icon: "map", perm: "assignments.manage", feature: "learning_paths" },
   { href: "/console/tests", label: "Tests", icon: "flag", perm: "assessments.proctor" },
+  { href: "/console/placements", label: "Placements", icon: "briefcase", perm: "placements.manage", feature: "placements" },
   { href: "/console/drives", label: "Hiring drives", icon: "users", perm: "drives.manage", feature: "hiring_drives" },
   { href: "/console/engage", label: "Engagement", icon: "megaphone", perm: null },
   { href: "/console/batches", label: "Batches", icon: "layers", perm: null },
