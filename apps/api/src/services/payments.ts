@@ -6,6 +6,7 @@ import { env } from "../env";
 import { audit } from "../lib/audit";
 import { badRequest, HttpError, unauthorized } from "../lib/errors";
 import { getInvoice } from "./billing";
+import { amountDue } from "./credit-notes";
 
 // Online payment of invoices through Razorpay Payment Links. The customer pays
 // on Razorpay's page; the invoice is marked paid when Razorpay's signed webhook
@@ -42,11 +43,13 @@ export async function paymentLink(db: Db, args: { invoiceId: string; tenantId: s
   const inv = await getInvoice(db, args.invoiceId, args.tenantId);
   if (inv.status !== "issued") throw badRequest(inv.status === "paid" ? "This invoice is already paid" : "This invoice is void");
   if (inv.paymentLinkUrl) return { url: inv.paymentLinkUrl };
+  const due = await amountDue(db, inv);
+  if (due === 0) throw badRequest("Nothing is due on this invoice after its credit notes");
   const res = await fetchImpl(`${API}/payment_links`, {
     method: "POST",
     headers: { authorization: `Basic ${Buffer.from(`${cfg.keyId}:${cfg.keySecret}`).toString("base64")}`, "content-type": "application/json" },
     body: JSON.stringify({
-      amount: inv.totalPaise,
+      amount: due,
       currency: "INR",
       accept_partial: false,
       reference_id: inv.number,
@@ -66,11 +69,25 @@ export async function paymentLink(db: Db, args: { invoiceId: string; tenantId: s
   return { url: link.short_url };
 }
 
+/** Refund (part of) an online payment, for a credit note. Returns Razorpay's refund id and status. */
+export async function refundPayment(paymentId: string, amountPaise: number, notes: Record<string, string>) {
+  const cfg = config();
+  if (!cfg) throw badRequest("Online payment is not set up");
+  const res = await fetchImpl(`${API}/payments/${encodeURIComponent(paymentId)}/refund`, {
+    method: "POST",
+    headers: { authorization: `Basic ${Buffer.from(`${cfg.keyId}:${cfg.keySecret}`).toString("base64")}`, "content-type": "application/json" },
+    body: JSON.stringify({ amount: amountPaise, speed: "normal", notes }),
+  });
+  if (!res.ok) throw new HttpError(502, "payment_gateway", `Razorpay refused the refund (${res.status}). Nothing was changed; try again or refund from the Razorpay dashboard.`);
+  const body = (await res.json()) as { id: string; status: string };
+  return { id: body.id, status: body.status };
+}
+
 /** Mark the invoice behind a payment link paid. Safe to repeat: only an issued invoice changes. */
 async function markPaid(db: Db, linkId: string, paymentId: string, amountPaise: number | null, now: Date) {
   const [inv] = await db.select().from(invoices).where(eq(invoices.paymentLinkId, linkId));
   if (!inv) return null;
-  if (amountPaise !== null && amountPaise !== inv.totalPaise) {
+  if (amountPaise !== null && amountPaise !== (await amountDue(db, inv))) {
     await audit(db, { tenantId: inv.tenantId, actorId: null, action: "billing.payment_mismatch", target: inv.number, data: { amountPaise, paymentId } });
     return inv;
   }

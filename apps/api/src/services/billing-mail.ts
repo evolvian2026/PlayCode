@@ -6,6 +6,8 @@ import { mailer } from "../lib/mailer";
 import { renderInvoicePdf } from "./billing";
 import { appLink } from "./notifications";
 import { onlinePaymentsEnabled } from "./payments";
+import { amountDue, renderCreditNotePdf } from "./credit-notes";
+import type { creditNotes } from "../db/schema";
 
 // Billing emails, sent from the hourly job: each new invoice with its PDF, a
 // reminder three days before it is due, a weekly reminder while it is
@@ -36,7 +38,7 @@ async function recipients(db: Db, tenantId: string): Promise<string[]> {
  * Claim the notice, send it, and release the claim if sending fails so the
  * next run retries. Returns whether an email went out.
  */
-async function sendOnce(db: Db, args: { key: string; tenantId: string; kind: Kind; now: Date; subject: string; text: string; attachments?: { filename: string; content: Buffer; contentType: string }[] }) {
+export async function sendOnce(db: Db, args: { key: string; tenantId: string; kind: Kind; now: Date; subject: string; text: string; attachments?: { filename: string; content: Buffer; contentType: string }[] }) {
   const m = mailer();
   if (!m) return false;
   const to = await recipients(db, args.tenantId);
@@ -67,7 +69,9 @@ export async function sendBillingNotices(db: Db, now: Date) {
   };
 
   for (const inv of await db.select().from(invoices).where(eq(invoices.status, "issued"))) {
+    const due = await amountDue(db, inv);
     const amount = formatRupees(inv.totalPaise);
+    const dueText = formatRupees(due);
     await attempt("issued", async () =>
       sendOnce(db, {
         key: `invoice_issued:${inv.id}`,
@@ -80,6 +84,8 @@ export async function sendBillingNotices(db: Db, now: Date) {
       }),
     );
     const untilDue = inv.dueAt.getTime() - now.getTime();
+    // Nothing to chase once credit notes cover the invoice.
+    if (due === 0) continue;
     if (untilDue > 0 && untilDue <= 3 * DAY_MS) {
       await attempt("due", () =>
         sendOnce(db, {
@@ -88,7 +94,7 @@ export async function sendBillingNotices(db: Db, now: Date) {
           kind: "invoice_due",
           now,
           subject: `Reminder: PlayCode invoice ${inv.number} is due on ${date(inv.dueAt)}`,
-          text: `Hello,\n\nA reminder that invoice ${inv.number} (${amount}) is due on ${date(inv.dueAt)}.\n\n${pay}\n\nIf you have already paid, thank you, and please ignore this email.\n\nPlayCode`,
+          text: `Hello,\n\nA reminder that invoice ${inv.number} (${dueText} due) is due on ${date(inv.dueAt)}.\n\n${pay}\n\nIf you have already paid, thank you, and please ignore this email.\n\nPlayCode`,
         }),
       );
     }
@@ -104,7 +110,7 @@ export async function sendBillingNotices(db: Db, now: Date) {
             kind: "invoice_overdue",
             now,
             subject: `Overdue: PlayCode invoice ${inv.number} (${daysLate} days)`,
-            text: `Hello,\n\nInvoice ${inv.number} for ${amount} was due on ${date(inv.dueAt)} and is now ${daysLate} days overdue.\n\n${pay}\n\nIf you have already paid, please reply with the payment reference so we can match it.\n\nPlayCode`,
+            text: `Hello,\n\nInvoice ${inv.number} (${dueText} due) was due on ${date(inv.dueAt)} and is now ${daysLate} days overdue.\n\n${pay}\n\nIf you have already paid, please reply with the payment reference so we can match it.\n\nPlayCode`,
           }),
         );
       }
@@ -130,4 +136,17 @@ export async function sendBillingNotices(db: Db, now: Date) {
     );
   }
   return summary;
+}
+
+/** Email a new credit note with its PDF to the customer. */
+export async function sendCreditNote(db: Db, cn: typeof creditNotes.$inferSelect, invoiceNumber: string, now: Date) {
+  return sendOnce(db, {
+    key: `credit_note:${cn.id}`,
+    tenantId: cn.tenantId,
+    kind: "credit_note",
+    now,
+    subject: `PlayCode credit note ${cn.number} against invoice ${invoiceNumber}`,
+    text: `Hello,\n\nCredit note ${cn.number} for ${formatRupees(cn.totalPaise)} against invoice ${invoiceNumber} is attached.\nReason: ${cn.reason}\n${cn.refundId ? "The amount is being refunded to the original payment; banks usually take 5 to 7 working days.\n" : ""}\nPlayCode`,
+    attachments: [{ filename: `${cn.number.replace(/\//g, "-")}.pdf`, content: await renderCreditNotePdf(db, cn), contentType: "application/pdf" }],
+  });
 }

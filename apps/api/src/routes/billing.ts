@@ -3,6 +3,8 @@ import { z } from "zod";
 import { db } from "../db/client";
 import { forbidden } from "../lib/errors";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
+import { creditNotesFor, getCreditNote, issueCreditNote, renderCreditNotePdf } from "../services/credit-notes";
+import { sendCreditNote } from "../services/billing-mail";
 import { confirmCallback, handleWebhook, onlinePaymentsEnabled, paymentLink } from "../services/payments";
 import { generateInvoices, getInvoice, getProfile, listInvoices, renderInvoicePdf, saveProfile, setInvoiceStatus, usage } from "../services/billing";
 
@@ -32,7 +34,7 @@ async function signedInRoutes(app: FastifyInstance) {
       usage: await usage(db, tenantId, app.now()),
       onlinePayments: onlinePaymentsEnabled(),
       profile: await getProfile(db, tenantId),
-      invoices: (await listInvoices(db, { tenantId })).map((r) => r.invoice),
+      invoices: await withCredits((await listInvoices(db, { tenantId })).map((r) => r.invoice)),
     };
   });
 
@@ -68,6 +70,11 @@ async function signedInRoutes(app: FastifyInstance) {
     return confirmCallback(db, tenantOf(req), body, app.now());
   });
 
+  app.get("/console/billing/credit-notes/:id/pdf", { preHandler: requirePermission("tenant.settings") }, async (req, reply) => {
+    const cn = await getCreditNote(db, parse(idParam, req.params).id, tenantOf(req));
+    return reply.header("content-type", "application/pdf").header("content-disposition", `attachment; filename="${cn.number.replace(/\//g, "-")}.pdf"`).send(await renderCreditNotePdf(db, cn));
+  });
+
   app.get("/console/billing/invoices/:id/pdf", { preHandler: requirePermission("tenant.settings") }, async (req, reply) => {
     const inv = await getInvoice(db, parse(idParam, req.params).id, tenantOf(req));
     return reply.header("content-type", "application/pdf").header("content-disposition", `attachment; filename="${inv.number.replace(/\//g, "-")}.pdf"`).send(await renderInvoicePdf(inv));
@@ -81,7 +88,7 @@ async function signedInRoutes(app: FastifyInstance) {
 
     a.get("/admin/billing/invoices", async (req) => {
       const q = parse(z.object({ period: z.string().regex(/^\d{4}-\d{2}$/).optional() }), req.query);
-      return { invoices: (await listInvoices(db, q)).map((r) => ({ ...r.invoice, tenantName: r.tenant })) };
+      return { invoices: await withCredits((await listInvoices(db, q)).map((r) => ({ ...r.invoice, tenantName: r.tenant }))) };
     });
 
     a.post("/admin/billing/run", async (req) => {
@@ -94,9 +101,36 @@ async function signedInRoutes(app: FastifyInstance) {
       return { invoice: await setInvoiceStatus(db, parse(idParam, req.params).id, status, req.auth.userId, app.now()) };
     });
 
+    a.post("/admin/billing/invoices/:id/credit-notes", async (req) => {
+      const body = parse(z.object({ subtotalPaise: z.number().int().min(100), reason: z.string().trim().min(5).max(500), refund: z.boolean().default(false) }), req.body);
+      const cn = await issueCreditNote(db, { invoiceId: parse(idParam, req.params).id, ...body, actorId: req.auth.userId, now: app.now() });
+      const inv = await getInvoice(db, cn.invoiceId);
+      void sendCreditNote(db, cn, inv.number, app.now()).catch((err) => req.log.error(err));
+      return { creditNote: cn };
+    });
+
+    a.get("/admin/billing/credit-notes/:id/pdf", async (req, reply) => {
+      const cn = await getCreditNote(db, parse(idParam, req.params).id);
+      return reply.header("content-type", "application/pdf").send(await renderCreditNotePdf(db, cn));
+    });
+
     a.get("/admin/billing/invoices/:id/pdf", async (req, reply) => {
       const inv = await getInvoice(db, parse(idParam, req.params).id);
       return reply.header("content-type", "application/pdf").send(await renderInvoicePdf(inv));
     });
+  });
+}
+
+/** Each invoice with its credit notes and what is still due. */
+async function withCredits<T extends { id: string; totalPaise: number; status: string }>(list: T[]) {
+  const notes = await creditNotesFor(db, list.map((i) => i.id));
+  return list.map((i) => {
+    const mine = notes.filter((n) => n.invoiceId === i.id);
+    const credited = mine.reduce((a, n) => a + n.totalPaise, 0);
+    return {
+      ...i,
+      creditNotes: mine.map((n) => ({ id: n.id, number: n.number, totalPaise: n.totalPaise, reason: n.reason, refundId: n.refundId, issuedAt: n.issuedAt })),
+      amountDuePaise: i.status === "issued" ? Math.max(0, i.totalPaise - credited) : 0,
+    };
   });
 }

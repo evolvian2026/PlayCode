@@ -7,7 +7,8 @@ import { renderInvoicePdf, rupeesInWords } from "../src/services/billing";
 import { setPaymentFetch } from "../src/services/payments";
 import { sendBillingNotices } from "../src/services/billing-mail";
 import { setMailer, type Mail } from "../src/lib/mailer";
-import { invoices } from "../src/db/schema";
+import { creditNotes, invoices } from "../src/db/schema";
+import { renderCreditNotePdf } from "../src/services/credit-notes";
 import { createHmac } from "node:crypto";
 import { setup, type TestApp } from "./helpers";
 
@@ -256,6 +257,62 @@ describe("billing emails", () => {
     const licence = mails.filter((m) => m.subject === "Your PlayCode licence for Demo Institute of Technology ends on 31 Jul 2027");
     expect(licence).toHaveLength(2);
     expect(licence[1]!.text).toContain("in 7 days");
+  });
+});
+
+describe("credit notes and refunds", () => {
+  const mails: Mail[] = [];
+  const calls: { url: string; body: Record<string, unknown> }[] = [];
+  let refundStatus = 200;
+  beforeAll(() => {
+    setMailer({ send: async (m) => void mails.push(m) });
+    Object.assign(process.env, { RAZORPAY_KEY_ID: "rzp_test_key", RAZORPAY_KEY_SECRET: "key-secret", RAZORPAY_WEBHOOK_SECRET: "hook-secret" });
+    setPaymentFetch((async (url: string, init: { body: string }) => {
+      calls.push({ url, body: JSON.parse(init.body) });
+      if (url.endsWith("/refund")) return new Response(JSON.stringify({ id: "rfnd_1", status: "processed" }), { status: refundStatus });
+      return new Response(JSON.stringify({ id: `plink_cn${calls.length}`, short_url: "https://rzp.io/i/cn" }), { status: 200 });
+    }) as unknown as typeof fetch);
+  });
+  afterAll(() => {
+    setMailer(undefined);
+    setPaymentFetch(undefined);
+    for (const k of ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET"]) delete process.env[k];
+  });
+
+  it("credits part of an unpaid invoice, with the invoice's kind of tax", async () => {
+    const acme = await tenantId("acme");
+    const inv = (await db.select().from(invoices).where(eq(invoices.tenantId, acme))).find((i) => i.period === "2026-09" && i.status === "issued")!;
+    const half = Math.floor(inv.subtotalPaise / 2);
+    const res = await t.post(superAdmin, `/admin/billing/invoices/${inv.id}/credit-notes`, { subtotalPaise: half, reason: "Seats were reduced mid-month" });
+    expect(res.status).toBe(200);
+    const cn = res.body.creditNote;
+    expect(cn.number).toMatch(/^PC\/CN\/2026-27\/\d{4}$/);
+    expect(cn).toMatchObject({ subtotalPaise: half, cgstPaise: 0, sgstPaise: 0, igstPaise: Math.round(half * 0.18) }); // IGST, like the invoice
+    expect((await t.post(superAdmin, `/admin/billing/invoices/${inv.id}/credit-notes`, { subtotalPaise: inv.subtotalPaise, reason: "Too much" })).status).toBe(400);
+    expect((await t.post(superAdmin, `/admin/billing/invoices/${inv.id}/credit-notes`, { subtotalPaise: 1000, reason: "Refund please", refund: true })).status).toBe(400);
+    const listed = (await t.get(superAdmin, "/admin/billing/invoices?period=2026-09")).body.invoices.find((i: { id: string }) => i.id === inv.id);
+    expect(listed.amountDuePaise).toBe(inv.totalPaise - cn.totalPaise);
+    // The payment link asks only for what is still due.
+    const acmeAdmin = await t.login("hr@acme.dev");
+    await t.post(acmeAdmin, `/console/billing/invoices/${inv.id}/pay`);
+    expect(calls.at(-1)!.body.amount).toBe(inv.totalPaise - cn.totalPaise);
+    const text = pdfText(await renderCreditNotePdf(db, (await db.select().from(creditNotes).where(eq(creditNotes.id, cn.id)))[0]!, { compress: false }));
+    for (const s of ["Credit note", cn.number, inv.number, "IGST 18%", "Seats were reduced mid-month"]) expect(text).toContain(s);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mails.find((m) => m.subject.startsWith(`PlayCode credit note ${cn.number}`))?.attachments?.[0]?.contentType).toBe("application/pdf");
+  });
+
+  it("refunds an online payment through Razorpay", async () => {
+    const partner = await tenantId("skillbridge");
+    const inv = (await db.select().from(invoices).where(eq(invoices.tenantId, partner))).find((i) => i.paidVia === "razorpay")!;
+    refundStatus = 400;
+    const failed = await t.post(superAdmin, `/admin/billing/invoices/${inv.id}/credit-notes`, { subtotalPaise: 10_000, reason: "Goodwill credit", refund: true });
+    expect(failed.status).toBe(502);
+    expect(await db.select().from(creditNotes).where(eq(creditNotes.invoiceId, inv.id))).toHaveLength(0); // nothing half-done
+    refundStatus = 200;
+    const res = await t.post(superAdmin, `/admin/billing/invoices/${inv.id}/credit-notes`, { subtotalPaise: 10_000, reason: "Goodwill credit", refund: true });
+    expect(res.body.creditNote).toMatchObject({ refundId: "rfnd_1", refundStatus: "processed", totalPaise: 11_800 });
+    expect(calls.at(-1)).toMatchObject({ url: `https://api.razorpay.com/v1/payments/${inv.paymentRef}/refund`, body: { amount: 11_800 } });
   });
 });
 

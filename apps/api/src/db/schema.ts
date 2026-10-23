@@ -1202,7 +1202,7 @@ export const billingNotices = pgTable(
   {
     key: text("key").primaryKey(),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-    kind: text("kind").$type<"invoice_issued" | "invoice_due" | "invoice_overdue" | "licence_renewal">().notNull(),
+    kind: text("kind").$type<"invoice_issued" | "invoice_due" | "invoice_overdue" | "licence_renewal" | "credit_note">().notNull(),
     recipients: jsonb("recipients").$type<string[]>().notNull(),
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull(),
   },
@@ -1231,4 +1231,29 @@ export const questionReports = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("question_reports_question_idx").on(t.questionId, t.status)],
+);
+
+// ---------- Credit notes ----------
+
+/** A GST credit note reducing an issued invoice, with an optional refund of an online payment. */
+export const creditNotes = pgTable(
+  "credit_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    invoiceId: uuid("invoice_id").notNull().references(() => invoices.id),
+    /** e.g. PC/CN/2026-27/0001, its own series within the financial year. */
+    number: text("number").notNull().unique(),
+    reason: text("reason").notNull(),
+    subtotalPaise: integer("subtotal_paise").notNull(),
+    cgstPaise: integer("cgst_paise").notNull(),
+    sgstPaise: integer("sgst_paise").notNull(),
+    igstPaise: integer("igst_paise").notNull(),
+    totalPaise: integer("total_paise").notNull(),
+    refundId: text("refund_id"),
+    refundStatus: text("refund_status"),
+    issuedAt: timestamp("issued_at", { withTimezone: true }).notNull(),
+    createdBy: uuid("created_by").notNull(),
+  },
+  (t) => [index("credit_notes_invoice_idx").on(t.invoiceId)],
 );

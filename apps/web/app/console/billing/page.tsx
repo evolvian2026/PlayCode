@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useState, type FormEvent } from "react";
 import { formatRupees } from "@playcode/core";
 import { useMe } from "@/components/Auth";
 import { Bar, ErrorBox, Loading, Stat } from "@/components/ui";
@@ -17,6 +17,57 @@ interface Invoice {
   issuedAt: string;
   dueAt: string;
   tenantName?: string;
+  amountDuePaise: number;
+  creditNotes: { id: string; number: string; totalPaise: number; reason: string; refundId: string | null; issuedAt: string }[];
+}
+
+/** PlayCode staff: issue a credit note (and refund an online payment) against an invoice. */
+function CreditNoteForm({ invoice, onDone }: { invoice: Invoice; onDone: () => void }) {
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [refund, setRefund] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/admin/billing/invoices/${invoice.id}/credit-notes`, { body: { subtotalPaise: Math.round(Number(amount) * 100), reason, refund } });
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form className="stack" onSubmit={submit} style={{ gap: 6, padding: "8px 0" }}>
+      <div className="row wrap" style={{ alignItems: "flex-end" }}>
+        <div style={{ width: 170 }}>
+          <label htmlFor={`cn-amount-${invoice.id}`} className="small">
+            Amount before GST (Rs)
+          </label>
+          <input id={`cn-amount-${invoice.id}`} type="number" min={1} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+        </div>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <label htmlFor={`cn-reason-${invoice.id}`} className="small">
+            Reason (printed on the credit note)
+          </label>
+          <input id={`cn-reason-${invoice.id}`} value={reason} onChange={(e) => setReason(e.target.value)} minLength={5} maxLength={500} required placeholder="e.g. 50 seats removed from 1 October" />
+        </div>
+      </div>
+      {invoice.status === "paid" && invoice.paidVia === "razorpay" && (
+        <label className="row small" style={{ gap: 6, fontWeight: 500 }}>
+          <input type="checkbox" style={{ width: "auto" }} checked={refund} onChange={(e) => setRefund(e.target.checked)} /> Refund it to the original online payment (Razorpay)
+        </label>
+      )}
+      {error && <ErrorBox message={error} />}
+      <button className="btn small primary" style={{ alignSelf: "flex-start" }} disabled={busy}>
+        Issue credit note
+      </button>
+    </form>
+  );
 }
 
 interface BillingInfo {
@@ -50,6 +101,7 @@ async function downloadPdf(path: string, name: string) {
 function InvoiceTable({ invoices, admin, onlinePayments = false, onChange }: { invoices: Invoice[]; admin: boolean; onlinePayments?: boolean; onChange?: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState<string | null>(null);
+  const [crediting, setCrediting] = useState<string | null>(null);
   async function pay(id: string) {
     setPaying(id);
     setError(null);
@@ -80,13 +132,15 @@ function InvoiceTable({ invoices, admin, onlinePayments = false, onChange }: { i
             {admin && <th>Customer</th>}
             <th>Period</th>
             <th>Total (incl. GST)</th>
+            <th>Due</th>
             <th>Status</th>
             <th />
           </tr>
         </thead>
         <tbody>
           {invoices.map((i) => (
-            <tr key={i.id}>
+            <Fragment key={i.id}>
+            <tr>
               <td>
                 {i.number}
                 <div className="small muted">due {new Date(i.dueAt).toLocaleDateString()}</div>
@@ -94,6 +148,7 @@ function InvoiceTable({ invoices, admin, onlinePayments = false, onChange }: { i
               {admin && <td>{i.tenantName}</td>}
               <td>{i.period}</td>
               <td>{formatRupees(i.totalPaise)}</td>
+              <td>{i.status === "issued" ? formatRupees(i.amountDuePaise) : "-"}</td>
               <td>
                 <span className={`pill ${STATUS_TONE[i.status]}`}>{i.status === "paid" && i.paidVia === "razorpay" ? "paid online" : i.status}</span>
               </td>
@@ -102,7 +157,7 @@ function InvoiceTable({ invoices, admin, onlinePayments = false, onChange }: { i
                   <button className="btn small" onClick={() => downloadPdf(`${admin ? "/admin" : "/console"}/billing/invoices/${i.id}/pdf`, `${i.number.replace(/\//g, "-")}.pdf`)}>
                     PDF
                   </button>
-                  {!admin && onlinePayments && i.status === "issued" && (
+                  {!admin && onlinePayments && i.status === "issued" && i.amountDuePaise > 0 && (
                   <button className="btn small primary" disabled={paying !== null} onClick={() => pay(i.id)}>
                     {paying === i.id ? "Opening..." : "Pay online"}
                   </button>
@@ -117,9 +172,38 @@ function InvoiceTable({ invoices, admin, onlinePayments = false, onChange }: { i
                       </button>
                     </>
                   )}
+                  {admin && i.status !== "void" && (
+                    <button className="btn small ghost" onClick={() => setCrediting(crediting === i.id ? null : i.id)}>
+                      Credit note
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>
+            {(i.creditNotes.length > 0 || crediting === i.id) && (
+              <tr>
+                <td colSpan={admin ? 7 : 6} style={{ paddingTop: 0 }}>
+                  {i.creditNotes.map((c) => (
+                    <div key={c.id} className="row small" style={{ gap: 8 }}>
+                      <span className="muted">Credit note {c.number}: {formatRupees(c.totalPaise)} · {c.reason}{c.refundId ? " · refunded" : ""}</span>
+                      <button className="btn small ghost" style={{ padding: "0 4px" }} onClick={() => downloadPdf(`${admin ? "/admin" : "/console"}/billing/credit-notes/${c.id}/pdf`, `${c.number.replace(/\//g, "-")}.pdf`)}>
+                        PDF
+                      </button>
+                    </div>
+                  ))}
+                  {crediting === i.id && (
+                    <CreditNoteForm
+                      invoice={i}
+                      onDone={() => {
+                        setCrediting(null);
+                        onChange?.();
+                      }}
+                    />
+                  )}
+                </td>
+              </tr>
+            )}
+            </Fragment>
           ))}
         </tbody>
       </table>
