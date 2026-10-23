@@ -9,6 +9,7 @@ import { hashPassword } from "../lib/auth";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { authenticate, parse, requirePermission } from "../lib/http";
 import { customerHealth, healthCsv } from "../services/health";
+import { systemStatus } from "../services/system";
 import { closeLeagueWeek } from "../services/leagues";
 import { getTenant, tenantToday } from "../services/tenant";
 import { PLANS, renewedUntil, type Plan } from "@playcode/core";
@@ -130,6 +131,12 @@ export async function adminRoutes(app: FastifyInstance) {
     const [updated] = await db.update(tenants).set(body).where(eq(tenants.id, id)).returning();
     await audit(db, { tenantId: id, actorId: req.auth.userId, action: "tenant.update", target: id, data: body });
     return { tenant: updated };
+  });
+
+  // System status for PlayCode staff: database, migrations, scheduled jobs, outboxes.
+  app.get("/system", async (req) => {
+    if (!req.auth.roles.includes("super_admin")) throw forbidden("Only PlayCode admins see system status");
+    return systemStatus(db, app.now());
   });
 
   /** Renew a licence by whole months, from the later of today and the current end date. */

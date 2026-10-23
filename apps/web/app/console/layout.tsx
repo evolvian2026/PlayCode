@@ -32,6 +32,7 @@ const NAV: NavItem[] = [
   { href: "/console/billing", label: "Plan & billing", icon: "clipboard", perm: "tenant.settings", tenantOnly: true },
   { href: "/console/billing", label: "Invoicing", icon: "clipboard", perm: null, superAdmin: true },
   { href: "/console/health", label: "Customer health", icon: "chart", perm: "tenants.manage", accounts: true },
+  { href: "/console/system", label: "System status", icon: "settings", perm: null, superAdmin: true },
 ];
 
 /** Hide what the role can't use, and what the institution's plan doesn't include (PlayCode staff outside an institution see everything). */

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import { eq } from "drizzle-orm";
@@ -7,6 +8,9 @@ import { users } from "./db/schema";
 import { env } from "./env";
 import { verifyToken } from "./lib/auth";
 import { HttpError } from "./lib/errors";
+import { safeEqual, sha256 } from "./lib/crypto";
+import { observeRequest, renderMetrics } from "./lib/metrics";
+import { readiness, systemGauges } from "./services/system";
 import { startFanout, stopFanout, subscribe } from "./lib/realtime";
 import { accountRoutes } from "./routes/account";
 import { adminRoutes } from "./routes/admin";
@@ -38,6 +42,12 @@ export interface AppOptions {
 
 export async function buildApp(options: AppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
+    // A request id from the load balancer is kept (if it looks like one); otherwise we make one. It is logged and returned in x-request-id.
+    requestIdHeader: false,
+    genReqId: (req) => {
+      const given = req.headers["x-request-id"];
+      return typeof given === "string" && /^[\w.:-]{8,100}$/.test(given) ? given : randomUUID();
+    },
     logger: options.logger
       ? {
           serializers: {
@@ -59,10 +69,31 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
       return reply.status(statusCode).send({ error: { code: "bad_request", message: message ?? "Bad request" } });
     }
     req.log.error(err);
-    return reply.status(500).send({ error: { code: "internal", message: "Something went wrong" } });
+    return reply.status(500).send({ error: { code: "internal", message: `Something went wrong. If it keeps happening, quote reference ${req.id}.`, requestId: req.id } });
   });
 
+  app.addHook("onSend", async (req, reply) => {
+    reply.header("x-request-id", req.id);
+  });
+  app.addHook("onResponse", async (req, reply) => {
+    observeRequest(req.method, req.routeOptions.url ?? "unmatched", reply.statusCode, reply.elapsedTime / 1000);
+  });
+
+  // Liveness: the process is up. Readiness: it can reach the database, which is fully migrated.
   app.get("/health", async () => ({ ok: true }));
+  app.get("/health/ready", async (_req, reply) => {
+    const r = await readiness(db);
+    return reply.status(r.ready ? 200 : 503).send(r);
+  });
+
+  // Prometheus metrics, only when METRICS_TOKEN is set; scrapers send it as a bearer token.
+  app.get("/metrics", async (req, reply) => {
+    const token = process.env.METRICS_TOKEN;
+    if (!token) return reply.status(404).send({ error: { code: "not_found", message: "Not found" } });
+    const sent = req.headers.authorization?.replace(/^Bearer /, "") ?? "";
+    if (!safeEqual(sha256(sent), sha256(token))) return reply.status(401).send({ error: { code: "unauthorized", message: "Bad metrics token" } });
+    return reply.header("content-type", "text/plain; version=0.0.4").send(renderMetrics(await systemGauges(db, app.now())));
+  });
 
   // Live events (duels, proctoring). Browsers cannot set headers on a
   // WebSocket, so the token comes as a query parameter.
