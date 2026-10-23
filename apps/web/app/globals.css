@@ -17,6 +17,12 @@
   --streak: #ff7a1a;
   --heart: #ef3e5c;
   --xp: #f5b400;
+  /* Text versions of the status colours, dark enough for small text on their soft backgrounds (WCAG AA). */
+  --good-ink: #12703f;
+  --bad-ink: #b02a2a;
+  --warn-ink: #8f5600;
+  --streak-ink: #c2410c;
+  --xp-ink: #8a5a00;
   --code-bg: #1d1b33;
   --code-text: #e9e7ff;
   --code-line: #8c88b8;
@@ -44,6 +50,11 @@
     --bad-soft: #3d1d24;
     --warn: #ffb547;
     --warn-soft: #3a2c12;
+    --good-ink: var(--good);
+    --bad-ink: var(--bad);
+    --warn-ink: var(--warn);
+    --streak-ink: #ff9a4d;
+    --xp-ink: #ffc933;
     --code-bg: #0c0b1a;
     --shadow: none;
     color-scheme: dark;
@@ -138,7 +149,7 @@ p {
 }
 .card.accent .muted {
   color: inherit;
-  opacity: 0.85;
+  opacity: 0.95;
 }
 
 .btn {
@@ -233,15 +244,15 @@ label {
 }
 .pill.good {
   background: var(--good-soft);
-  color: var(--good);
+  color: var(--good-ink);
 }
 .pill.bad {
   background: var(--bad-soft);
-  color: var(--bad);
+  color: var(--bad-ink);
 }
 .pill.warn {
   background: var(--warn-soft);
-  color: var(--warn);
+  color: var(--warn-ink);
 }
 .pill.accent {
   background: var(--accent-soft);
@@ -416,10 +427,10 @@ tr.clickable:hover td {
 }
 
 .stat-xp {
-  color: var(--xp);
+  color: var(--xp-ink);
 }
 .stat-streak {
-  color: var(--streak);
+  color: var(--streak-ink);
 }
 .stat-heart {
   color: var(--heart);
@@ -691,4 +702,12 @@ textarea.mono {
 .path-dot.open {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Links inside running text are underlined, so they don't rely on colour alone. */
+p a,
+li a,
+.small a:not(.btn) {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }

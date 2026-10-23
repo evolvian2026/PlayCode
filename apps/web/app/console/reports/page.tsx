@@ -128,7 +128,7 @@ export default function Reports() {
           </div>
         </div>
         {data.subscription?.lastSentAt && <div className="small muted">Last sent {new Date(data.subscription.lastSentAt).toLocaleString()}</div>}
-        {data.subscription?.lastError && <div className="small" style={{ color: "var(--bad)" }}>Last attempt failed: {data.subscription.lastError}</div>}
+        {data.subscription?.lastError && <div className="small" style={{ color: "var(--bad-ink)" }}>Last attempt failed: {data.subscription.lastError}</div>}
         {msg && <span className="pill good" style={{ alignSelf: "flex-start" }}>{msg}</span>}
         <button className="btn" style={{ alignSelf: "flex-start" }} onClick={save}>
           Save

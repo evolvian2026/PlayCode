@@ -298,7 +298,7 @@ function TenantBilling() {
         <h2 style={{ margin: 0 }}>What your plan includes</h2>
         <div className="row wrap" style={{ gap: 8 }}>
           {u.features.map((f) => (
-            <span key={f.id} className={`pill ${f.included ? "good" : ""}`} style={f.included ? undefined : { opacity: 0.6 }}>
+            <span key={f.id} className={`pill ${f.included ? "good" : ""}`} style={f.included ? undefined : { color: "var(--muted)", textDecoration: "line-through" }}>
               {f.included ? "✓ " : ""}
               {f.label}
             </span>

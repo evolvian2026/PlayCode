@@ -128,7 +128,7 @@ export default function CustomerHealth() {
                   <td>
                     {c.weeklyActivePct}%{" "}
                     {c.trend !== null && c.trend !== 0 && (
-                      <span className="small" style={{ color: c.trend > 0 ? "var(--good)" : "var(--bad)" }}>
+                      <span className="small" style={{ color: c.trend > 0 ? "var(--good-ink)" : "var(--bad-ink)" }}>
                         {c.trend > 0 ? "+" : ""}
                         {c.trend}
                       </span>
@@ -140,7 +140,7 @@ export default function CustomerHealth() {
                   <td>{c.assignments30}</td>
                   <td className="small">
                     {c.validUntil ? new Date(`${c.validUntil}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "-"}
-                    {c.overdueDays > 0 && <div style={{ color: "var(--bad)" }}>{c.overdueDays} days overdue</div>}
+                    {c.overdueDays > 0 && <div style={{ color: "var(--bad-ink)" }}>{c.overdueDays} days overdue</div>}
                     {c.licenceDaysLeft !== null && c.licenceDaysLeft <= 90 && (
                       <button className="btn small ghost" style={{ padding: "2px 0" }} onClick={() => renew(c)}>
                         Renew

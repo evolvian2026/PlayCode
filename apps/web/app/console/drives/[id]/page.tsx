@@ -153,7 +153,7 @@ export default function DriveDetail() {
                 </td>
                 <td>
                   {c.riskScore === null ? "-" : <span className={`pill ${c.riskScore >= 40 ? "bad" : c.riskScore >= 15 ? "warn" : "good"}`}>{c.riskScore}</span>}
-                  {c.similarityPct !== null && c.similarityPct >= 70 && <div className="small" style={{ color: "var(--bad)" }}>code {c.similarityPct}% similar</div>}
+                  {c.similarityPct !== null && c.similarityPct >= 70 && <div className="small" style={{ color: "var(--bad-ink)" }}>code {c.similarityPct}% similar</div>}
                 </td>
                 <td>
                   <select

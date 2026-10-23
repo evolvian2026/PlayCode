@@ -19,7 +19,7 @@ function StepRow({ step, onStart, busy }: { step: StudentPathStep; onStart: () =
   const progress = step.value === null ? t("not started") : t(step.kind === "skill" ? "{n}% now" : "best {n}%", { n: step.value });
   const date = due(step, locale);
   return (
-    <div className="row" style={{ alignItems: "flex-start", opacity: step.state === "locked" ? 0.55 : 1 }}>
+    <div className="row" style={{ alignItems: "flex-start", color: step.state === "locked" ? "var(--muted)" : undefined }}>
       <span className={`path-dot ${step.state}`} aria-hidden>
         {step.state === "done" ? <Icon name="check" size={14} /> : null}
       </span>
@@ -29,7 +29,7 @@ function StepRow({ step, onStart, busy }: { step: StudentPathStep; onStart: () =
           {step.kind === "pack" ? t("Mission · ") : ""}
           {goal} · {progress}
           {date && (
-            <span style={{ color: step.overdue ? "var(--bad)" : undefined }}>
+            <span style={{ color: step.overdue ? "var(--bad-ink)" : undefined }}>
               {" "}
               · {t(step.overdue ? "was due {date}" : "due {date}", { date })}
             </span>

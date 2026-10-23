@@ -47,7 +47,7 @@ function Rounds({ drive }: { drive: Drive }) {
             </span>
             <span style={{ fontWeight: i === app.roundsCleared && app.status !== "rejected" && app.status !== "offered" ? 700 : 400 }}>{r}</span>
             {done && <span className="muted">{t("cleared")}</span>}
-            {failed && <span style={{ color: "var(--bad)" }}>{t("not selected")}</span>}
+            {failed && <span style={{ color: "var(--bad-ink)" }}>{t("not selected")}</span>}
           </div>
         );
       })}

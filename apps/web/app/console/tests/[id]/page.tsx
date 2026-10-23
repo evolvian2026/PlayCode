@@ -147,7 +147,7 @@ function AttemptPanel({ attemptId, onClose, onChanged }: { attemptId: string; on
           <button className="btn small" onClick={() => act("reset-device")}>
             Allow another device
           </button>
-          <button className="btn small" style={{ color: "var(--bad)" }} onClick={() => act("force-submit")}>
+          <button className="btn small" style={{ color: "var(--bad-ink)" }} onClick={() => act("force-submit")}>
             Submit now
           </button>
         </div>
@@ -294,7 +294,7 @@ export default function TestMonitor() {
                         {Object.entries(s.integrity)
                           .map(([k, v]) => `${EVENT_LABELS[k] ?? k} ×${v}`)
                           .join(", ") || "-"}
-                        {s.similarityPct >= 70 && <div style={{ color: "var(--bad)" }}>Code {s.similarityPct}% similar</div>}
+                        {s.similarityPct >= 70 && <div style={{ color: "var(--bad-ink)" }}>Code {s.similarityPct}% similar</div>}
                       </td>
                       <td>{s.attemptId ? riskPill(s.riskScore) : "-"}</td>
                       {a.proctorLevel >= 2 && <td>{s.latestSnapshot && s.attemptId ? <Snapshot attemptId={s.attemptId} snapshotId={s.latestSnapshot.id} size={56} /> : "-"}</td>}

@@ -163,7 +163,7 @@ function AiDrafts({ info, skills }: { info: StudioInfo; skills: Skill[] }) {
           {d.input.answer.kind === "text" && <div className="small">Answer: {d.input.answer.accepted.join(" / ")}</div>}
           {d.input.answer.kind === "lines" && <div className="small">Faulty line: {d.input.answer.lines.join(", ")}</div>}
           {d.check.problems.map((p) => (
-            <div key={p} className="small" style={{ color: "var(--bad)" }}>
+            <div key={p} className="small" style={{ color: "var(--bad-ink)" }}>
               {p}
             </div>
           ))}

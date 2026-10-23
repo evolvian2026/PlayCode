@@ -192,7 +192,7 @@ export default function PlayHome() {
                 <div className="spread">
                   <div className="small">
                     {t("Next:")} <b>{next.title}</b>
-                    {next.overdue && <span style={{ color: "var(--bad)" }}> · {t("overdue")}</span>}
+                    {next.overdue && <span style={{ color: "var(--bad-ink)" }}> · {t("overdue")}</span>}
                   </div>
                   <button className="btn primary small" disabled={busy} onClick={() => start(next.kind === "skill" ? { kind: "skill", skillId: next.ref } : { kind: "pack", packId: next.ref })}>
                     {t("Continue")}

@@ -89,7 +89,7 @@ function SwitchedBanner() {
   const me = useMe();
   if (!me.switched) return null;
   return (
-    <div className="spread" style={{ background: "var(--warn-soft)", color: "var(--warn)", padding: "8px 16px", borderRadius: 10, marginBottom: 16, fontWeight: 600 }}>
+    <div className="spread" style={{ background: "var(--warn-soft)", color: "var(--warn-ink)", padding: "8px 16px", borderRadius: 10, marginBottom: 16, fontWeight: 600 }}>
       <span>You are working inside {me.tenant?.name}. Changes are recorded under your name.</span>
       <button className="btn small" onClick={() => void switchTenant(null)}>
         Return to my account

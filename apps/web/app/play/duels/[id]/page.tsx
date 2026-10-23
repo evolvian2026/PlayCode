@@ -180,7 +180,7 @@ export default function DuelPage() {
         <Link href="/play/duels" className="btn ghost small" aria-label="Back to duels">
           <Icon name="back" />
         </Link>
-        <span className="kpi" style={{ fontSize: "1.4rem", color: timeLeft !== null && timeLeft < 30_000 ? "var(--bad)" : undefined }} aria-live="off">
+        <span className="kpi" style={{ fontSize: "1.4rem", color: timeLeft !== null && timeLeft < 30_000 ? "var(--bad-ink)" : undefined }} aria-live="off">
           {timeLeft !== null && startsIn === 0 ? fmt(timeLeft) : "3:00"}
         </span>
       </div>

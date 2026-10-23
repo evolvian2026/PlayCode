@@ -56,7 +56,7 @@ export default function LeaguePage() {
       )}
       {events.data?.events.map((ev) => <EventCard key={ev.id} ev={ev} highlight={ev.myTeam?.name} />)}
       <p className="muted small">
-        <span style={{ color: "var(--good)" }}>Green line</span>: promotion zone. <span style={{ color: "var(--bad)" }}>Red line</span>: demotion zone.
+        <span style={{ color: "var(--good-ink)" }}>Green line</span>: promotion zone. <span style={{ color: "var(--bad-ink)" }}>Red line</span>: demotion zone.
       </p>
     </div>
   );

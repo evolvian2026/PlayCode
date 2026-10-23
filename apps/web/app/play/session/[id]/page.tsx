@@ -64,7 +64,7 @@ function Summary({ session, onHome, certificate, paths }: { session: SessionView
       )}
       {session.answered < session.total && <p className="muted">{t("You ran out of hearts. Review a mistake to earn one back.")}</p>}
       {paths.map((p) => (
-        <Link key={p.code} href={`/verify/${p.code}`} className="btn big" style={{ borderColor: "var(--good)" }}>
+        <Link key={p.code} href={`/verify/${p.code}`} className="btn big" style={{ borderColor: "var(--good-ink)" }}>
           <Icon name="award" /> {t("Path complete: {title}. View certificate", { title: p.title })}
         </Link>
       ))}
@@ -264,10 +264,10 @@ export default function SessionPlayer() {
       {result ? (
         <div className={`feedback stack ${result.correct ? "right" : "wrong"}`} role="status" aria-live="polite">
           <div className="spread">
-            <h2 style={{ margin: 0, color: result.correct ? "var(--good)" : "var(--bad)" }}>
+            <h2 style={{ margin: 0, color: result.correct ? "var(--good-ink)" : "var(--bad-ink)" }}>
               <Icon name={result.correct ? "check" : "x"} /> {t(result.correct ? "Correct!" : "Not quite")}
             </h2>
-            {result.xp > 0 && <span className="pill" style={{ color: "var(--xp)" }}>+{result.xp} XP</span>}
+            {result.xp > 0 && <span className="pill" style={{ color: "var(--xp-ink)" }}>+{result.xp} XP</span>}
           </div>
           {result.evaluation && <EvaluationView evaluation={result.evaluation} title={t(result.evaluation.kind === "code" ? "All tests" : "Your query's result")} />}
           {!result.correct && (

@@ -239,7 +239,7 @@ function Webhooks() {
               <button className="btn small" onClick={() => setOpen(open === h.id ? null : h.id)}>
                 {open === h.id ? "Hide" : "Deliveries"}
               </button>
-              <button className="btn small" style={{ color: "var(--bad)" }} onClick={() => api(`/console/webhooks/${h.id}`, { method: "DELETE" }).then(reload)}>
+              <button className="btn small" style={{ color: "var(--bad-ink)" }} onClick={() => api(`/console/webhooks/${h.id}`, { method: "DELETE" }).then(reload)}>
                 Delete
               </button>
             </div>

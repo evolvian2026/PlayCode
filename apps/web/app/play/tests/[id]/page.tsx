@@ -331,7 +331,7 @@ export default function Exam() {
           </div>
         </div>
         <div className="row">
-          <span className="kpi" style={{ fontSize: "1.3rem", color: timeLeft < 5 * 60_000 ? "var(--bad)" : undefined }} role="timer">
+          <span className="kpi" style={{ fontSize: "1.3rem", color: timeLeft < 5 * 60_000 ? "var(--bad-ink)" : undefined }} role="timer">
             {fmt(timeLeft)}
           </span>
           <button className="btn primary small" disabled={busy} onClick={() => setConfirming(true)}>

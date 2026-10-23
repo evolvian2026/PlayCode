@@ -29,10 +29,10 @@ interface Readiness {
 }
 
 const BANDS = [
-  { key: "ready", label: "Ready (70+)", color: "var(--good)" },
+  { key: "ready", label: "Ready (70+)", color: "var(--good-ink)" },
   { key: "almost", label: "Almost (50-69)", color: "var(--accent)" },
-  { key: "building", label: "Building (30-49)", color: "var(--warn)" },
-  { key: "at_risk", label: "At risk (<30)", color: "var(--bad)" },
+  { key: "building", label: "Building (30-49)", color: "var(--warn-ink)" },
+  { key: "at_risk", label: "At risk (<30)", color: "var(--bad-ink)" },
 ] as const;
 
 export default function Overview() {

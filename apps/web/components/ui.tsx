@@ -2,10 +2,10 @@
 
 import type { ReactNode } from "react";
 
-export function Bar({ value, tone }: { value: number; tone?: "good" | "warn" | "bad" }) {
+export function Bar({ value, tone, label = "Progress" }: { value: number; tone?: "good" | "warn" | "bad"; label?: string }) {
   const v = Math.max(0, Math.min(100, value));
   return (
-    <div className={`bar ${tone ?? ""}`} role="progressbar" aria-valuenow={Math.round(v)} aria-valuemin={0} aria-valuemax={100}>
+    <div className={`bar ${tone ?? ""}`} role="progressbar" aria-label={label} aria-valuenow={Math.round(v)} aria-valuemin={0} aria-valuemax={100}>
       <span style={{ width: `${v}%` }} />
     </div>
   );

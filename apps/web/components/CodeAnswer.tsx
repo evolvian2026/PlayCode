@@ -84,7 +84,7 @@ export function EvaluationView({ evaluation, title }: { evaluation: Evaluation; 
                   <pre>{t.expected || "(nothing)"}</pre>
                   <div className="small muted">Your output</div>
                   <pre>{t.actual || "(nothing)"}</pre>
-                  {t.stderr && <pre style={{ color: "var(--bad)" }}>{t.stderr}</pre>}
+                  {t.stderr && <pre style={{ color: "var(--bad-ink)" }}>{t.stderr}</pre>}
                 </>
               )}
             </div>
