@@ -15,3 +15,4 @@ export * from "./plans";
 export * from "./placements";
 export * from "./health";
 export * from "./licence";
+export * from "./items";

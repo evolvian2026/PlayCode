@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   initialQuestionRating,
   isoWeekKey,
@@ -18,7 +18,7 @@ import { requestErasure } from "../services/privacy";
 import { db, pool, type Db } from "./client";
 import { runMigrations } from "./migrate";
 import { seedInterview, seedPlacements } from "./seed-placements";
-import { assessments, assignments, competitions, memberships, orgUnits, packs, questions, skills, tenants, users } from "./schema";
+import { assessments, assignments, competitions, memberships, orgUnits, packs, questionReports, questions, responses, skills, tenants, users } from "./schema";
 
 export const DEMO_PASSWORD = "playcode123";
 
@@ -253,6 +253,19 @@ export async function seedDemo(now = new Date()): Promise<void> {
     now,
   });
   await seedInterview({ tenantId, userId: demoStudent.id, now });
+  // Two students reported the same question, so the content team's review queue has something in it.
+  const [reported] = await db
+    .select({ questionId: responses.questionId, version: questions.version })
+    .from(responses)
+    .innerJoin(questions, eq(questions.id, responses.questionId))
+    .where(and(eq(responses.userId, students[1]!.id), sql`${questions.type} = 'predict_output'`))
+    .limit(1);
+  if (reported) {
+    await db.insert(questionReports).values([
+      { questionId: reported.questionId, questionVersion: reported.version, userId: students[1]!.id, tenantId, reason: "unclear", note: "Does end=' ' add a space after the last number too?", createdAt: new Date(now.getTime() - 86_400_000) },
+      { questionId: reported.questionId, questionVersion: reported.version, userId: students[5]!.id, tenantId, reason: "wrong_answer", note: "", createdAt: new Date(now.getTime() - 3_600_000) },
+    ]);
+  }
   // A student who never started has asked for their data to be deleted.
   await requestErasure(db, { tenantId, userId: students[26]!.id, reason: "I have left the college.", now: new Date(now.getTime() - 2 * 86_400_000) });
   // A training partner reselling PlayCode under its own brand, with one college.

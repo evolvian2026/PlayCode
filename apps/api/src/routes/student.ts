@@ -17,6 +17,7 @@ import { answerQuestion, getSession, runCurrent, sessionScore, startSession, tak
 import { getOrCreateProfile, profileSummary } from "../services/profile";
 import { studentUnitIdsWithAncestors } from "../services/scope";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
+import { reportQuestion } from "../services/quality";
 
 const responseSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("option"), optionId: z.string().max(20) }),
@@ -162,6 +163,14 @@ export async function studentRoutes(app: FastifyInstance) {
   });
 
   app.post("/sessions", async (req) => startSession(db, ctxOf(req), parse(startSchema, req.body)));
+
+  // "Something wrong with this question?" from the player or the mistake notebook.
+  app.post("/questions/:id/report", async (req) => {
+    const { id } = parse(z.object({ id: z.string().min(1).max(80) }), req.params);
+    const body = parse(z.object({ reason: z.enum(["wrong_answer", "unclear", "typo", "other"]), note: z.string().trim().max(1000).default("") }), req.body);
+    await reportQuestion(db, { userId: req.auth.userId, tenantId: tenantOf(req), now: app.now() }, id, body.reason, body.note);
+    return { ok: true };
+  });
 
   app.get("/sessions/:id", async (req) => {
     const { id } = parse(z.object({ id: z.string().uuid() }), req.params);

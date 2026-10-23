@@ -256,6 +256,18 @@ const HI: Record<string, string> = {
   "In progress": "जारी है",
   "Not scored": "स्कोर नहीं हुआ",
 
+  // Question reports
+  "Something wrong with this question?": "इस सवाल में कुछ गलत है?",
+  "What's wrong?": "क्या गलत है?",
+  "The answer marked correct is wrong": "सही बताया गया जवाब गलत है",
+  "The question is unclear": "सवाल साफ़ नहीं है",
+  "There's a typo or formatting problem": "टाइपिंग या फ़ॉर्मेटिंग की गलती है",
+  "Something else": "कुछ और",
+  "Details (optional)": "विवरण (वैकल्पिक)",
+  "Send report": "रिपोर्ट भेजें",
+  Cancel: "रद्द करें",
+  "Thanks. The content team will check this question.": "धन्यवाद। कंटेंट टीम इस सवाल की जाँच करेगी।",
+
   // Licence
   "Your institution's PlayCode licence has ended. Practice keeps working until {date}.": "आपके संस्थान का PlayCode लाइसेंस खत्म हो गया है। {date} तक अभ्यास चलता रहेगा।",
   "Your institution's PlayCode licence has ended. You can still see your progress, but practice is paused until it is renewed.":

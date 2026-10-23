@@ -215,6 +215,12 @@ export default function Studio() {
               Draft with AI
             </button>
           )}
+          <Link className="btn" href="/console/studio/review">
+            Review queue
+          </Link>
+          <Link className="btn" href="/console/studio/import">
+            Import
+          </Link>
           <Link className="btn primary" href="/console/studio/edit">
             New question
           </Link>

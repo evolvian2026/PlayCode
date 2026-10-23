@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { EvaluationView } from "@/components/CodeAnswer";
 import { draftToResponse, emptyDraft, QuestionInput, type Draft } from "@/components/QuestionInput";
 import { Icon } from "@/components/Icon";
+import { ReportQuestion } from "@/components/ReportQuestion";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { usePlayer } from "@/lib/player-state";
@@ -285,6 +286,7 @@ export default function SessionPlayer() {
               ))}
             </div>
           )}
+          {question && <ReportQuestion key={question.id} questionId={question.id} />}
           <button className="btn primary big" onClick={next} autoFocus>
             {t(result.session.finished ? "See results" : "Continue")}
           </button>

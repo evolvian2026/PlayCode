@@ -8,6 +8,7 @@ import { authenticate, parse, requireAny } from "../lib/http";
 import { rateLimit } from "../lib/rate-limit";
 import { checkQuestion, createQuestion, DRAFTABLE, draftWithAi, getStudio, listStudio, runCheck, setStatus, updateQuestion, type Bank } from "../services/studio";
 import { assertFeature } from "../services/plan";
+import { importQuestions, publishMany, resolveReports, reviewQueue } from "../services/quality";
 
 const codeLanguage = z.enum(["c", "java", "python"]);
 const option = z.object({ id: z.string().min(1).max(4), text: z.string().min(1).max(4000), code: z.boolean().optional() });
@@ -103,6 +104,28 @@ export async function studioRoutes(app: FastifyInstance) {
     const { id } = parse(idParam, req.params);
     const { status } = parse(z.object({ status: z.enum(["live", "retired", "draft"]) }), req.body);
     return { question: await setStatus(db, bankOf(req), req.auth.userId, id, status, app.now()) };
+  });
+
+  // ---------- Bank quality ----------
+  app.post("/studio/import", { bodyLimit: 5 * 1024 * 1024 }, async (req) => {
+    const { questions } = parse(z.object({ questions: z.array(z.unknown()).min(1).max(200) }), req.body);
+    const items = questions.map((q) => {
+      const r = studioInput.safeParse(q);
+      return r.success ? { input: r.data } : { error: r.error.issues.slice(0, 5).map((i) => `${i.path.join(".") || "question"}: ${i.message}`) };
+    });
+    return importQuestions(db, bankOf(req), req.auth.userId, items, app.now());
+  });
+
+  app.post("/studio/publish", async (req) => {
+    const { ids } = parse(z.object({ ids: z.array(z.string().min(1).max(80)).min(1).max(200) }), req.body);
+    return publishMany(db, bankOf(req), req.auth.userId, ids, app.now());
+  });
+
+  app.get("/studio/review", async (req) => reviewQueue(db, bankOf(req), app.now()));
+
+  app.post("/studio/questions/:id/reports", async (req) => {
+    const body = parse(z.object({ status: z.enum(["resolved", "dismissed"]), resolution: z.string().max(1000).default("") }), req.body);
+    return resolveReports(db, bankOf(req), req.auth.userId, parse(idParam, req.params).id, body.status, body.resolution, app.now());
   });
 
   app.post("/studio/draft", async (req) => {

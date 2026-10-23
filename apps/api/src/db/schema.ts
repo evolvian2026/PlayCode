@@ -1208,3 +1208,27 @@ export const billingNotices = pgTable(
   },
   (t) => [index("billing_notices_tenant_idx").on(t.tenantId, t.sentAt)],
 );
+
+// ---------- Question quality ----------
+
+export type ReportReason = "wrong_answer" | "unclear" | "typo" | "other";
+
+/** A student's report that a question is wrong or unclear, for the content team to review. */
+export const questionReports = pgTable(
+  "question_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    questionId: text("question_id").notNull().references(() => questions.id, { onDelete: "cascade" }),
+    questionVersion: integer("question_version").notNull(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+    reason: text("reason").$type<ReportReason>().notNull(),
+    note: text("note").notNull().default(""),
+    status: text("status").$type<"open" | "resolved" | "dismissed">().notNull().default("open"),
+    resolution: text("resolution"),
+    resolvedBy: uuid("resolved_by"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("question_reports_question_idx").on(t.questionId, t.status)],
+);
