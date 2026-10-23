@@ -4,6 +4,7 @@ import { env } from "../env";
 import type { Db, DbOrTx } from "../db/client";
 import { notifications, tenants, users, type NotificationTemplate } from "../db/schema";
 import { publish } from "../lib/realtime";
+import { pushTo } from "./push";
 
 // Notification outbox. Every notification shows in the student's in-app
 // inbox; students with a phone number and WhatsApp configured also get a
@@ -87,19 +88,26 @@ export async function sendWhatsApp(phone: string, template: string, params: stri
 /** Deliver pending notifications. Run every minute (pnpm notify:send) or after enqueueing. */
 export async function processOutbox(db: Db, now: Date, limit = 200, fetchImpl: typeof fetch = fetch) {
   const pending = await db
-    .select({ n: notifications, phone: users.phone, nudgesOff: sql<boolean>`coalesce((${tenants.settings}->>'nudges')::boolean = false, false)` })
+    .select({ n: notifications, phone: users.phone, prefs: users.notifyPrefs, nudgesOff: sql<boolean>`coalesce((${tenants.settings}->>'nudges')::boolean = false, false)` })
     .from(notifications)
     .innerJoin(users, eq(users.id, notifications.userId))
     .innerJoin(tenants, eq(tenants.id, notifications.tenantId))
     .where(eq(notifications.status, "pending"))
     .orderBy(asc(notifications.createdAt))
     .limit(limit);
-  const summary = { sent: 0, skipped: 0, failed: 0 };
-  for (const { n, phone, nudgesOff } of pending) {
+  const summary = { sent: 0, skipped: 0, failed: 0, pushed: 0 };
+  for (const { n, phone, prefs, nudgesOff } of pending) {
     let status: "sent" | "skipped" | "failed" = "skipped";
     let error: string | null = null;
-    // Announcements always go out; automatic nudges respect the institution's setting.
-    if (n.channel === "whatsapp" && phone && !(nudgesOff && n.template !== "announcement")) {
+    // Messages from staff always go out; automatic nudges respect the institution's setting.
+    const allowed = !(nudgesOff && n.template !== "announcement" && n.template !== "placement");
+    // Push to the student's devices too, unless they turned it off; it costs nothing to send.
+    let pushedAt: Date | null = null;
+    if (allowed && prefs.push !== false && (await pushTo(db, [n.userId], () => ({ title: n.title, body: n.body, link: n.link }), now)).size) {
+      pushedAt = now;
+      summary.pushed++;
+    }
+    if (n.channel === "whatsapp" && phone && allowed) {
       try {
         await sendWhatsApp(phone, n.template, [n.title, n.body], fetchImpl);
         status = "sent";
@@ -109,7 +117,7 @@ export async function processOutbox(db: Db, now: Date, limit = 200, fetchImpl: t
       }
     }
     summary[status]++;
-    await db.update(notifications).set({ status, error, sentAt: status === "sent" ? now : null }).where(eq(notifications.id, n.id));
+    await db.update(notifications).set({ status, error, sentAt: status === "sent" ? now : null, pushedAt }).where(eq(notifications.id, n.id));
   }
   return summary;
 }

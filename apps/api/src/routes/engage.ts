@@ -10,6 +10,7 @@ import { competitionState, getCompetition, leaderboard, studentCompetitions, ten
 import { inbox, markRead, processOutbox, whatsappConfigured } from "../services/notifications";
 import { audienceIds, runNudges, sendAnnouncement } from "../services/nudges";
 import { recordConsent } from "../services/privacy";
+import { pushConfigured, subscribe, subscriptionCount, unsubscribe, vapidPublicKey } from "../services/push";
 import { assertUnitsInScope, scopedUnitIds } from "../services/scope";
 import { getTenant, tenantToday } from "../services/tenant";
 
@@ -146,12 +147,29 @@ export async function engageRoutes(app: FastifyInstance) {
     const body = parse(z.object({ phone: z.string().regex(/^\+?\d[\d\s-]{8,16}$/).nullable().optional(), whatsapp: z.boolean().optional(), locale: z.enum(["en", "hi"]).optional() }), req.body);
     const set: Partial<typeof users.$inferInsert> = {};
     if (body.phone !== undefined) set.phone = body.phone ? body.phone.replace(/[^\d+]/g, "") : null;
-    if (body.whatsapp !== undefined) set.notifyPrefs = { whatsapp: body.whatsapp };
+    if (body.whatsapp !== undefined) {
+      const [cur] = await db.select({ prefs: users.notifyPrefs }).from(users).where(eq(users.id, req.auth.userId));
+      set.notifyPrefs = { ...cur?.prefs, whatsapp: body.whatsapp };
+    }
     if (body.locale) set.locale = body.locale;
     if (Object.keys(set).length) await db.update(users).set(set).where(eq(users.id, req.auth.userId));
     if (body.whatsapp !== undefined) await recordConsent(db, { tenantId: req.auth.tenantId, userId: req.auth.userId, purpose: "whatsapp", granted: body.whatsapp, source: "settings", now: app.now() });
     const [u] = await db.select({ phone: users.phone, prefs: users.notifyPrefs, locale: users.locale }).from(users).where(eq(users.id, req.auth.userId));
     return { phone: u?.phone ?? null, whatsapp: u?.prefs.whatsapp !== false, locale: u?.locale ?? "en" };
+  });
+
+  // ---------- Web push (any signed-in user, on each of their devices) ----------
+  app.get("/push", async (req) => ({ available: pushConfigured(), publicKey: vapidPublicKey(), devices: await subscriptionCount(db, req.auth.userId) }));
+  app.post("/push/subscribe", async (req) => {
+    const body = parse(z.object({ endpoint: z.string().url().max(1000), keys: z.object({ p256dh: z.string().min(10).max(200), auth: z.string().min(8).max(100) }) }), req.body);
+    if (!pushConfigured()) throw badRequest("Push notifications are not set up on this server");
+    await subscribe(db, { userId: req.auth.userId, tenantId: req.auth.tenantId, endpoint: body.endpoint, p256dh: body.keys.p256dh, auth: body.keys.auth, userAgent: req.headers["user-agent"]?.slice(0, 300) ?? null });
+    return { ok: true, devices: await subscriptionCount(db, req.auth.userId) };
+  });
+  app.post("/push/unsubscribe", async (req) => {
+    const { endpoint } = parse(z.object({ endpoint: z.string().max(1000) }), req.body);
+    await unsubscribe(db, req.auth.userId, endpoint);
+    return { ok: true, devices: await subscriptionCount(db, req.auth.userId) };
   });
 
   // ---------- Admin ----------

@@ -255,6 +255,16 @@ const HI: Record<string, string> = {
   "Past interviews": "पिछले इंटरव्यू",
   "In progress": "जारी है",
   "Not scored": "स्कोर नहीं हुआ",
+
+  // Push notifications
+  "Notifications on this phone": "इस फ़ोन पर नोटिफ़िकेशन",
+  "Get streak, assignment, test and placement reminders as phone notifications. Free, and you can turn them off any time.":
+    "स्ट्रीक, असाइनमेंट, टेस्ट और प्लेसमेंट के रिमाइंडर फ़ोन नोटिफ़िकेशन के रूप में पाएँ। मुफ़्त, और आप कभी भी बंद कर सकते हैं।",
+  "This browser can't show notifications. On iPhone, add PlayCode to your home screen first, then open it from there.":
+    "यह ब्राउज़र नोटिफ़िकेशन नहीं दिखा सकता। iPhone पर पहले PlayCode को होम स्क्रीन पर जोड़ें, फिर वहीं से खोलें।",
+  "Turn off on this phone": "इस फ़ोन पर बंद करें",
+  "Turn on notifications": "नोटिफ़िकेशन चालू करें",
+  "Notifications are blocked for this site. Allow them in your browser settings.": "इस साइट के लिए नोटिफ़िकेशन बंद हैं। अपने ब्राउज़र की सेटिंग में इन्हें चालू करें।",
 };
 
 const STORAGE_KEY = "playcode.locale";

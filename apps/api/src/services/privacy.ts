@@ -28,6 +28,7 @@ import {
   placementApplications,
   placementDrives,
   playerProfiles,
+  pushSubscriptions,
   responses,
   sessions,
   skillRatings,
@@ -222,6 +223,7 @@ export async function resolveErasure(
     await tx.delete(placementApplications).where(eq(placementApplications.userId, user.id));
     await tx.delete(academicRecords).where(eq(academicRecords.userId, user.id));
     await tx.delete(interviews).where(eq(interviews.userId, user.id));
+    await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, user.id));
     await tx.delete(playerProfiles).where(eq(playerProfiles.userId, user.id));
     await tx.delete(memberships).where(eq(memberships.userId, user.id));
     // Duels stay so opponents keep their history; the player now shows as "Deleted user".

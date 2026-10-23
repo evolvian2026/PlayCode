@@ -78,7 +78,7 @@ export const users = pgTable(
     rollNo: text("roll_no"),
     /** E.164 phone number for WhatsApp nudges (optional). */
     phone: text("phone"),
-    notifyPrefs: jsonb("notify_prefs").$type<{ whatsapp?: boolean }>().notNull().default({}),
+    notifyPrefs: jsonb("notify_prefs").$type<{ whatsapp?: boolean; push?: boolean }>().notNull().default({}),
     /** Interface language: "en" or "hi". */
     locale: text("locale").$type<"en" | "hi">().notNull().default("en"),
     status: text("status").$type<"active" | "disabled" | "erased">().notNull().default("active"),
@@ -514,6 +514,8 @@ export const notifications = pgTable(
     readAt: timestamp("read_at", { withTimezone: true }),
     createdAt: createdAt(),
     sentAt: timestamp("sent_at", { withTimezone: true }),
+    /** When it went out as a web push notification (null: not pushed). */
+    pushedAt: timestamp("pushed_at", { withTimezone: true }),
   },
   (t) => [index("notifications_user_idx").on(t.userId, t.createdAt), index("notifications_status_idx").on(t.status)],
 );
@@ -539,7 +541,7 @@ export const certificates = pgTable(
 
 // ---------- Public API and webhooks ----------
 
-export const API_SCOPES = ["users:read", "users:write", "assignments:read", "assignments:write", "results:read"] as const;
+export const API_SCOPES = ["users:read", "users:write", "assignments:read", "assignments:write", "results:read", "reports:read"] as const;
 export type ApiScope = (typeof API_SCOPES)[number];
 
 export const apiClients = pgTable(
@@ -1153,4 +1155,54 @@ export const interviews = pgTable(
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (t) => [index("interviews_user_idx").on(t.userId, t.startedAt), index("interviews_tenant_idx").on(t.tenantId, t.startedAt)],
+);
+
+// ---------- Web push ----------
+
+/** A browser or installed app that receives push notifications for a user. */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"),
+    createdAt: createdAt(),
+    lastPushedAt: timestamp("last_pushed_at", { withTimezone: true }),
+  },
+  (t) => [index("push_subscriptions_user_idx").on(t.userId)],
+);
+
+// ---------- Student profiles ----------
+
+/** What a student adds to their PlayCode record for a resume, and whether recruiters can see it at a public link. */
+export const studentProfiles = pgTable("student_profiles", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  headline: text("headline").notNull().default(""),
+  about: text("about").notNull().default(""),
+  links: jsonb("links").$type<{ github?: string; linkedin?: string; portfolio?: string }>().notNull().default({}),
+  /** Public profile at /p/<code>; null while private. */
+  publicCode: text("public_code").unique(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------- Billing notices ----------
+
+/** Billing emails already sent (invoice issued, due soon, overdue, licence renewal), so each goes out once. */
+export const billingNotices = pgTable(
+  "billing_notices",
+  {
+    key: text("key").primaryKey(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<"invoice_issued" | "invoice_due" | "invoice_overdue" | "licence_renewal">().notNull(),
+    recipients: jsonb("recipients").$type<string[]>().notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("billing_notices_tenant_idx").on(t.tenantId, t.sentAt)],
 );

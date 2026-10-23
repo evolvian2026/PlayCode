@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { disablePush } from "@/lib/push";
 import { api, getToken, setToken } from "@/lib/api";
 import { applyBranding } from "@/lib/branding";
 import type { Me } from "@/lib/types";
@@ -16,7 +17,8 @@ export function useMe(): Me {
 }
 
 export async function signOut() {
-  // Revoke this device's session on the server too, so the token is dead even if it was copied.
+  // Stop push notifications to this device, then revoke its session on the server too, so the token is dead even if it was copied.
+  await disablePush().catch(() => {});
   await api("/auth/logout", { body: {} }).catch(() => {});
   setToken(null);
   window.location.href = "/login";
