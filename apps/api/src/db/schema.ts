@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, CodeLanguage, CompanyType, Delivery, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, CodeLanguage, CompanyType, Delivery, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -1223,6 +1223,19 @@ export const studentProfiles = pgTable("student_profiles", {
   lookingFor: jsonb("looking_for").$type<{ locations?: string[]; companyTypes?: CompanyType[] }>().notNull().default({}),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** A nightly snapshot of each institution's aggregate metrics, for anonymised peer benchmarks. */
+export const institutionMetrics = pgTable(
+  "institution_metrics",
+  {
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    day: text("day").notNull(),
+    students: integer("students").notNull(),
+    values: jsonb("values").$type<BenchmarkValues>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.day] }), index("institution_metrics_day_idx").on(t.day)],
+);
 
 export type TalentInviteStatus = "pending" | "accepted" | "declined";
 

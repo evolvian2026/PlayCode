@@ -8,6 +8,7 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:reset": "tsx src/db/reset.ts",
     "db:seed": "tsx src/db/seed.ts",
+    "benchmarks:run": "tsx src/scripts/run-benchmarks.ts",
     "dev": "tsx watch src/server.ts",
     "league:close": "tsx src/scripts/close-league-week.ts",
     "nudges:run": "tsx src/scripts/run-nudges.ts",

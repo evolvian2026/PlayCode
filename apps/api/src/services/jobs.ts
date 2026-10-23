@@ -10,6 +10,7 @@ export const JOBS = {
   webhooks: { label: "Webhook and LMS grade retries", everyHours: 1 / 60 },
   league: { label: "Close the league week", everyHours: 24 * 7 },
   retention: { label: "Data retention clean-up", everyHours: 24 },
+  benchmarks: { label: "Peer benchmark snapshots", everyHours: 24 },
 } as const;
 export type JobName = keyof typeof JOBS;
 

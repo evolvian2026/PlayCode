@@ -8,6 +8,7 @@ import { aiProvider } from "../lib/ai";
 import { audit } from "../lib/audit";
 import { forbidden, notFound } from "../lib/errors";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
+import { institutionBenchmark } from "../services/benchmarks";
 import { engagement, readinessReport, skillsReport, studentDetail, studentList } from "../services/analytics";
 import { createAssignment } from "../services/assignments";
 import { effectiveBranding, updateBranding } from "../services/branding";
@@ -56,6 +57,8 @@ export async function consoleRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 
   // ---------- Overview ----------
+  app.get("/benchmarks", { preHandler: requirePermission("analytics.institution") }, async (req) => institutionBenchmark(db, tenantOf(req)));
+
   app.get("/overview", { preHandler: anyAnalytics }, async (req) => {
     const scope = await resolveScope(req);
     const tenant = await getTenant(db, scope.tenantId);

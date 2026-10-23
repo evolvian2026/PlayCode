@@ -15,6 +15,7 @@ import { closeLeagueWeek } from "../services/leagues";
 import { answerQuestion, startSession, type StartInput } from "../services/practice";
 import { createPath } from "../services/paths";
 import { requestErasure } from "../services/privacy";
+import { snapshotBenchmarks } from "../services/benchmarks";
 import { sendInvite, setDiscoverable, setInstitutionPool } from "../services/talent";
 import { db, pool, type Db } from "./client";
 import { runMigrations } from "./migrate";
@@ -335,6 +336,9 @@ export async function seedDemo(now = new Date()): Promise<void> {
     message: "Hi Riya, your loops and arrays work stood out. We are hiring graduate engineers in Pune and Bengaluru; take our campus test if you are interested.",
     driveId: drive.id,
   });
+
+  // A peer-benchmark snapshot for the demo college (comparisons appear once there are 5 measured peers).
+  await snapshotBenchmarks(db, now);
 
   console.log(`Seeded demo institution with ${students.length} students. Password for every account: ${DEMO_PASSWORD}`);
 }

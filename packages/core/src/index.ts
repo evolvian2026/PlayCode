@@ -18,3 +18,4 @@ export * from "./health";
 export * from "./licence";
 export * from "./items";
 export * from "./speech";
+export * from "./benchmarks";

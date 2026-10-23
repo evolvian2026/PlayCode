@@ -59,7 +59,7 @@ describe("monitoring", () => {
     const sa = await t.login("superadmin@playcode.dev");
     const res = await t.get(sa, "/admin/system");
     expect(res.body.ready.ready).toBe(true);
-    expect(res.body.jobs.map((j: { job: string }) => j.job)).toEqual(["nudges", "webhooks", "league", "retention"]);
+    expect(res.body.jobs.map((j: { job: string }) => j.job)).toEqual(["nudges", "webhooks", "league", "retention", "benchmarks"]);
     expect(res.body.backlog).toHaveProperty("notificationsPending");
     expect(res.body.databaseBytes).toBeGreaterThan(0);
     expect((await t.get(await t.login("admin@demo.edu"), "/admin/system")).status).toBe(403);
