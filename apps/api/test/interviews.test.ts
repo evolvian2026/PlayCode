@@ -141,4 +141,28 @@ describe("mock interviews", () => {
     // Students don't see the console list.
     expect((await t.get(riya, "/console/interviews")).status).toBe(403);
   });
+
+  it("runs a spoken interview with delivery feedback", async () => {
+    const started = (await t.post(riya, "/student/interviews", { track: "product", mode: "voice" })).body;
+    expect(started.mode).toBe("voice");
+    expect(calls.at(-1)).toMatchObject({ mode: "voice", turns: [] });
+    // 40 words in 20 seconds (120 a minute), two fillers.
+    const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(" ");
+    const res = await t.post(riya, `/student/interviews/${started.id}/answer`, { text: `um basically ${words(38)}`, voice: { durationMs: 20_000, edited: false } });
+    expect(res.body.turns[1].voice).toEqual({ durationMs: 20_000, words: 40, wpm: 120, fillers: 2, edited: false });
+    expect((await t.post(riya, `/student/interviews/${started.id}/answer`, { text: "x", voice: { durationMs: 10, edited: false } })).status).toBe(400);
+    // A typed answer in a voice interview carries no delivery stats.
+    const typed = await t.post(riya, `/student/interviews/${started.id}/answer`, { text: words(30) });
+    expect(typed.body.turns[3].voice).toBeUndefined();
+    const done = (await t.post(riya, `/student/interviews/${started.id}/finish`)).body;
+    expect(done.scorecard.delivery).toMatchObject({ spokenAnswers: 1, wordsPerMinute: 120, fillersPer100Words: 5, pace: "good" });
+    expect(done.scorecard.delivery.tips[0]).toContain("filler");
+    expect(calls.at(-1)).toMatchObject({ mode: "voice", delivery: { wordsPerMinute: 120 } });
+    // Voice stats are ignored in a text interview.
+    const text = (await t.post(riya, "/student/interviews", { track: "service" })).body;
+    const r = await t.post(riya, `/student/interviews/${text.id}/answer`, { text: "Loops repeat.", voice: { durationMs: 5_000, edited: false } });
+    expect(r.body.turns[1].voice).toBeUndefined();
+    const faculty = await t.login("faculty@demo.edu");
+    expect((await t.get(faculty, "/console/interviews")).body.interviews.find((x: { id: string }) => x.id === started.id).mode).toBe("voice");
+  });
 });

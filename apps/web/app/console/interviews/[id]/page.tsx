@@ -9,9 +9,10 @@ interface Detail {
   userId: string;
   student: { name: string; rollNo: string | null };
   track: "service" | "product";
+  mode: "text" | "voice";
   status: string;
   focusSkills: { id: string; name: string }[];
-  turns: { role: "interviewer" | "candidate"; text: string }[];
+  turns: { role: "interviewer" | "candidate"; text: string; voice?: { wpm: number; fillers: number; edited: boolean } }[];
   scorecard: {
     scores: { problemSolving: number; fundamentals: number; communication: number; code: number };
     overall: number;
@@ -19,6 +20,7 @@ interface Detail {
     improvements: string[];
     summary: string;
     practise: { id: string; name: string }[];
+    delivery?: { spokenAnswers: number; wordsPerMinute: number; fillersPer100Words: number; pace: string; tips: string[] } | null;
   } | null;
   startedAt: string;
 }
@@ -39,7 +41,7 @@ export default function ConsoleInterview() {
           <Link href={`/console/students/${data.userId}`} style={{ color: "inherit" }}>
             {data.student.name}
           </Link>{" "}
-          <span className="muted" style={{ fontWeight: 500 }}>· {data.track === "product" ? "product" : "service"} company interview</span>
+          <span className="muted" style={{ fontWeight: 500 }}>· {data.track === "product" ? "product" : "service"} company interview{data.mode === "voice" ? ", spoken" : ""}</span>
         </h1>
         <div className="small muted">
           {new Date(data.startedAt).toLocaleString("en-IN")} · focus: {data.focusSkills.map((s) => s.name).join(", ")}
@@ -72,6 +74,11 @@ export default function ConsoleInterview() {
               </ul>
             </div>
           </div>
+          {c.delivery && (
+            <div className="small">
+              <b>Delivery</b> ({c.delivery.spokenAnswers} spoken answers): {c.delivery.wordsPerMinute} words a minute, {c.delivery.fillersPer100Words} filler words per 100. {c.delivery.tips.join(" ")}
+            </div>
+          )}
           {c.practise.length > 0 && <div className="small muted">Suggested practice: {c.practise.map((s) => s.name).join(", ")}</div>}
           <div className="small muted">Scored by AI from the transcript below. Use it as a starting point for a conversation, not a grade.</div>
         </div>
@@ -81,6 +88,12 @@ export default function ConsoleInterview() {
         {data.turns.map((t, i) => (
           <div key={i} style={{ whiteSpace: "pre-wrap" }}>
             <b className="small">{t.role === "interviewer" ? "Interviewer" : data.student.name}:</b> {t.text}
+            {t.voice && (
+              <span className="small muted">
+                {" "}
+                (spoken, {t.voice.wpm} wpm{t.voice.edited ? ", transcript edited" : ""})
+              </span>
+            )}
           </div>
         ))}
       </div>

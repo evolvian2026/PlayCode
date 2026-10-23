@@ -11,6 +11,7 @@ interface Row {
   name: string;
   rollNo: string | null;
   track: "service" | "product";
+  mode: "text" | "voice";
   overall: number;
   scores: { problemSolving: number; fundamentals: number; communication: number; code: number };
   finishedAt: string;
@@ -82,7 +83,7 @@ export default function ConsoleInterviews() {
                         <Link href={`/console/interviews/${r.id}`}>{r.name}</Link>
                         <div className="small muted">{r.rollNo}</div>
                       </td>
-                      <td className="small">{r.track === "product" ? "Product" : "Service"}</td>
+                      <td className="small">{r.track === "product" ? "Product" : "Service"}{r.mode === "voice" ? " · spoken" : ""}</td>
                       <td>
                         <span className={`pill ${tone(r.overall)}`}>{r.overall}/5</span>
                       </td>

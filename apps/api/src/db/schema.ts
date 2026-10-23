@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, CodeLanguage, CompanyType, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, CodeLanguage, CompanyType, Delivery, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -1131,6 +1131,8 @@ export interface InterviewTurn {
   role: "interviewer" | "candidate";
   text: string;
   at: string;
+  /** A spoken answer: how long the student spoke, and whether they edited the transcript before sending. */
+  voice?: { durationMs: number; words: number; wpm: number; fillers: number; edited: boolean };
 }
 
 export interface InterviewScorecard {
@@ -1142,6 +1144,8 @@ export interface InterviewScorecard {
   summary: string;
   /** Skill ids to practise next. */
   practise: string[];
+  /** Spoken interviews: pace and filler words across the spoken answers. */
+  delivery?: Delivery | null;
 }
 
 export const interviews = pgTable(
@@ -1151,6 +1155,8 @@ export const interviews = pgTable(
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     track: text("track").$type<"service" | "product">().notNull(),
+    /** Voice: the interviewer is read aloud and answers are spoken (transcribed in the browser). */
+    mode: text("mode").$type<"text" | "voice">().notNull().default("text"),
     /** Skill ids the interview leans on (the student's weakest relevant skills). */
     focusSkills: jsonb("focus_skills").$type<string[]>().notNull(),
     status: text("status").$type<"active" | "finished" | "abandoned">().notNull().default("active"),

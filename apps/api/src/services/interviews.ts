@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
-import { masteryFromRating, READINESS_PROFILES } from "@playcode/core";
+import { deliverySummary, masteryFromRating, READINESS_PROFILES, spokenAnswer } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { interviews, skillRatings, skills, users, type InterviewTurn } from "../db/schema";
 import { aiProvider, AiUnavailableError, type InterviewInput } from "../lib/ai";
@@ -19,6 +19,7 @@ const MIN_ANSWERS_TO_SCORE = 2;
 const DAY_MS = 86_400_000;
 
 type Track = "service" | "product";
+type Mode = "text" | "voice";
 type Ctx = { tenantId: string; userId: string; now: Date };
 type Row = typeof interviews.$inferSelect;
 
@@ -61,6 +62,7 @@ async function view(db: DbOrTx, row: Row) {
   return {
     id: row.id,
     track: row.track,
+    mode: row.mode,
     status: row.status,
     focusSkills: row.focusSkills.map((id) => ({ id, name: name(id) })),
     turns: row.turns,
@@ -80,7 +82,7 @@ export async function listMine(db: Db, ctx: Ctx) {
     reason: availability.ok ? null : availability.reason,
     weeklyLeft: Math.max(0, WEEKLY_LIMIT - startedThisWeek),
     active: rows.find((r) => r.status === "active")?.id ?? null,
-    interviews: rows.map((r) => ({ id: r.id, track: r.track, status: r.status, overall: r.scorecard?.overall ?? null, answers: answersIn(r.turns), startedAt: r.startedAt, finishedAt: r.finishedAt })),
+    interviews: rows.map((r) => ({ id: r.id, track: r.track, mode: r.mode, status: r.status, overall: r.scorecard?.overall ?? null, answers: answersIn(r.turns), startedAt: r.startedAt, finishedAt: r.finishedAt })),
   };
 }
 
@@ -88,12 +90,14 @@ export async function getMine(db: Db, ctx: Ctx, id: string) {
   return view(db, await load(db, ctx.userId, id));
 }
 
-function input(row: Pick<Row, "track" | "turns">, focus: { id: string; name: string }[]): InterviewInput {
-  return { track: row.track, focusSkills: focus, turns: row.turns.map(({ role, text }) => ({ role, text })), answersLeft: MAX_ANSWERS - answersIn(row.turns) };
+function input(row: Pick<Row, "track" | "turns" | "mode">, focus: { id: string; name: string }[]): InterviewInput {
+  return { track: row.track, mode: row.mode, focusSkills: focus, turns: row.turns.map(({ role, text }) => ({ role, text })), answersLeft: MAX_ANSWERS - answersIn(row.turns) };
 }
 
+const deliveryOf = (turns: InterviewTurn[]) => deliverySummary(turns.flatMap((t) => (t.role === "candidate" && t.voice ? [t.voice] : [])));
+
 /** Start an interview (or return the one already in progress). */
-export async function startInterview(db: Db, ctx: Ctx, track: Track) {
+export async function startInterview(db: Db, ctx: Ctx, track: Track, mode: Mode = "text") {
   const [active] = await db.select().from(interviews).where(and(eq(interviews.userId, ctx.userId), eq(interviews.status, "active")));
   if (active) return view(db, active);
   const allowed = await interviewAvailability(db, ctx);
@@ -107,14 +111,14 @@ export async function startInterview(db: Db, ctx: Ctx, track: Track) {
   const focus = (await relevantSkills(db, ctx.userId, track)).slice(0, 3).map(({ id, name }) => ({ id, name }));
   let first;
   try {
-    first = await aiProvider()!.interviewTurn({ track, focusSkills: focus, turns: [], answersLeft: MAX_ANSWERS });
+    first = await aiProvider()!.interviewTurn({ track, mode, focusSkills: focus, turns: [], answersLeft: MAX_ANSWERS });
   } catch (err) {
     aiError(err);
   }
   await recordAiUsage(db, { tenantId: ctx.tenantId, userId: ctx.userId, feature: "mock_interview", usage: first.usage, now: ctx.now });
   const [row] = await db
     .insert(interviews)
-    .values({ tenantId: ctx.tenantId, userId: ctx.userId, track, focusSkills: focus.map((f) => f.id), turns: [{ role: "interviewer", text: first.value.message, at: ctx.now.toISOString() }], startedAt: ctx.now })
+    .values({ tenantId: ctx.tenantId, userId: ctx.userId, track, mode, focusSkills: focus.map((f) => f.id), turns: [{ role: "interviewer", text: first.value.message, at: ctx.now.toISOString() }], startedAt: ctx.now })
     .returning();
   return view(db, row!);
 }
@@ -140,9 +144,10 @@ async function focusOf(db: DbOrTx, row: Row) {
 
 async function score(db: Db, ctx: Ctx, row: Row) {
   const choices = (await relevantSkills(db, ctx.userId, row.track)).map(({ id, name }) => ({ id, name }));
+  const delivery = deliveryOf(row.turns);
   let res;
   try {
-    res = await aiProvider()!.interviewScorecard({ ...input(row, await focusOf(db, row)), skillChoices: choices });
+    res = await aiProvider()!.interviewScorecard({ ...input(row, await focusOf(db, row)), skillChoices: choices, delivery });
   } catch (err) {
     aiError(err);
   }
@@ -157,16 +162,19 @@ async function score(db: Db, ctx: Ctx, row: Row) {
     improvements: card.improvements.slice(0, 4),
     summary: card.summary,
     practise: [...new Set(card.practise.filter((id) => valid.has(id)))].slice(0, 3),
+    delivery,
   };
 }
 
-export async function answer(db: Db, ctx: Ctx, id: string, text: string) {
+export async function answer(db: Db, ctx: Ctx, id: string, text: string, voice?: { durationMs: number; edited: boolean }) {
   const row = await load(db, ctx.userId, id);
   if (row.status !== "active") throw badRequest("This interview has finished");
   if (row.turns.at(-1)?.role !== "interviewer") throw conflict("interview_changed", "Your answer is already in. Reload to continue.");
   const allowed = await interviewAvailability(db, ctx);
   if (!allowed.ok) throw badRequest(allowed.reason);
-  const turns: InterviewTurn[] = [...row.turns, { role: "candidate", text, at: ctx.now.toISOString() }];
+  // Pace is measured on what was sent; an answer typed in a voice interview has no delivery stats.
+  const spoken = voice && row.mode === "voice" ? { ...spokenAnswer(text, voice.durationMs), edited: voice.edited } : undefined;
+  const turns: InterviewTurn[] = [...row.turns, { role: "candidate", text, at: ctx.now.toISOString(), ...(spoken ? { voice: spoken } : {}) }];
   const withAnswer = { ...row, turns };
   let next;
   try {
@@ -195,7 +203,7 @@ export async function finishEarly(db: Db, ctx: Ctx, id: string) {
 export async function interviewsFor(db: Db, studentIds: string[]) {
   if (studentIds.length === 0) return { interviews: [], averages: null };
   const rows = await db
-    .select({ id: interviews.id, userId: interviews.userId, name: users.name, rollNo: users.rollNo, track: interviews.track, scorecard: interviews.scorecard, finishedAt: interviews.finishedAt })
+    .select({ id: interviews.id, userId: interviews.userId, name: users.name, rollNo: users.rollNo, track: interviews.track, mode: interviews.mode, scorecard: interviews.scorecard, finishedAt: interviews.finishedAt })
     .from(interviews)
     .innerJoin(users, eq(users.id, interviews.userId))
     .where(and(inArray(interviews.userId, studentIds), eq(interviews.status, "finished")))
@@ -203,7 +211,7 @@ export async function interviewsFor(db: Db, studentIds: string[]) {
     .limit(200);
   const avg = (pick: (s: NonNullable<Row["scorecard"]>) => number) => Math.round((rows.reduce((a, r) => a + pick(r.scorecard!), 0) / Math.max(1, rows.length)) * 10) / 10;
   return {
-    interviews: rows.map((r) => ({ id: r.id, userId: r.userId, name: r.name, rollNo: r.rollNo, track: r.track, overall: r.scorecard!.overall, scores: r.scorecard!.scores, finishedAt: r.finishedAt })),
+    interviews: rows.map((r) => ({ id: r.id, userId: r.userId, name: r.name, rollNo: r.rollNo, track: r.track, mode: r.mode, overall: r.scorecard!.overall, scores: r.scorecard!.scores, finishedAt: r.finishedAt })),
     averages: rows.length
       ? { overall: avg((s) => s.overall), problemSolving: avg((s) => s.scores.problemSolving), fundamentals: avg((s) => s.scores.fundamentals), communication: avg((s) => s.scores.communication), code: avg((s) => s.scores.code) }
       : null,

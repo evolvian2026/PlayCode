@@ -17,3 +17,4 @@ export * from "./placements";
 export * from "./health";
 export * from "./licence";
 export * from "./items";
+export * from "./speech";

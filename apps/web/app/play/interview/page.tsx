@@ -5,9 +5,19 @@ import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { useLocale, useT } from "@/lib/i18n";
+import { speak, speechInputSupported, speechOutputSupported, stopSpeaking, useDictation } from "@/lib/speech";
 import { startAndOpen } from "@/lib/start";
 
 type Track = "service" | "product";
+type Mode = "text" | "voice";
+
+interface Delivery {
+  spokenAnswers: number;
+  wordsPerMinute: number;
+  fillersPer100Words: number;
+  pace: "slow" | "good" | "fast";
+  tips: string[];
+}
 
 interface Scorecard {
   scores: { problemSolving: number; fundamentals: number; communication: number; code: number };
@@ -16,14 +26,16 @@ interface Scorecard {
   improvements: string[];
   summary: string;
   practise: { id: string; name: string }[];
+  delivery?: Delivery | null;
 }
 
 interface Interview {
   id: string;
   track: Track;
+  mode: Mode;
   status: "active" | "finished" | "abandoned";
   focusSkills: { id: string; name: string }[];
-  turns: { role: "interviewer" | "candidate"; text: string; at: string }[];
+  turns: { role: "interviewer" | "candidate"; text: string; at: string; voice?: { wpm: number; fillers: number } }[];
   answersLeft: number;
   scorecard: Scorecard | null;
 }
@@ -33,7 +45,7 @@ interface Mine {
   reason: string | null;
   weeklyLeft: number;
   active: string | null;
-  interviews: { id: string; track: Track; status: Interview["status"]; overall: number | null; answers: number; startedAt: string }[];
+  interviews: { id: string; track: Track; mode: Mode; status: Interview["status"]; overall: number | null; answers: number; startedAt: string }[];
 }
 
 const SCORE_LABELS: [keyof Scorecard["scores"], string][] = [
@@ -79,6 +91,23 @@ function ScorecardView({ card }: { card: Scorecard }) {
           ))}
         </ul>
       </div>
+      {card.delivery && (
+        <div>
+          <b className="small">{t("How you spoke")}</b>
+          <div className="small">
+            {t("{wpm} words a minute ({pace}) · {fillers} filler words per 100", {
+              wpm: card.delivery.wordsPerMinute,
+              pace: t(card.delivery.pace === "good" ? "a good pace" : card.delivery.pace === "slow" ? "slow" : "fast"),
+              fillers: card.delivery.fillersPer100Words,
+            })}
+          </div>
+          <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+            {card.delivery.tips.map((s) => (
+              <li key={s}>{t(s)}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {card.practise.length > 0 && (
         <div className="row wrap">
           <span className="small muted">{t("Practise next:")}</span>
@@ -103,13 +132,45 @@ function Conversation({ initial, onDone }: { initial: Interview; onDone: () => v
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => end.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [iv.turns.length, busy]);
 
+  // Voice: read each new question aloud, and dictate answers into the text box.
+  const voice = iv.mode === "voice";
+  const canDictate = voice && speechInputSupported();
+  const [readAloud, setReadAloud] = useState(voice && speechOutputSupported());
+  const dictation = useDictation();
+  const dictated = useRef("");
+  const lastTurn = iv.turns.at(-1);
+  const spokenTurns = useRef(new Set<number>());
+  useEffect(() => {
+    const index = iv.turns.length - 1;
+    if (!readAloud || iv.status !== "active" || lastTurn?.role !== "interviewer" || spokenTurns.current.has(index)) return;
+    spokenTurns.current.add(index);
+    speak(lastTurn.text);
+  }, [iv.turns.length, iv.status, lastTurn, readAloud]);
+  useEffect(() => () => stopSpeaking(), []);
+  useEffect(() => {
+    if (dictation.listening || dictation.text) {
+      setText(dictation.text);
+      dictated.current = dictation.text;
+    }
+  }, [dictation.text, dictation.listening]);
+
+  function toggleMic() {
+    if (dictation.listening) return dictation.stop();
+    stopSpeaking();
+    dictation.start(text);
+  }
+
   async function send(e: FormEvent) {
     e.preventDefault();
+    if (dictation.listening) dictation.stop();
     setBusy("answer");
     setError(null);
+    const spoken = dictation.spokenMs >= 500 ? { durationMs: Math.min(600_000, Math.round(dictation.spokenMs)), edited: text.trim() !== dictated.current.trim() } : undefined;
     try {
-      setIv(await api<Interview>(`/student/interviews/${iv.id}/answer`, { body: { text } }));
+      setIv(await api<Interview>(`/student/interviews/${iv.id}/answer`, { body: { text, ...(spoken ? { voice: spoken } : {}) } }));
       setText("");
+      dictation.reset();
+      dictated.current = "";
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -135,6 +196,19 @@ function Conversation({ initial, onDone }: { initial: Interview; onDone: () => v
         <div>
           <h1 style={{ margin: 0 }}>{t(iv.track === "product" ? "Product company interview" : "Service company interview")}</h1>
           {iv.focusSkills.length > 0 && <div className="small muted">{t("Focus: {skills}", { skills: iv.focusSkills.map((s) => s.name).join(", ") })}</div>}
+          {voice && iv.status === "active" && speechOutputSupported() && (
+            <label className="row small" style={{ gap: 6, marginTop: 4 }}>
+              <input
+                type="checkbox"
+                checked={readAloud}
+                onChange={(e) => {
+                  setReadAloud(e.target.checked);
+                  if (!e.target.checked) stopSpeaking();
+                }}
+              />
+              {t("Read questions aloud")}
+            </label>
+          )}
         </div>
         {iv.status === "active" && (
           <button className="btn ghost small" disabled={busy !== null} onClick={finish}>
@@ -155,6 +229,12 @@ function Conversation({ initial, onDone }: { initial: Interview; onDone: () => v
             }}
           >
             {turn.text}
+            {voice && turn.role === "interviewer" && speechOutputSupported() && (
+              <button type="button" className="btn ghost small" style={{ marginLeft: 6 }} aria-label={t("Hear again")} onClick={() => speak(turn.text)}>
+                {t("Hear again")}
+              </button>
+            )}
+            {turn.voice && <div className="small muted">{t("Spoken · {wpm} words a minute", { wpm: turn.voice.wpm })}</div>}
           </div>
         ))}
         {busy === "answer" && <div className="small muted">{t("The interviewer is thinking...")}</div>}
@@ -169,15 +249,26 @@ function Conversation({ initial, onDone }: { initial: Interview; onDone: () => v
             value={text}
             onChange={(e) => setText(e.target.value)}
             maxLength={4000}
-            placeholder={t("Answer as you would in the room. Explain your thinking.")}
-            disabled={busy !== null}
+            placeholder={t(canDictate ? "Press Speak and answer out loud. You can fix the words before sending." : "Answer as you would in the room. Explain your thinking.")}
+            disabled={busy !== null || dictation.listening}
           />
+          {voice && !canDictate && <div className="small muted">{t("This browser can't turn speech into text. Type your answers, or open PlayCode in Chrome or Edge.")}</div>}
+          {dictation.error && <ErrorBox message={t(dictation.error)} />}
           {error && <ErrorBox message={error} />}
           <div className="spread">
-            <span className="small muted">{t("{n} answers left", { n: iv.answersLeft })}</span>
-            <button className="btn primary" disabled={busy !== null || !text.trim()}>
-              {t("Send")}
-            </button>
+            <span className="small muted" aria-live="polite">
+              {dictation.listening ? t("Listening...") : t("{n} answers left", { n: iv.answersLeft })}
+            </span>
+            <div className="row">
+              {canDictate && (
+                <button type="button" className={`btn ${dictation.listening ? "danger" : ""}`} disabled={busy !== null} aria-pressed={dictation.listening} onClick={toggleMic}>
+                  {t(dictation.listening ? "Stop" : "Speak")}
+                </button>
+              )}
+              <button className="btn primary" disabled={busy !== null || !text.trim()}>
+                {t("Send")}
+              </button>
+            </div>
           </div>
         </form>
       ) : iv.scorecard ? (
@@ -201,6 +292,9 @@ function InterviewHome() {
   const params = useSearchParams();
   const openId = params.get("id");
   const [track, setTrack] = useState<Track>(params.get("track") === "product" ? "product" : "service");
+  const [mode, setMode] = useState<Mode>("text");
+  const [voiceOk, setVoiceOk] = useState(false);
+  useEffect(() => setVoiceOk(speechInputSupported()), []);
   const mine = useApi<Mine>("/student/interviews");
   const current = useApi<Interview>(openId ? `/student/interviews/${openId}` : null);
   const [starting, setStarting] = useState(false);
@@ -210,7 +304,7 @@ function InterviewHome() {
     setStarting(true);
     setError(null);
     try {
-      const iv = await api<Interview>("/student/interviews", { body: { track } });
+      const iv = await api<Interview>("/student/interviews", { body: { track, mode } });
       router.push(`/play/interview?id=${iv.id}`);
     } catch (e) {
       setError(errorMessage(e));
@@ -255,6 +349,18 @@ function InterviewHome() {
                 </button>
               ))}
             </div>
+            <div className="row wrap" role="group" aria-label={t("Answer by")}>
+              {(["text", "voice"] as const).map((m) => (
+                <button key={m} className={`btn small ${mode === m ? "primary" : ""}`} aria-pressed={mode === m} disabled={m === "voice" && !voiceOk} onClick={() => setMode(m)}>
+                  {t(m === "text" ? "Type answers" : "Speak answers")}
+                </button>
+              ))}
+            </div>
+            {mode === "voice" ? (
+              <div className="small muted">{t("Questions are read aloud and you answer out loud, as in a real interview. Your browser turns speech into text (Chrome and Edge use their speech service); PlayCode keeps only the text and how long you spoke.")}</div>
+            ) : (
+              !voiceOk && <div className="small muted">{t("Speaking answers needs Chrome, Edge or Safari.")}</div>
+            )}
             <button className="btn primary" disabled={starting || d.weeklyLeft === 0} onClick={start}>
               {starting ? t("Starting...") : t("Start interview")}
             </button>
@@ -269,7 +375,8 @@ function InterviewHome() {
           {d.interviews.map((iv) => (
             <button key={iv.id} className="spread" style={{ all: "unset", cursor: "pointer", display: "flex", justifyContent: "space-between" }} onClick={() => router.push(`/play/interview?id=${iv.id}`)}>
               <span>
-                {t(iv.track === "product" ? "Product company" : "Service company")}{" "}
+                {t(iv.track === "product" ? "Product company" : "Service company")}
+                {iv.mode === "voice" ? ` · ${t("spoken")}` : ""}{" "}
                 <span className="small muted">· {new Date(iv.startedAt).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" })}</span>
               </span>
               {iv.overall ? <span className="pill">{iv.overall}/5</span> : <span className="small muted">{t(iv.status === "active" ? "In progress" : "Not scored")}</span>}
