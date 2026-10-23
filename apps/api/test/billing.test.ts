@@ -5,6 +5,9 @@ import { aiUsage, tenants } from "../src/db/schema";
 import { setAiProvider, type AiProvider } from "../src/lib/ai";
 import { renderInvoicePdf, rupeesInWords } from "../src/services/billing";
 import { setPaymentFetch } from "../src/services/payments";
+import { sendBillingNotices } from "../src/services/billing-mail";
+import { setMailer, type Mail } from "../src/lib/mailer";
+import { invoices } from "../src/db/schema";
 import { createHmac } from "node:crypto";
 import { setup, type TestApp } from "./helpers";
 
@@ -201,6 +204,58 @@ describe("online payments", () => {
     expect(after).toMatchObject({ status: "paid", paidVia: "razorpay", paymentRef: "pay_2" });
     const other = JSON.stringify({ event: "payment.captured", payload: {} });
     expect((await webhook(other, sign("hook-secret", other))).json()).toEqual({ handled: false });
+  });
+});
+
+describe("billing emails", () => {
+  const mails: Mail[] = [];
+  beforeAll(() => setMailer({ send: async (m) => void mails.push(m) }));
+  afterAll(() => setMailer(undefined));
+  const DAY = 86_400_000;
+
+  it("emails each new invoice once, with the PDF", async () => {
+    await t.post(superAdmin, "/admin/billing/run", { period: "2026-07" });
+    const demo = await tenantId("demo-tech");
+    const inv = (await db.select().from(invoices).where(eq(invoices.tenantId, demo))).find((i) => i.period === "2026-07");
+    const first = await sendBillingNotices(db, t.clock.now);
+    expect(first.issued).toBeGreaterThan(0);
+    const mail = mails.find((m) => m.subject.startsWith(`PlayCode invoice ${inv!.number}`))!;
+    expect(mail.to).toContain("admin@demo.edu");
+    expect(mail.to).toContain("accounts@demo.edu"); // from the billing profile
+    expect(mail.attachments![0]!.contentType).toBe("application/pdf");
+    expect(mail.text).toContain("due by");
+    expect((await sendBillingNotices(db, t.clock.now)).issued).toBe(0);
+  });
+
+  it("reminds before the due date and weekly while overdue", async () => {
+    const demo = await tenantId("demo-tech");
+    const inv = (await db.select().from(invoices).where(eq(invoices.tenantId, demo))).find((i) => i.period === "2026-07")!;
+    const count = () => mails.filter((m) => m.subject.includes(inv.number)).length;
+    const before = count();
+    await sendBillingNotices(db, new Date(inv.dueAt.getTime() - 2 * DAY));
+    expect(mails.at(-1)!.subject).toContain("is due on");
+    await sendBillingNotices(db, new Date(inv.dueAt.getTime() - 1 * DAY)); // already reminded
+    await sendBillingNotices(db, new Date(inv.dueAt.getTime() + 1 * DAY));
+    await sendBillingNotices(db, new Date(inv.dueAt.getTime() + 3 * DAY)); // same week
+    await sendBillingNotices(db, new Date(inv.dueAt.getTime() + 8 * DAY));
+    // Due soon, then overdue in week one and week two.
+    expect(count() - before).toBe(3);
+    expect(mails.at(-1)!.subject).toBe(`Overdue: PlayCode invoice ${inv.number} (8 days)`);
+    // Paid invoices get no more reminders.
+    await t.post(superAdmin, `/admin/billing/invoices/${inv.id}/status`, { status: "paid" });
+    const n = count();
+    await sendBillingNotices(db, new Date(inv.dueAt.getTime() + 15 * DAY));
+    expect(count()).toBe(n);
+  });
+
+  it("reminds admins before the licence ends", async () => {
+    // Demo's licence ends on 31 Jul 2027.
+    await sendBillingNotices(db, new Date("2027-06-15T06:00:00Z")); // 47 days: the 60-day notice
+    await sendBillingNotices(db, new Date("2027-06-20T06:00:00Z")); // still the 60-day notice
+    await sendBillingNotices(db, new Date("2027-07-25T06:00:00Z")); // 7-day notice
+    const licence = mails.filter((m) => m.subject === "Your PlayCode licence for Demo Institute of Technology ends on 31 Jul 2027");
+    expect(licence).toHaveLength(2);
+    expect(licence[1]!.text).toContain("in 7 days");
   });
 });
 
