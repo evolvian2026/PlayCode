@@ -24,6 +24,7 @@ export interface Me {
   permissions: string[];
   home: "console" | "play";
   mfaSetupRequired?: boolean;
+  licence: { state: "active" | "ending" | "grace" | "expired"; validUntil: string | null; daysLeft: number | null; graceEndsOn: string | null } | null;
 }
 
 export interface ProfileSummary {

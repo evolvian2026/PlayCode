@@ -11,7 +11,7 @@ import { authenticate, parse, requirePermission } from "../lib/http";
 import { customerHealth, healthCsv } from "../services/health";
 import { closeLeagueWeek } from "../services/leagues";
 import { getTenant, tenantToday } from "../services/tenant";
-import { PLANS, type Plan } from "@playcode/core";
+import { PLANS, renewedUntil, type Plan } from "@playcode/core";
 
 /** Seats a partner has left to hand out: its pool minus what its sub-tenants hold. */
 async function partnerPool(partnerId: string, excludeChildId?: string) {
@@ -129,6 +129,24 @@ export async function adminRoutes(app: FastifyInstance) {
     }
     const [updated] = await db.update(tenants).set(body).where(eq(tenants.id, id)).returning();
     await audit(db, { tenantId: id, actorId: req.auth.userId, action: "tenant.update", target: id, data: body });
+    return { tenant: updated };
+  });
+
+  /** Renew a licence by whole months, from the later of today and the current end date. */
+  app.post("/tenants/:id/renew", { preHandler: requirePermission("tenants.manage") }, async (req) => {
+    const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+    const { months } = parse(z.object({ months: z.number().int().min(1).max(36) }), req.body);
+    const [target] = await db.select().from(tenants).where(eq(tenants.id, id));
+    if (!target) throw notFound("Institution");
+    const today = tenantToday(target, app.now());
+    const validUntil = renewedUntil(target.validUntil, today, months);
+    if (!req.auth.roles.includes("super_admin")) {
+      if (target.parentId !== req.auth.tenantId) throw forbidden("You can only renew your own institutions");
+      const [partner] = await db.select({ validUntil: tenants.validUntil }).from(tenants).where(eq(tenants.id, req.auth.tenantId!));
+      if (partner?.validUntil && validUntil > partner.validUntil) throw badRequest(`Your own licence ends on ${partner.validUntil}; renew colleges up to that date`);
+    }
+    const [updated] = await db.update(tenants).set({ validUntil }).where(eq(tenants.id, id)).returning();
+    await audit(db, { tenantId: id, actorId: req.auth.userId, action: "tenant.renew", target: id, data: { from: target.validUntil, to: validUntil, months } });
     return { tenant: updated };
   });
 

@@ -16,6 +16,7 @@ import { importStudents } from "../services/students";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
 import { hasFeature } from "../services/plan";
 import { reportRoutes } from "./v1-reports";
+import { assertWritable } from "../services/licence";
 
 // Public REST API for ERPs, LMSs and ATSs. Clients use OAuth 2.0 client
 // credentials: POST /v1/oauth/token, then send "Authorization: Bearer <token>".
@@ -89,6 +90,7 @@ export async function v1Routes(app: FastifyInstance) {
       }
       const [client] = await db.select({ revokedAt: apiClients.revokedAt }).from(apiClients).where(eq(apiClients.id, req.api.clientId));
       if (!client || client.revokedAt) throw unauthorized("This API client has been revoked");
+      await assertWritable(db, { tenantId: req.api.tenantId, method: req.method, url: req.url, superAdmin: false, now: app.now() });
     });
 
     reportRoutes(api, requireScope);

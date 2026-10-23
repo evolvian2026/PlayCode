@@ -256,6 +256,11 @@ const HI: Record<string, string> = {
   "In progress": "जारी है",
   "Not scored": "स्कोर नहीं हुआ",
 
+  // Licence
+  "Your institution's PlayCode licence has ended. Practice keeps working until {date}.": "आपके संस्थान का PlayCode लाइसेंस खत्म हो गया है। {date} तक अभ्यास चलता रहेगा।",
+  "Your institution's PlayCode licence has ended. You can still see your progress, but practice is paused until it is renewed.":
+    "आपके संस्थान का PlayCode लाइसेंस खत्म हो गया है। आप अपनी प्रगति देख सकते हैं, लेकिन नवीनीकरण होने तक अभ्यास रुका रहेगा।",
+
   // Push notifications
   "Notifications on this phone": "इस फ़ोन पर नोटिफ़िकेशन",
   "Get streak, assignment, test and placement reminders as phone notifications. Free, and you can turn them off any time.":

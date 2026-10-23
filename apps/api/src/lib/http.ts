@@ -7,6 +7,7 @@ import { authSessions, tenants, users } from "../db/schema";
 import { verifyToken } from "./auth";
 import { badRequest, forbidden, HttpError, unauthorized } from "./errors";
 import type { AuthContext } from "../services/scope";
+import { assertWritable } from "../services/licence";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -57,6 +58,8 @@ export async function authenticate(req: FastifyRequest, _reply: FastifyReply): P
     throw new HttpError(403, "mfa_setup_required", "Your institution requires two-factor sign-in. Set it up to continue.");
   }
   req.auth = { userId: claims.sub, tenantId: claims.tenantId, roles: claims.roles, sessionId: claims.sid };
+  // Past the licence grace period the account is read-only.
+  await assertWritable(db, { tenantId: claims.tenantId, method: req.method, url: req.url, superAdmin: claims.roles.includes("super_admin"), now: req.server.now() });
 }
 
 /** What staff can still reach before setting up two-factor sign-in. */

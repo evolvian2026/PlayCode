@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ErrorBox, Loading, Stat } from "@/components/ui";
-import { fetchObjectUrl, useApi } from "@/lib/api";
+import { api, errorMessage, fetchObjectUrl, useApi } from "@/lib/api";
 
 type Status = "healthy" | "watch" | "at_risk";
 
@@ -39,6 +39,17 @@ const TONE: Record<Status, string> = { healthy: "good", watch: "warn", at_risk: 
 export default function CustomerHealth() {
   const { data, error, loading, reload } = useApi<Health>("/admin/health");
   const [filter, setFilter] = useState<Status | "renewals" | "all">("all");
+
+  async function renew(c: Customer) {
+    const months = window.prompt(`Renew ${c.name} by how many months?`, "12");
+    if (!months) return;
+    try {
+      await api(`/admin/tenants/${c.id}/renew`, { body: { months: Number(months) } });
+      reload();
+    } catch (e) {
+      window.alert(errorMessage(e));
+    }
+  }
 
   async function download() {
     const url = await fetchObjectUrl("/admin/health/export");
@@ -130,6 +141,11 @@ export default function CustomerHealth() {
                   <td className="small">
                     {c.validUntil ? new Date(`${c.validUntil}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "-"}
                     {c.overdueDays > 0 && <div style={{ color: "var(--bad)" }}>{c.overdueDays} days overdue</div>}
+                    {c.licenceDaysLeft !== null && c.licenceDaysLeft <= 90 && (
+                      <button className="btn small ghost" style={{ padding: "2px 0" }} onClick={() => renew(c)}>
+                        Renew
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -125,7 +125,7 @@ export async function sendBillingNotices(db: Db, now: Date) {
         kind: "licence_renewal",
         now,
         subject: `Your PlayCode licence for ${t.name} ends on ${date(ends)}`,
-        text: `Hello,\n\nThe PlayCode licence for ${t.name} (${t.seats} seats, ${t.plan} plan) ends on ${date(ends)}, in ${daysLeft} days. Renew before then so students can keep practising without a break.\n\nTo renew, reply to this email or contact your PlayCode account manager${t.parentId ? " or training partner" : ""}.\n\nPlan and usage: ${appLink("/console/billing")}\n\nPlayCode`,
+        text: `Hello,\n\nThe PlayCode licence for ${t.name} (${t.seats} seats, ${t.plan} plan) ends on ${date(ends)}, in ${daysLeft} days. After that there are 14 days of grace, then the account becomes read-only (people can still sign in and see their data) until it is renewed.\n\nTo renew, reply to this email or contact your PlayCode account manager${t.parentId ? " or training partner" : ""}.\n\nPlan and usage: ${appLink("/console/billing")}\n\nPlayCode`,
       }),
     );
   }

@@ -9,6 +9,7 @@ import { rateLimit } from "../lib/rate-limit";
 import { checkPassword, signMfaToken, signToken, verifyMfaToken } from "../lib/auth";
 import { forbidden, notFound, unauthorized } from "../lib/errors";
 import { env } from "../env";
+import { tenantLicence } from "../services/licence";
 import { effectiveBranding } from "../services/branding";
 import { startSaml } from "../services/saml";
 import { finishLogin, startLogin } from "../services/sso";
@@ -21,7 +22,7 @@ import { issueSession, type SignInMethod } from "../services/sessions";
  * and platform admins can switch into another tenant, so the active tenant
  * can differ from the user's own.
  */
-export async function loadIdentity(userId: string, activeTenantId?: string | null) {
+export async function loadIdentity(userId: string, activeTenantId?: string | null, now = new Date()) {
   const [user] = await db.select().from(users).where(eq(users.id, userId));
   if (!user) return null;
   const rows = await db.select({ role: memberships.role }).from(memberships).where(eq(memberships.userId, userId));
@@ -40,6 +41,8 @@ export async function loadIdentity(userId: string, activeTenantId?: string | nul
       home: isStaff(roles) ? "console" : "play",
       /** The institution requires two-factor for staff and this person hasn't set it up yet. */
       mfaSetupRequired: Boolean(isStaff(roles) && tenant?.settings.requireStaffMfa && !user.totpSecretEnc),
+      /** For the renewal and read-only banners. */
+      licence: tenant ? await tenantLicence(db, tenant.id, now).then(({ tenantName: _n, ...l }) => l) : null,
     },
   };
 }
@@ -64,7 +67,7 @@ async function canSwitch(userId: string, roles: Role[], homeTenantId: string | n
 async function firstFactorPassed(user: typeof users.$inferSelect, method: SignInMethod, req: FastifyRequest) {
   if (user.totpSecretEnc) return { mfaRequired: true, mfaToken: await signMfaToken(user.id, method) };
   const token = await issueSession(db, { userId: user.id, method, userAgent: req.headers["user-agent"], ip: req.ip });
-  return { token, ...(await loadIdentity(user.id))!.body };
+  return { token, ...(await loadIdentity(user.id, undefined, req.server.now()))!.body };
 }
 
 export async function authRoutes(app: FastifyInstance) {
@@ -111,11 +114,11 @@ export async function authRoutes(app: FastifyInstance) {
     const [user] = await db.select().from(users).where(eq(users.id, pending.userId));
     if (!user || user.status !== "active" || !(await checkSecondFactor(db, user, body.code, app.now()))) throw unauthorized("That code didn't match");
     const token = await issueSession(db, { userId: user.id, method: pending.method as SignInMethod, userAgent: req.headers["user-agent"], ip: req.ip });
-    return { token, ...(await loadIdentity(user.id))!.body };
+    return { token, ...(await loadIdentity(user.id, undefined, req.server.now()))!.body };
   });
 
   app.get("/me", { preHandler: authenticate }, async (req) => {
-    const identity = await loadIdentity(req.auth.userId, req.auth.tenantId);
+    const identity = await loadIdentity(req.auth.userId, req.auth.tenantId, req.server.now());
     if (!identity) throw notFound("User");
     return identity.body;
   });
@@ -154,6 +157,6 @@ export async function authRoutes(app: FastifyInstance) {
     if (!(await canSwitch(identity.user.id, identity.roles, identity.user.tenantId, target))) throw forbidden("You cannot manage that institution");
     await audit(db, { tenantId: target.id, actorId: identity.user.id, action: "tenant.switch_in", target: target.id });
     const token = await signToken({ sub: identity.user.id, tenantId: target.id, roles: identity.roles, sid: req.auth.sessionId! }, "4h");
-    return { token, ...(await loadIdentity(identity.user.id, target.id))!.body };
+    return { token, ...(await loadIdentity(identity.user.id, target.id, req.server.now()))!.body };
   });
 }

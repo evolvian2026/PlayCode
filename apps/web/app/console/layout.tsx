@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { planHas, ROLE_LABELS, type Feature, type Plan } from "@playcode/core";
 import { AuthGate, signOut, switchTenant, useMe } from "@/components/Auth";
+import { LicenceBanner } from "@/components/LicenceBanner";
 import { Icon } from "@/components/Icon";
 import { logoSrc } from "@/lib/branding";
 
@@ -104,6 +105,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
         <Side />
         <main className="console-main">
           <SwitchedBanner />
+          <LicenceBanner area="console" />
           {children}
         </main>
       </div>

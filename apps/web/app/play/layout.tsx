@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { DIVISION_LABELS } from "@playcode/core";
 import { AuthGate } from "@/components/Auth";
+import { LicenceBanner } from "@/components/LicenceBanner";
 import { Icon } from "@/components/Icon";
 import { api } from "@/lib/api";
 import { PlayerProvider, usePlayer } from "@/lib/player-state";
@@ -101,6 +102,7 @@ export default function PlayLayout({ children }: { children: ReactNode }) {
       <PlayerProvider>
         <div className="play-shell">
           <TopBar />
+          <LicenceBanner area="play" />
           {children}
         </div>
         <BottomNav />
