@@ -162,10 +162,11 @@ function Conversation({ initial, onDone }: { initial: Interview; onDone: () => v
 
   async function send(e: FormEvent) {
     e.preventDefault();
+    const spokenMs = dictation.spokenMs();
     if (dictation.listening) dictation.stop();
     setBusy("answer");
     setError(null);
-    const spoken = dictation.spokenMs >= 500 ? { durationMs: Math.min(600_000, Math.round(dictation.spokenMs)), edited: text.trim() !== dictated.current.trim() } : undefined;
+    const spoken = spokenMs >= 500 ? { durationMs: Math.min(600_000, Math.round(spokenMs)), edited: text.trim() !== dictated.current.trim() } : undefined;
     try {
       setIv(await api<Interview>(`/student/interviews/${iv.id}/answer`, { body: { text, ...(spoken ? { voice: spoken } : {}) } }));
       setText("");

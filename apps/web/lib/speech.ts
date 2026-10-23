@@ -52,22 +52,23 @@ const ERRORS: Record<string, string> = {
 
 /**
  * Dictation into a text box. `text` is the transcript so far (final words plus
- * the words still being recognised); `spokenMs` adds up the time the
- * microphone was on across every start and stop since the last reset.
+ * the words still being recognised); `spokenMs()` adds up the time the
+ * microphone was on across every start and stop since the last reset,
+ * including a recording still running (Send can be pressed before the
+ * browser reports that recognition has ended).
  */
 export function useDictation(lang = "en-IN") {
   const [listening, setListening] = useState(false);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [spokenMs, setSpokenMs] = useState(0);
+  const totalMs = useRef(0);
   const rec = useRef<Recognition | null>(null);
   const finalText = useRef("");
   const startedAt = useRef<number | null>(null);
 
   const closeTimer = () => {
     if (startedAt.current !== null) {
-      const elapsed = Date.now() - startedAt.current;
-      setSpokenMs((ms) => ms + elapsed);
+      totalMs.current += Date.now() - startedAt.current;
       startedAt.current = null;
     }
   };
@@ -117,8 +118,10 @@ export function useDictation(lang = "en-IN") {
     finalText.current = "";
     setListening(false);
     setText("");
-    setSpokenMs(0);
+    totalMs.current = 0;
   }, []);
+
+  const spokenMs = useCallback(() => totalMs.current + (startedAt.current !== null ? Date.now() - startedAt.current : 0), []);
 
   useEffect(() => () => rec.current?.abort(), []);
 
