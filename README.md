@@ -69,6 +69,12 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - Billing emails: each new invoice is emailed with its PDF to the customer's accounts email and admins, with a reminder three days before it is due, weekly reminders while overdue (four at most), and licence-renewal reminders 60, 30 and 7 days before a licence ends.
 - Reporting API for BI tools (scope `reports:read`): `GET /v1/reports/engagement/daily` (per day, overall or per section), `/v1/reports/skill-mastery`, `/v1/reports/readiness` and `/v1/reports/placements`, as JSON or CSV (`?format=csv`), with cursor paging. Power BI, Tableau, Looker Studio or Excel can pull them on a schedule.
 
+**Phase 9 additions**
+- Licence lifecycle: after a licence's end date there are 14 days of full access with a warning, then the account is read-only. People can still sign in, view and export their data, make privacy requests, change settings and pay invoices, but nothing can be practised or created, and integration writes are refused. A college under a partner also stops when the partner's licence does. Admins see a renewal banner 30 days ahead. PlayCode staff renew licences by months from customer health; partners renew their colleges up to their own end date.
+- Question bank quality: the content team (or an institution's authors) imports up to 200 questions at a time as JSON; each is saved as a draft and checked as in the editor, and the ones that pass publish in one step. Students report a question from the player once they've answered it. Item analysis on first attempts (difficulty, upper-lower discrimination, and a strong-student favourite that isn't the keyed option) flags likely flaws. Flagged and reported questions make a review queue (`/console/studio/review`) where reports are resolved and questions edited or retired. Reports show the institution, never the student.
+- GST credit notes: PlayCode staff correct an issued invoice with a numbered credit note (`PC/CN/2026-27/0001`) carrying the invoice's kind of tax, and can refund an online payment through Razorpay at the same time. Customers get it by email and on their billing page; payment links and reminders use the amount still due.
+- Accessibility: an axe-core check (WCAG 2.1 A and AA) over 25 student and console screens, with the issues it found fixed (progress bar names, text contrast of status colours, faded text, link styling). Re-run it with `pnpm --filter @playcode/web a11y` against a running demo (`PW=$(npm root -g)/playwright` if Playwright is installed globally).
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -188,6 +194,12 @@ Billing emails need `SMTP_URL`; they go out from the hourly job and are recorded
 
 Reporting API: create an API client with the "Reporting for BI tools" scope under Integrations. Engagement days follow the institution's time zone; readiness is as of the request; placement rows carry the readiness and practice snapshot taken when the student registered.
 
+Licences: a tenant's end date is `valid_until`; leave it empty for no end date. Read-only starts the day after the 14-day grace period, in the institution's time zone. Partners can't renew a college beyond their own end date.
+
+Question import format: a JSON array of questions as the studio editor saves them (see the example on the import page). Item analysis needs at least 30 first attempts per question in the last 180 days before it judges difficulty or discrimination.
+
+Credit notes: issued from Invoicing in the console. A credit note can't exceed what is left to credit on the invoice. With "refund", the Razorpay refund is made first; if Razorpay refuses, no credit note is recorded.
+
 Running several API instances: put them behind a load balancer (WebSocket upgrades must be allowed); they share Postgres for live events (each instance keeps one extra LISTEN connection), rate limits, webhook and grade outboxes and SAML request ids. Run the scheduled jobs from one place only. The code-execution queue limits concurrency per instance, so size `EXECUTION_CONCURRENCY` per instance against your Judge0 capacity. `REALTIME_FANOUT=off` keeps live events within one instance.
 
 Other operations:
@@ -211,4 +223,4 @@ Other operations:
 
 - **Sessions are checked against the account and its device session on every request**, so disabling or erasing an account, or signing a device out, takes effect at once. This costs one indexed lookup per request.
 
-Not built yet: Razorpay refunds, locking accounts when a licence ends, voice mock interviews, SAML single logout and encrypted assertions, PostgreSQL row-level security, languages other than English and Hindi, and native mobile apps (the web app is an installable PWA).
+Not built yet: voice mock interviews, screen-reader testing by people who use them (the automated check covers WCAG rules it can test), SAML single logout and encrypted assertions, PostgreSQL row-level security, languages other than English and Hindi, and native mobile apps (the web app is an installable PWA).

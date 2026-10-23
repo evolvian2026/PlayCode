@@ -141,7 +141,7 @@ function InvoiceTable({ invoices, admin, onlinePayments = false, onChange }: { i
           {invoices.map((i) => (
             <Fragment key={i.id}>
             <tr>
-              <td>
+              <td style={{ whiteSpace: "nowrap" }}>
                 {i.number}
                 <div className="small muted">due {new Date(i.dueAt).toLocaleDateString()}</div>
               </td>
