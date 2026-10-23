@@ -31,6 +31,8 @@ const PAGES = [
   { as: "student@demo.edu", path: "/play/paths", mobile: true },
   { as: "student@demo.edu", path: "/play/interview", mobile: true },
   { as: "student@demo.edu", path: "/play/duels", mobile: true },
+  { as: "student@demo.edu", path: "/play/talent", mobile: true },
+  { as: "recruiter@acme.dev", path: "/console/talent", mobile: false },
   { as: "hod.cse@demo.edu", path: "/console/studio", mobile: false },
   { as: "content@playcode.dev", path: "/console/studio/review", mobile: false },
   { as: "faculty@demo.edu", path: "/console/interviews", mobile: false },

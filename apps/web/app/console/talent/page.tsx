@@ -262,8 +262,8 @@ function InviteList() {
 
 export default function TalentPage() {
   const skills = useApi<{ skills: { id: string; name: string; topicName: string }[] }>("/console/skills");
-  const [f, setF] = useState({ track: "service" as Track, minReadiness: 40, graduationYear: "", location: "", skill: "" });
-  const [query, setQuery] = useState(() => new URLSearchParams({ track: "service", minReadiness: "40" }).toString());
+  const [f, setF] = useState({ track: "service" as Track, minReadiness: 0, graduationYear: "", location: "", skill: "" });
+  const [query, setQuery] = useState(() => new URLSearchParams({ track: "service", minReadiness: "0" }).toString());
   const results = useApi<Results>(`/console/talent/search?${query}`);
   const [open, setOpen] = useState<string | null>(null);
   const [tab, setTab] = useState<"search" | "invites">("search");
