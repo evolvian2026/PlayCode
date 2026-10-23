@@ -75,6 +75,13 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - GST credit notes: PlayCode staff correct an issued invoice with a numbered credit note (`PC/CN/2026-27/0001`) carrying the invoice's kind of tax, and can refund an online payment through Razorpay at the same time. Customers get it by email and on their billing page; payment links and reminders use the amount still due.
 - Accessibility: an axe-core check (WCAG 2.1 A and AA) over 25 student and console screens, with the issues it found fixed (progress bar names, text contrast of status colours, faded text, link styling). Re-run it with `pnpm --filter @playcode/web a11y` against a running demo (`PW=$(npm root -g)/playwright` if Playwright is installed globally).
 
+**Phase 10: production readiness**
+- CI (GitHub Actions): dependency audit (fails on high or critical advisories), type checks, content verification by running every bundled question, core and API tests against Postgres, the web build, then a seeded demo started up for the accessibility check and a backup-and-restore round trip.
+- Data retention (the DPDP Act's storage limitation): a nightly job deletes webcam snapshots a set number of days after their test closes (90 by default, 7 to 730 per institution under Settings), used or expired sign-in codes, sessions signed out or unused for 30 days, notifications after a year, push subscriptions unused for 180 days, and expired SAML, LTI and rate-limit leftovers. Learning records, results, certificates and the audit trail are kept.
+- Monitoring: an `x-request-id` on every response (500 errors quote it), `/health` for liveness and `/health/ready` for the database and migrations, Prometheus metrics at `/metrics` (request counts and latency by route, job health, outbox backlogs) behind `METRICS_TOKEN`, and a System status page for PlayCode staff.
+- Security: a Content Security Policy and other security headers on the web app, unframeable `nosniff` responses from the API, `no-store` on signed-in responses, rate limits on public lookups, and a clean dependency audit apart from one moderate advisory in a development tool (esbuild under drizzle-kit; its affected dev server isn't used).
+- Backups: `ops/backup.sh` (compressed `pg_dump` plus local file storage, checksums, retention, optional upload command) and `ops/restore-check.sh`, which restores the newest backup into a temporary database and checks it.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -152,6 +159,10 @@ Scheduled jobs (run them from cron or your scheduler):
 | Close league week | Mondays after midnight, tenant time | `pnpm --filter @playcode/api league:close` |
 | Nudges, notification delivery (in-app, push, WhatsApp), missed snapshot reviews, weekly report emails, billing emails | Hourly (streak reminders only fire 6-9 pm local time) | `pnpm --filter @playcode/api nudges:run` |
 | Webhook and LMS grade retries | Every minute | `pnpm --filter @playcode/api webhooks:deliver` |
+| Data retention clean-up | Nightly | `pnpm --filter @playcode/api retention:run` |
+| Database and file backup | Nightly, after the clean-up | `ops/backup.sh`, then `ops/restore-check.sh` |
+
+Every job records its runs in `job_runs`; PlayCode staff see them under System status, and a job that fails or hasn't succeeded for twice its interval shows as needing attention (and as `playcode_job_healthy 0` in metrics). Each script exits non-zero on failure, so cron or your scheduler can alert too.
 
 Webhooks are sent straight away when an event happens; the job retries failures
 (1, 2, 4, 8, 16 then 32 minutes apart, 7 attempts in all) and picks up anything a crash left behind.
@@ -199,6 +210,12 @@ Licences: a tenant's end date is `valid_until`; leave it empty for no end date. 
 Question import format: a JSON array of questions as the studio editor saves them (see the example on the import page). Item analysis needs at least 30 first attempts per question in the last 180 days before it judges difficulty or discrimination.
 
 Credit notes: issued from Invoicing in the console. A credit note can't exceed what is left to credit on the invoice. With "refund", the Razorpay refund is made first; if Razorpay refuses, no credit note is recorded.
+
+Monitoring: point your uptime checker at `/health/ready` (503 until the database is reachable and migrated) and Prometheus at `/metrics` with `Authorization: Bearer <METRICS_TOKEN>`; scrape every API instance, since request metrics are per instance. Useful alerts: `playcode_job_healthy == 0`, `playcode_outbox_pending` growing for an hour, and `playcode_webhook_deliveries_failed` increasing. Set `APP_VERSION` to show the deployed version on the status page.
+
+Backups: run `DATABASE_URL=... BACKUP_DIR=/var/backups/playcode STORAGE_DIR=... ops/backup.sh` nightly and copy the files off the server (`BACKUP_UPLOAD_CMD` receives the file paths). Run `ADMIN_DATABASE_URL=postgres://.../postgres ops/restore-check.sh` after each backup or at least weekly; it needs a role that can create databases. Restore for real with `pg_restore --clean --no-owner --dbname=$DATABASE_URL <file>.dump`, then untar the storage archive into `STORAGE_DIR`.
+
+Security headers: the web app's Content Security Policy allows network calls to `NEXT_PUBLIC_API_URL` only, so set it at build time to the API's public address. Next's inline bootstrap needs `'unsafe-inline'` for scripts; moving to per-request nonces is the next step if you need a stricter policy.
 
 Running several API instances: put them behind a load balancer (WebSocket upgrades must be allowed); they share Postgres for live events (each instance keeps one extra LISTEN connection), rate limits, webhook and grade outboxes and SAML request ids. Run the scheduled jobs from one place only. The code-execution queue limits concurrency per instance, so size `EXECUTION_CONCURRENCY` per instance against your Judge0 capacity. `REALTIME_FANOUT=off` keeps live events within one instance.
 
