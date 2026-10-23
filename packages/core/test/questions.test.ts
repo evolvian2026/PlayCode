@@ -126,7 +126,7 @@ describe("concept questions", () => {
   it("are plain multiple choice with no code", () => {
     expect(validateQuestion(concept)).toEqual([]);
     expect(grade(concept.answer, { kind: "option", optionId: "a" })).toBe(true);
-    expect(JSON.stringify(toStudentView(concept))).not.toContain("optionId");
+    expect(JSON.stringify(toStudentView(concept, "s1"))).not.toContain("optionId");
     expect(validateQuestion({ ...concept, answer: { kind: "text", accepted: ["Preemption"] } })).not.toEqual([]);
   });
 });
