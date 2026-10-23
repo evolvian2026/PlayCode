@@ -6,7 +6,7 @@ the bug, reorder the lines and more), wrapped in XP, streaks, hearts, leagues
 and missions. Colleges get assignments, analytics and a readiness score per
 student.
 
-This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which closes the roadmap items they left open) and Phase 5 (enterprise readiness and scale).
+This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which closes the roadmap items they left open), Phase 5 (enterprise readiness and scale) and the phases after it, listed below.
 
 ## What is in this build
 
@@ -81,6 +81,11 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - Monitoring: an `x-request-id` on every response (500 errors quote it), `/health` for liveness and `/health/ready` for the database and migrations, Prometheus metrics at `/metrics` (request counts and latency by route, job health, outbox backlogs) behind `METRICS_TOKEN`, and a System status page for PlayCode staff.
 - Security: a Content Security Policy and other security headers on the web app, unframeable `nosniff` responses from the API, `no-store` on signed-in responses, rate limits on public lookups, and a clean dependency audit apart from one moderate advisory in a development tool (esbuild under drizzle-kit; its affected dev server isn't used).
 - Backups: `ops/backup.sh` (compressed `pg_dump` plus local file storage, checksums, retention, optional upload command) and `ops/restore-check.sh`, which restores the newest backup into a temporary database and checks it.
+
+**Phase 11 additions**
+- Spaced review: every skill a student has started sits on a review ladder (2, 5, 12, 30, 60 and 120 days). Remembering a skill when it is due moves it up a step; a wrong answer moves it down one; practising early refreshes the due date without moving it up. Skills that are due (and were learned to at least 35% mastery) show as "fading" on the home screen and the learn map, and a review session interleaves two quick questions from each of up to five due skills, without costing hearts. Students with three or more fading skills get a reminder once a week (late afternoon).
+- Spoken mock interviews: students can choose to speak their answers. The browser reads each question aloud and turns speech into text with the Web Speech API (Chrome and Edge use their speech service; Safari can work on the device), and the student can correct the words before sending. PlayCode stores only the text and how long the student spoke, never audio. Each spoken answer records pace and filler words, the scorecard adds delivery feedback (words a minute, fillers per 100 words, tips), the interviewer keeps questions short for listening, and the scorer ignores transcription errors. Teachers see which interviews and answers were spoken and whether the transcript was edited.
+- SAML single logout and encrypted assertions: with a service-provider key pair (`SAML_SP_PRIVATE_KEY`, `SAML_SP_CERT`), PlayCode's metadata publishes signing and encryption certificates and a single logout service. Signing out of a SAML session sends a signed logout request to the IdP; a signed IdP logout request (redirect or POST binding) ends the PlayCode sessions it names (by NameID and SessionIndex) and is answered with a logout response. Unsigned logout requests are refused. Encrypted assertions are decrypted, and an institution can require them.
 
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
@@ -157,7 +162,7 @@ Scheduled jobs (run them from cron or your scheduler):
 | Job | When | Command |
 | --- | --- | --- |
 | Close league week | Mondays after midnight, tenant time | `pnpm --filter @playcode/api league:close` |
-| Nudges, notification delivery (in-app, push, WhatsApp), missed snapshot reviews, weekly report emails, billing emails | Hourly (streak reminders only fire 6-9 pm local time) | `pnpm --filter @playcode/api nudges:run` |
+| Nudges, notification delivery (in-app, push, WhatsApp), missed snapshot reviews, weekly report emails, billing emails | Hourly (streak reminders only fire 6-9 pm local time, fading-skill reminders 4-6 pm and at most weekly) | `pnpm --filter @playcode/api nudges:run` |
 | Webhook and LMS grade retries | Every minute | `pnpm --filter @playcode/api webhooks:deliver` |
 | Data retention clean-up | Nightly | `pnpm --filter @playcode/api retention:run` |
 | Database and file backup | Nightly, after the clean-up | `ops/backup.sh`, then `ops/restore-check.sh` |
@@ -171,7 +176,7 @@ Code execution:
 - Development and tests use the local runner (`EXECUTION_BACKEND=local`), which needs `gcc`, `javac`/`java` and `python3` and limits CPU, memory and output with `prlimit`. It does not isolate the network or filesystem, so the API refuses it in production.
 - Production: run [Judge0](https://github.com/judge0/judge0) on its own network and set `EXECUTION_BACKEND=judge0` and `JUDGE0_URL`. Assessments get priority over duels and practice in the execution queue.
 
-WhatsApp nudges: set `WHATSAPP_TOKEN` and `WHATSAPP_PHONE_ID` (WhatsApp Cloud API) and create approved templates named `playcode_streak_at_risk`, `playcode_assignment_due`, `playcode_test_open`, `playcode_duel_invite` and `playcode_announcement`, each with two body parameters (title, message). Students add their number on their profile or through the CSV import (fourth column).
+WhatsApp nudges: set `WHATSAPP_TOKEN` and `WHATSAPP_PHONE_ID` (WhatsApp Cloud API) and create approved templates named `playcode_streak_at_risk`, `playcode_assignment_due`, `playcode_test_open`, `playcode_duel_invite`, `playcode_announcement`, `playcode_placement` and `playcode_review_due`, each with two body parameters (title, message). Students add their number on their profile or through the CSV import (fourth column).
 
 Single sign-on: set `API_PUBLIC_URL` to the address browsers use for the API, and register `<API_PUBLIC_URL>/auth/sso/callback` as the redirect URI in Google Cloud or Microsoft Entra. The institution admin then enters the client ID and secret under Settings. Students sign in from `/login?org=<slug>`.
 
@@ -185,7 +190,7 @@ AI features: set `ANTHROPIC_API_KEY` on the API. They use Claude Opus 5.5 (`AI_M
 
 LMS (LTI 1.3): the institution admin registers the LMS under Settings (Moodle and Canvas URLs are filled in from presets) and gives the LMS admin the tool's login, launch and JWKS URLs shown there. In the LMS, enable "Assignment and Grade Services", share name and email, and open the tool in a new window (browsers block sign-in storage inside cross-site iframes). A teacher's first launch of a new activity asks which assignment it opens; alternatively set the custom parameter `assignment_id=<id>`. Students launching must be in a batch the assignment targets. Teachers can also add activities from the LMS's content picker (deep linking): they choose assignments in PlayCode and the LMS creates the activities and gradebook columns.
 
-SAML: under Settings, paste the identity provider's metadata (or enter its entity ID, redirect SSO URL and signing certificate) and give the IdP admin PlayCode's SP metadata URL shown there. Assertions must be signed; the email comes from the NameID (email format) or a named attribute. When SAML is on, the sign-in button uses it instead of OpenID Connect.
+SAML: under Settings, paste the identity provider's metadata (or enter its entity ID, redirect SSO URL and signing certificate) and give the IdP admin PlayCode's SP metadata URL shown there. Assertions must be signed; the email comes from the NameID (email format) or a named attribute. When SAML is on, the sign-in button uses it instead of OpenID Connect. For single logout and encrypted assertions, give the server a key pair (`openssl req -x509 -newkey rsa:2048 -nodes -days 1095 -subj "/CN=PlayCode SAML" -keyout sp.key -out sp.crt`, then set `SAML_SP_PRIVATE_KEY` and `SAML_SP_CERT`); the SP metadata then carries the certificate and logout URL, and the settings take the IdP's single logout URL (read from its metadata) and an option to require encrypted assertions. Rotating the key means sending IdP admins the new metadata.
 
 Email: set `SMTP_URL` (for example `smtps://user:pass@smtp.example.com:465`) and `MAIL_FROM` for the weekly report emails. Without it, reports can still be downloaded.
 
@@ -240,4 +245,8 @@ Other operations:
 
 - **Sessions are checked against the account and its device session on every request**, so disabling or erasing an account, or signing a device out, takes effect at once. This costs one indexed lookup per request.
 
-Not built yet: voice mock interviews, screen-reader testing by people who use them (the automated check covers WCAG rules it can test), SAML single logout and encrypted assertions, PostgreSQL row-level security, languages other than English and Hindi, and native mobile apps (the web app is an installable PWA).
+- **Spoken interviews use the browser's speech recognition**, not a speech API of our own: there is no audio upload, storage or extra cost, and it works on most Android phones (Chrome). The trade-off is that Firefox can't do it (students type there) and pace is measured from microphone time, which includes pauses.
+- **Spaced review works per skill, not per question**: placement tests sample a skill rather than repeat a question, and a skill-level ladder keeps the review queue short enough to clear in minutes.
+- **The SAML key pair is one per server**, from the environment, rather than one per institution: IdPs only need PlayCode's certificate, and rotating it is a deploy, not a per-college task.
+
+Not built yet: screen-reader testing by people who use them (the automated check covers WCAG rules it can test), PostgreSQL row-level security, languages other than English and Hindi, and native mobile apps (the web app is an installable PWA).
