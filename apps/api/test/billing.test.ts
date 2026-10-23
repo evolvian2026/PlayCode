@@ -233,14 +233,14 @@ describe("billing emails", () => {
     const count = () => mails.filter((m) => m.subject.includes(inv.number)).length;
     const before = count();
     await sendBillingNotices(db, new Date(inv.dueAt.getTime() - 2 * DAY));
-    expect(mails.at(-1)!.subject).toContain("is due on");
+    expect(mails.map((m) => m.subject)).toContain(`Reminder: PlayCode invoice ${inv.number} is due on ${inv.dueAt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" })}`);
     await sendBillingNotices(db, new Date(inv.dueAt.getTime() - 1 * DAY)); // already reminded
     await sendBillingNotices(db, new Date(inv.dueAt.getTime() + 1 * DAY));
     await sendBillingNotices(db, new Date(inv.dueAt.getTime() + 3 * DAY)); // same week
     await sendBillingNotices(db, new Date(inv.dueAt.getTime() + 8 * DAY));
     // Due soon, then overdue in week one and week two.
     expect(count() - before).toBe(3);
-    expect(mails.at(-1)!.subject).toBe(`Overdue: PlayCode invoice ${inv.number} (8 days)`);
+    expect(mails.map((m) => m.subject)).toContain(`Overdue: PlayCode invoice ${inv.number} (8 days)`);
     // Paid invoices get no more reminders.
     await t.post(superAdmin, `/admin/billing/invoices/${inv.id}/status`, { status: "paid" });
     const n = count();
