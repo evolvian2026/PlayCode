@@ -19,9 +19,10 @@ export function useMe(): Me {
 export async function signOut() {
   // Stop push notifications to this device, then revoke its session on the server too, so the token is dead even if it was copied.
   await disablePush().catch(() => {});
-  await api("/auth/logout", { body: {} }).catch(() => {});
+  const res = await api<{ redirect?: string | null }>("/auth/logout", { body: {} }).catch(() => null);
   setToken(null);
-  window.location.href = "/login";
+  // SAML single logout: the identity provider ends its session, then sends the browser back to sign-in.
+  window.location.href = res?.redirect ?? "/login";
 }
 
 /** Partner and platform admins: work inside another tenant, or return home (null). */

@@ -53,6 +53,7 @@ const HI: Record<string, string> = {
   Continue: "जारी रखें",
   Start: "शुरू करें",
   "Assigned to you": "आपको दिया गया काम",
+  "You are signed out of PlayCode and your institution's sign-in.": "आप PlayCode और अपने संस्थान के साइन-इन, दोनों से साइन आउट हो गए हैं।",
   "Keep it fresh": "याद ताज़ा रखें",
   "1 skill is fading": "1 स्किल भूलने लगी है",
   "{n} skills are fading": "{n} स्किल भूलने लगी हैं",

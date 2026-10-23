@@ -241,15 +241,25 @@ function AiSettings() {
 }
 
 interface SamlInfo {
-  connection: { idpEntityId: string; ssoUrl: string; certificates: string[]; emailAttribute: string | null; emailDomains: string[]; autoProvisionUnitId: string | null; enabled: boolean } | null;
-  sp: { entityId: string; acsUrl: string; metadataUrl: string };
+  connection: {
+    idpEntityId: string;
+    ssoUrl: string;
+    sloUrl: string | null;
+    requireEncryption: boolean;
+    certificates: string[];
+    emailAttribute: string | null;
+    emailDomains: string[];
+    autoProvisionUnitId: string | null;
+    enabled: boolean;
+  } | null;
+  sp: { entityId: string; acsUrl: string; sloUrl: string; metadataUrl: string; hasKeys: boolean };
 }
 
 function SamlSettings() {
   const { data, error, reload } = useApi<SamlInfo>("/console/saml");
   const units = useApi<{ units: { id: string; name: string }[] }>("/console/org-units");
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ idpEntityId: "", ssoUrl: "", cert: "", emailAttribute: "", emailDomains: "", autoProvisionUnitId: "", enabled: true });
+  const [f, setF] = useState({ idpEntityId: "", ssoUrl: "", sloUrl: "", requireEncryption: false, cert: "", emailAttribute: "", emailDomains: "", autoProvisionUnitId: "", enabled: true });
   const [metadata, setMetadata] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -257,7 +267,7 @@ function SamlSettings() {
   useEffect(() => {
     const c = data?.connection;
     if (!c) return;
-    setF({ idpEntityId: c.idpEntityId, ssoUrl: c.ssoUrl, cert: c.certificates[0] ?? "", emailAttribute: c.emailAttribute ?? "", emailDomains: c.emailDomains.join(", "), autoProvisionUnitId: c.autoProvisionUnitId ?? "", enabled: c.enabled });
+    setF({ idpEntityId: c.idpEntityId, ssoUrl: c.ssoUrl, sloUrl: c.sloUrl ?? "", requireEncryption: c.requireEncryption, cert: c.certificates[0] ?? "", emailAttribute: c.emailAttribute ?? "", emailDomains: c.emailDomains.join(", "), autoProvisionUnitId: c.autoProvisionUnitId ?? "", enabled: c.enabled });
   }, [data]);
 
   if (error) return <ErrorBox message={error.message} onRetry={reload} />;
@@ -266,8 +276,8 @@ function SamlSettings() {
   async function importMetadata() {
     setSaveError(null);
     try {
-      const m = await api<{ idpEntityId: string; ssoUrl: string; certificates: string[] }>("/console/saml/metadata", { body: { xml: metadata } });
-      setF({ ...f, idpEntityId: m.idpEntityId, ssoUrl: m.ssoUrl, cert: m.certificates[0] ?? "" });
+      const m = await api<{ idpEntityId: string; ssoUrl: string; sloUrl: string | null; certificates: string[] }>("/console/saml/metadata", { body: { xml: metadata } });
+      setF({ ...f, idpEntityId: m.idpEntityId, ssoUrl: m.ssoUrl, sloUrl: m.sloUrl ?? "", cert: m.certificates[0] ?? "" });
       setMsg("Read the metadata. Check the fields and save.");
     } catch (e) {
       setSaveError(errorMessage(e));
@@ -284,6 +294,8 @@ function SamlSettings() {
         body: {
           idpEntityId: f.idpEntityId.trim(),
           ssoUrl: f.ssoUrl.trim(),
+          sloUrl: f.sloUrl.trim() || null,
+          requireEncryption: f.requireEncryption,
           certificates: [f.cert],
           emailAttribute: f.emailAttribute.trim() || null,
           emailDomains: f.emailDomains.split(/[\s,]+/).filter(Boolean),
@@ -315,10 +327,18 @@ function SamlSettings() {
         <div>
           Assertion consumer service (HTTP-POST): <code className="inline-code">{data.sp.acsUrl}</code>
         </div>
+        {data.sp.hasKeys && (
+          <div>
+            Single logout (HTTP-Redirect or HTTP-POST): <code className="inline-code">{data.sp.sloUrl}</code>
+          </div>
+        )}
         <div>
           Metadata: <code className="inline-code">{data.sp.metadataUrl}</code>
         </div>
-        <div className="muted">Sign assertions, and send the email as the NameID (email format) or as an attribute.</div>
+        <div className="muted">
+          Sign assertions, and send the email as the NameID (email format) or as an attribute.
+          {data.sp.hasKeys ? " The metadata includes PlayCode's certificate for encrypting assertions and checking logout requests." : " Single logout and encrypted assertions need a PlayCode key pair on the server (SAML_SP_PRIVATE_KEY and SAML_SP_CERT)."}
+        </div>
       </div>
       {!open ? (
         <button className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setOpen(true)}>
@@ -342,6 +362,17 @@ function SamlSettings() {
               <label htmlFor="saml-sso">Single sign-on URL (HTTP-Redirect)</label>
               <input id="saml-sso" type="url" value={f.ssoUrl} onChange={(e) => setF({ ...f, ssoUrl: e.target.value })} required />
             </div>
+          </div>
+          <div>
+            <label htmlFor="saml-slo">Single logout URL (HTTP-Redirect, optional)</label>
+            <input
+              id="saml-slo"
+              type="url"
+              value={f.sloUrl}
+              disabled={!data.sp.hasKeys}
+              onChange={(e) => setF({ ...f, sloUrl: e.target.value })}
+              placeholder={data.sp.hasKeys ? "Signing out of PlayCode also signs out of the IdP" : "Needs the server's SAML key pair"}
+            />
           </div>
           <div>
             <label htmlFor="saml-cert">IdP signing certificate</label>
@@ -368,6 +399,10 @@ function SamlSettings() {
               ))}
             </select>
           </div>
+          <label className="row" style={{ gap: 6, fontWeight: 500 }}>
+            <input type="checkbox" style={{ width: "auto" }} disabled={!data.sp.hasKeys} checked={f.requireEncryption} onChange={(e) => setF({ ...f, requireEncryption: e.target.checked })} /> Require encrypted
+            assertions
+          </label>
           <label className="row" style={{ gap: 6, fontWeight: 500 }}>
             <input type="checkbox" style={{ width: "auto" }} checked={f.enabled} onChange={(e) => setF({ ...f, enabled: e.target.checked })} /> Use SAML on the sign-in page
           </label>

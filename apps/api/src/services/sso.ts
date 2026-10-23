@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 import { env } from "../env";
 import type { Db } from "../db/client";
-import { memberships, ssoConnections, tenants, users } from "../db/schema";
+import { memberships, ssoConnections, tenants, users, type SamlSessionRef } from "../db/schema";
 import { audit } from "../lib/audit";
 import { signToken } from "../lib/auth";
 import { decrypt, encrypt } from "../lib/crypto";
@@ -153,7 +153,7 @@ export async function finishLogin(db: Db, params: { code: string; state: string 
  */
 export async function signInByEmail(
   db: Db,
-  args: { tenantId: string; email: string; name: string | null; emailDomains: string[]; autoProvisionUnitId: string | null; via: string },
+  args: { tenantId: string; email: string; name: string | null; emailDomains: string[]; autoProvisionUnitId: string | null; via: string; saml?: SamlSessionRef },
   now: Date,
 ) {
   const email = args.email.trim().toLowerCase();
@@ -169,5 +169,5 @@ export async function signInByEmail(
   }
   if (user!.status !== "active") throw forbidden("Your account is disabled");
   await audit(db, { tenantId: args.tenantId, actorId: user!.id, action: args.via, data: { email } });
-  return issueSession(db, { userId: user!.id, method: args.via === "saml.login" ? "saml" : "sso" });
+  return issueSession(db, { userId: user!.id, method: args.via === "saml.login" ? "saml" : "sso", saml: args.saml });
 }

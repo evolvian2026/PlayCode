@@ -2,12 +2,13 @@ import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client";
-import { memberships, tenants, users } from "../db/schema";
+import { authSessions, memberships, tenants, users } from "../db/schema";
 import { audit } from "../lib/audit";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { rateLimit } from "../lib/rate-limit";
 import { checkSecondFactor, confirmTotpSetup, disableTotp, otpChannelsAvailable, startTotpSetup } from "../services/mfa";
+import { samlLogoutUrl } from "../services/saml";
 import { listSessions, revokeAll, revokeSession } from "../services/sessions";
 import { getTenant } from "../services/tenant";
 
@@ -27,8 +28,10 @@ export async function accountRoutes(app: FastifyInstance) {
     });
     r.post("/auth/sessions/revoke-others", async (req) => ({ revoked: await revokeAll(db, req.auth.userId, app.now(), req.auth.sessionId) }));
     r.post("/auth/logout", async (req) => {
+      const [session] = await db.select({ saml: authSessions.saml }).from(authSessions).where(eq(authSessions.id, req.auth.sessionId!));
       await revokeSession(db, req.auth.userId, req.auth.sessionId!, app.now());
-      return { ok: true };
+      // Signed in through SAML with single logout: the browser goes on to the IdP to end that session too.
+      return { ok: true, redirect: await samlLogoutUrl(db, session?.saml ?? null) };
     });
 
     // ---------- Two-factor ----------

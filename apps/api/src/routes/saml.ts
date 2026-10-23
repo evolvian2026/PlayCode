@@ -4,7 +4,7 @@ import { db } from "../db/client";
 import { env } from "../env";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { rateLimit } from "../lib/rate-limit";
-import { acsUrl, finishSaml, getSamlConnection, parseIdpMetadata, saveSamlConnection, spEntityId, spMetadata } from "../services/saml";
+import { acsUrl, finishSaml, getSamlConnection, handleSlo, parseIdpMetadata, saveSamlConnection, sloCallbackUrl, spEntityId, spKeys, spMetadata } from "../services/saml";
 import { assertUnitsInScope } from "../services/scope";
 import { getTenant } from "../services/tenant";
 import { requireFeature } from "../services/plan";
@@ -33,6 +33,26 @@ export async function samlRoutes(app: FastifyInstance) {
     }
   });
 
+  // Single logout: the IdP's logout requests, and its answers to ours (redirect or POST binding).
+  const slo = async (req: { params: unknown; query: unknown; url: string; ip: string; body?: unknown; method: string }, reply: { redirect: (url: string) => unknown }) => {
+    await rateLimit(`saml-slo:${req.ip}`, 60, 60_000);
+    const { slug } = parse(slugParam, req.params);
+    const appUrl = env.PUBLIC_APP_URL.replace(/\/$/, "");
+    try {
+      const next = await handleSlo(
+        db,
+        slug,
+        { query: (req.query as Record<string, string>) ?? {}, rawQuery: req.url.split("?")[1] ?? "", form: req.method === "POST" ? ((req.body as Record<string, string>) ?? {}) : null },
+        app.now(),
+      );
+      return reply.redirect(next);
+    } catch (err) {
+      return reply.redirect(`${appUrl}/login?org=${encodeURIComponent(slug)}&sso_error=${encodeURIComponent((err as Error).message.slice(0, 200))}`);
+    }
+  };
+  app.get("/auth/saml/:slug/slo", slo);
+  app.post("/auth/saml/:slug/slo", slo);
+
   app.register(async (c) => {
     c.addHook("preHandler", authenticate);
     c.addHook("preHandler", requirePermission("tenant.settings"));
@@ -42,7 +62,7 @@ export async function samlRoutes(app: FastifyInstance) {
       const conn = await getSamlConnection(db, tenant.id);
       return {
         connection: conn && { ...conn, tenantId: undefined },
-        sp: { entityId: spEntityId(tenant.slug), acsUrl: acsUrl(tenant.slug), metadataUrl: `${spEntityId(tenant.slug)}/metadata` },
+        sp: { entityId: spEntityId(tenant.slug), acsUrl: acsUrl(tenant.slug), sloUrl: sloCallbackUrl(tenant.slug), metadataUrl: `${spEntityId(tenant.slug)}/metadata`, hasKeys: Boolean(spKeys()) },
       };
     });
 
@@ -53,6 +73,8 @@ export async function samlRoutes(app: FastifyInstance) {
         z.object({
           idpEntityId: z.string().min(1).max(500),
           ssoUrl: z.string().url().max(500),
+          sloUrl: z.string().url().max(500).nullable().default(null),
+          requireEncryption: z.boolean().default(false),
           certificates: z.array(z.string().min(1).max(10_000)).min(1).max(4),
           emailAttribute: z.string().max(200).nullable(),
           emailDomains: z.array(z.string().regex(/^@?[a-z0-9.-]+\.[a-z]{2,}$/i, "Use domains like college.edu")).min(1).max(20),

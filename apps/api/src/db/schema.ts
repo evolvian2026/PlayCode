@@ -923,6 +923,10 @@ export const samlConnections = pgTable("saml_connections", {
   idpEntityId: text("idp_entity_id").notNull(),
   /** HTTP-Redirect single sign-on URL. */
   ssoUrl: text("sso_url").notNull(),
+  /** HTTP-Redirect single logout URL; signing out of PlayCode also ends the IdP session when set. */
+  sloUrl: text("slo_url"),
+  /** Refuse responses whose assertion isn't encrypted to PlayCode's key. */
+  requireEncryption: boolean("require_encryption").notNull().default(false),
   /** IdP signing certificates (base64 DER bodies); several are allowed during a rollover. */
   certificates: jsonb("certificates").$type<string[]>().notNull(),
   /** Attribute holding the email; when unset, the NameID (email format) is used. */
@@ -1028,6 +1032,13 @@ export const invoices = pgTable(
 // ---------- Sign-in sessions and one-time codes ----------
 
 /** One signed-in device or browser. Tokens carry its id, so it can be signed out remotely. */
+export interface SamlSessionRef {
+  tenantId: string;
+  nameID: string;
+  nameIDFormat: string;
+  sessionIndex: string | null;
+}
+
 export const authSessions = pgTable(
   "auth_sessions",
   {
@@ -1039,6 +1050,8 @@ export const authSessions = pgTable(
     createdAt: createdAt(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    /** SAML sign-ins: who the IdP said this was, so single logout can find the session. */
+    saml: jsonb("saml").$type<SamlSessionRef>(),
   },
   (t) => [index("auth_sessions_user_idx").on(t.userId, t.createdAt)],
 );

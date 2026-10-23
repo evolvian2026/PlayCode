@@ -115,6 +115,11 @@ function LoginForm() {
           <div className="muted small">{brand ? brand.tenantName : t("Level up your coding for placements")}</div>
         </div>
       </div>
+      {params.get("signed_out") && !error && (
+        <div className="card tight small" role="status" style={{ marginBottom: 16 }}>
+          {t("You are signed out of PlayCode and your institution's sign-in.")}
+        </div>
+      )}
       {brand?.sso && step === "password" && (
         <div className="card stack" style={{ marginBottom: 16 }}>
           <a className="btn primary big" href={`${API_URL}/auth/sso/start?org=${encodeURIComponent(brand.slug)}`}>

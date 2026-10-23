@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import type { Role } from "@playcode/core";
 import type { DbOrTx } from "../db/client";
-import { authSessions, memberships, users } from "../db/schema";
+import { authSessions, memberships, users, type SamlSessionRef } from "../db/schema";
 import { audit } from "../lib/audit";
 import { signToken } from "../lib/auth";
 import { notFound } from "../lib/errors";
@@ -18,13 +18,13 @@ export async function rolesOf(db: DbOrTx, userId: string): Promise<Role[]> {
 
 export async function issueSession(
   db: DbOrTx,
-  args: { userId: string; method: SignInMethod; tenantId?: string | null; userAgent?: string | null; ip?: string | null },
+  args: { userId: string; method: SignInMethod; tenantId?: string | null; userAgent?: string | null; ip?: string | null; saml?: SamlSessionRef },
 ): Promise<string> {
   const [user] = await db.select({ tenantId: users.tenantId }).from(users).where(eq(users.id, args.userId));
   if (!user) throw notFound("User");
   const [session] = await db
     .insert(authSessions)
-    .values({ userId: args.userId, method: args.method, userAgent: args.userAgent?.slice(0, 300) ?? null, ip: args.ip ?? null })
+    .values({ userId: args.userId, method: args.method, userAgent: args.userAgent?.slice(0, 300) ?? null, ip: args.ip ?? null, saml: args.saml ?? null })
     .returning({ id: authSessions.id });
   return signToken({ sub: args.userId, tenantId: args.tenantId === undefined ? user.tenantId : args.tenantId, roles: await rolesOf(db, args.userId), sid: session!.id });
 }
