@@ -171,6 +171,41 @@ function SecuritySettings() {
   );
 }
 
+function RetentionSettings() {
+  const { data, error, reload, setData } = useApi<{ snapshotRetentionDays: number; fixed: { sessionsDays: number; notificationsDays: number; pushDays: number } }>("/console/retention");
+  const [days, setDays] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  if (error) return <ErrorBox message={error.message} onRetry={reload} />;
+  if (!data) return null;
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    try {
+      setData(await api("/console/retention", { method: "PUT", body: { snapshotRetentionDays: Number(days) } }));
+      setMsg("Saved");
+    } catch (err) {
+      setMsg(errorMessage(err));
+    }
+  }
+  return (
+    <form className="card stack" onSubmit={save}>
+      <h2 style={{ margin: 0 }}>Data retention</h2>
+      <p className="small muted" style={{ margin: 0 }}>
+        Webcam snapshots from proctored tests are deleted {data.snapshotRetentionDays} days after each test closes. Signed-out sessions go after {data.fixed.sessionsDays} days and
+        in-app messages after {data.fixed.notificationsDays} days. Practice history, results and certificates are kept for as long as the student&apos;s account exists.
+      </p>
+      <div className="row" style={{ alignItems: "flex-end" }}>
+        <div style={{ width: 200 }}>
+          <label htmlFor="ret-days">Keep webcam snapshots for (days)</label>
+          <input id="ret-days" type="number" min={7} max={730} placeholder={String(data.snapshotRetentionDays)} value={days} onChange={(e) => setDays(e.target.value)} required />
+        </div>
+        <button className="btn small">Save</button>
+        {msg && <span className="small muted">{msg}</span>}
+      </div>
+    </form>
+  );
+}
+
 function AiSettings() {
   const { data, error, reload, setData } = useApi<{ configured: boolean; hints: boolean; proctoring: boolean }>("/console/ai");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -626,6 +661,7 @@ export default function Settings() {
       </div>
       <SecuritySettings />
       <AiSettings />
+      <RetentionSettings />
       <SsoSettings />
       <SamlSettings />
       <LtiSettings />

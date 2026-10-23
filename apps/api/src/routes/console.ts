@@ -14,6 +14,7 @@ import { effectiveBranding, updateBranding } from "../services/branding";
 import { DEFAULT_PASS_MARK, sessionScore, visibleTo } from "../services/practice";
 import { getConnection, PRESET_ISSUERS, redirectUri, saveConnection } from "../services/sso";
 import { importStudents } from "../services/students";
+import { DEFAULT_SNAPSHOT_DAYS, RETENTION } from "../services/retention";
 import { renderResumePdf, resumeData } from "../services/resume";
 import { interviewForStaff, interviewsFor } from "../services/interviews";
 import { assertUnitsInScope, descendants, scopedUnitIds, studentIdsInUnits, tenantUnits } from "../services/scope";
@@ -194,6 +195,23 @@ export async function consoleRoutes(app: FastifyInstance) {
       .where(eq(tenants.id, tenantId));
     await audit(db, { tenantId, actorId: req.auth.userId, action: "settings.ai", data: body });
     return { configured: Boolean(aiProvider()), ...body };
+  });
+
+  // ---------- Data retention ----------
+  app.get("/retention", { preHandler: requirePermission("tenant.settings") }, async (req) => {
+    const tenant = await getTenant(db, tenantOf(req));
+    return { snapshotRetentionDays: tenant.settings.snapshotRetentionDays ?? DEFAULT_SNAPSHOT_DAYS, fixed: RETENTION };
+  });
+
+  app.put("/retention", { preHandler: requirePermission("tenant.settings") }, async (req) => {
+    const tenantId = tenantOf(req);
+    const { snapshotRetentionDays } = parse(z.object({ snapshotRetentionDays: z.number().int().min(7).max(730) }), req.body);
+    await db
+      .update(tenants)
+      .set({ settings: sql`${tenants.settings} || ${JSON.stringify({ snapshotRetentionDays })}::jsonb` })
+      .where(eq(tenants.id, tenantId));
+    await audit(db, { tenantId, actorId: req.auth.userId, action: "settings.retention", data: { snapshotRetentionDays } });
+    return { snapshotRetentionDays, fixed: RETENTION };
   });
 
   // ---------- Single sign-on ----------

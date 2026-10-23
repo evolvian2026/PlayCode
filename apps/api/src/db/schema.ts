@@ -44,6 +44,8 @@ export interface TenantSettings {
   aiHints?: boolean;
   /** AI review of webcam snapshots in strict tests (on by default when AI is configured). */
   aiProctoring?: boolean;
+  /** Days after a test closes before its webcam snapshots are deleted (default 90). */
+  snapshotRetentionDays?: number;
 }
 
 export interface TenantBranding {
@@ -1256,4 +1258,21 @@ export const creditNotes = pgTable(
     createdBy: uuid("created_by").notNull(),
   },
   (t) => [index("credit_notes_invoice_idx").on(t.invoiceId)],
+);
+
+// ---------- Scheduled jobs ----------
+
+/** One run of a scheduled job, for the system status page and alerting. */
+export const jobRuns = pgTable(
+  "job_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    job: text("job").notNull(),
+    status: text("status").$type<"running" | "ok" | "failed">().notNull().default("running"),
+    summary: jsonb("summary").$type<Record<string, unknown>>(),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [index("job_runs_job_idx").on(t.job, t.startedAt)],
 );
