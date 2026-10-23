@@ -265,6 +265,31 @@ const HI: Record<string, string> = {
   "Turn off on this phone": "इस फ़ोन पर बंद करें",
   "Turn on notifications": "नोटिफ़िकेशन चालू करें",
   "Notifications are blocked for this site. Allow them in your browser settings.": "इस साइट के लिए नोटिफ़िकेशन बंद हैं। अपने ब्राउज़र की सेटिंग में इन्हें चालू करें।",
+
+  // Resume
+  "My resume": "मेरा रिज़्यूमे",
+  "A resume and public profile built from your verified PlayCode record": "आपके सत्यापित PlayCode रिकॉर्ड से बना रिज़्यूमे और पब्लिक प्रोफ़ाइल",
+  "Download PDF": "PDF डाउनलोड करें",
+  "About you": "आपके बारे में",
+  Headline: "हेडलाइन",
+  About: "परिचय",
+  "e.g. Final-year CSE student who enjoys Java and SQL": "जैसे: अंतिम वर्ष का CSE छात्र जिसे Java और SQL पसंद है",
+  "Two or three lines about what you have built and what you want to do.": "आपने क्या बनाया है और आगे क्या करना चाहते हैं, दो-तीन पंक्तियों में।",
+  "Verified by {app}": "{app} द्वारा सत्यापित",
+  "These come from your practice and can't be edited. Practise more to improve them.": "ये आपके अभ्यास से आते हैं और बदले नहीं जा सकते। इन्हें बेहतर करने के लिए और अभ्यास करें।",
+  "Service companies": "सर्विस कंपनियाँ",
+  "Product companies": "प्रोडक्ट कंपनियाँ",
+  "{q} questions, {c} coding and {s} SQL problems solved · {d} practice days in 90": "{q} सवाल, {c} कोडिंग और {s} SQL प्रॉब्लम हल · 90 में से {d} दिन अभ्यास",
+  "Mock interview: {n}/5": "मॉक इंटरव्यू: {n}/5",
+  "Skills appear here once you reach 60% mastery with at least 5 answers.": "कम से कम 5 जवाबों के साथ 60% महारत होने पर स्किल यहाँ दिखेंगी।",
+  "{n} verified certificates": "{n} सत्यापित प्रमाणपत्र",
+  "Public profile": "पब्लिक प्रोफ़ाइल",
+  "A link you can put on your resume or send to recruiters. It shows your name, college, verified skills and certificates, but not your email, phone, roll number or marks.":
+    "एक लिंक जिसे आप रिज़्यूमे में डाल सकते हैं या रिक्रूटर्स को भेज सकते हैं। इसमें आपका नाम, कॉलेज, सत्यापित स्किल और प्रमाणपत्र दिखते हैं, लेकिन ईमेल, फ़ोन, रोल नंबर या अंक नहीं।",
+  "Copy link": "लिंक कॉपी करें",
+  "Link copied": "लिंक कॉपी हो गया",
+  "Make private": "प्राइवेट करें",
+  "Create public link": "पब्लिक लिंक बनाएँ",
 };
 
 const STORAGE_KEY = "playcode.locale";

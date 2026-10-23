@@ -5,10 +5,18 @@ import { useParams } from "next/navigation";
 import { DIVISION_LABELS } from "@playcode/core";
 import { Icon } from "@/components/Icon";
 import { Bar, ErrorBox, formatDate, Loading, masteryTone, Stat, timeAgo } from "@/components/ui";
-import { useApi } from "@/lib/api";
+import { fetchObjectUrl, useApi } from "@/lib/api";
 import type { StudentDetail } from "@/lib/types";
 
 const KIND_LABELS: Record<string, string> = { skill: "Practice", daily: "Daily challenge", pack: "Mission", assignment: "Assignment", mistakes: "Mistake review" };
+
+async function downloadResume(id: string, name: string) {
+  const url = await fetchObjectUrl(`/console/students/${id}/resume.pdf`);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${name.replace(/[^\w]+/g, "-").toLowerCase()}-resume.pdf`;
+  a.click();
+}
 
 export default function StudentPage() {
   const { id } = useParams<{ id: string }>();
@@ -21,11 +29,16 @@ export default function StudentPage() {
       <Link href="/console/students" className="small">
         <Icon name="back" size={16} /> Students
       </Link>
-      <div>
-        <h1 style={{ margin: 0 }}>{data.user.name}</h1>
-        <p className="muted">
-          {data.user.rollNo} · {data.user.email} · last active {timeAgo(data.user.lastActiveAt)}
-        </p>
+      <div className="spread wrap">
+        <div>
+          <h1 style={{ margin: 0 }}>{data.user.name}</h1>
+          <p className="muted">
+            {data.user.rollNo} · {data.user.email} · last active {timeAgo(data.user.lastActiveAt)}
+          </p>
+        </div>
+        <button className="btn small" onClick={() => downloadResume(id, data.user.name)}>
+          Resume (PDF)
+        </button>
       </div>
       <div className="grid">
         <Stat label="Level" value={data.level} sub={`${data.title} · ${data.xp} XP`} />

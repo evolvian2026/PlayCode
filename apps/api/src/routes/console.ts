@@ -14,6 +14,7 @@ import { effectiveBranding, updateBranding } from "../services/branding";
 import { DEFAULT_PASS_MARK, sessionScore, visibleTo } from "../services/practice";
 import { getConnection, PRESET_ISSUERS, redirectUri, saveConnection } from "../services/sso";
 import { importStudents } from "../services/students";
+import { renderResumePdf, resumeData } from "../services/resume";
 import { interviewForStaff, interviewsFor } from "../services/interviews";
 import { assertUnitsInScope, descendants, scopedUnitIds, studentIdsInUnits, tenantUnits } from "../services/scope";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
@@ -136,6 +137,13 @@ export async function consoleRoutes(app: FastifyInstance) {
     const interview = await interviewForStaff(db, tenantOf(req), id);
     if (!(await resolveScope(req)).studentIds.includes(interview.userId)) throw notFound("Interview");
     return interview;
+  });
+
+  // A student's resume, for the placement cell sending CVs to companies.
+  app.get("/students/:id/resume.pdf", { preHandler: anyAnalytics }, async (req, reply) => {
+    const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+    if (!(await resolveScope(req)).studentIds.includes(id)) throw notFound("Student");
+    return reply.header("content-type", "application/pdf").send(await renderResumePdf(await resumeData(db, id, app.now())));
   });
 
   app.post("/students/import", { preHandler: requirePermission("users.manage") }, async (req) => {

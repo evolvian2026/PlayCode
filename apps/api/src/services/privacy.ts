@@ -29,6 +29,7 @@ import {
   placementDrives,
   playerProfiles,
   pushSubscriptions,
+  studentProfiles,
   responses,
   sessions,
   skillRatings,
@@ -124,6 +125,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .where(eq(driveCandidates.userId, userId)),
     coachHints: await db.select({ questionId: coachHints.questionId, hint: coachHints.hint, at: coachHints.createdAt }).from(coachHints).where(eq(coachHints.userId, userId)),
     academicRecord: (await db.select().from(academicRecords).where(eq(academicRecords.userId, userId)))[0] ?? null,
+    resumeProfile: (await db.select().from(studentProfiles).where(eq(studentProfiles.userId, userId)))[0] ?? null,
     placements: await db
       .select({ company: placementDrives.company, role: placementDrives.roleTitle, status: placementApplications.status, roundsCleared: placementApplications.roundsCleared, offerCtcRupees: placementApplications.offerCtcRupees, registeredAt: placementApplications.createdAt })
       .from(placementApplications)
@@ -224,6 +226,7 @@ export async function resolveErasure(
     await tx.delete(academicRecords).where(eq(academicRecords.userId, user.id));
     await tx.delete(interviews).where(eq(interviews.userId, user.id));
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, user.id));
+    await tx.delete(studentProfiles).where(eq(studentProfiles.userId, user.id));
     await tx.delete(playerProfiles).where(eq(playerProfiles.userId, user.id));
     await tx.delete(memberships).where(eq(memberships.userId, user.id));
     // Duels stay so opponents keep their history; the player now shows as "Deleted user".

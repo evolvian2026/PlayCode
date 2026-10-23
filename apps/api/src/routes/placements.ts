@@ -19,6 +19,7 @@ import {
   withdraw,
 } from "../services/placements";
 import { badRequest } from "../lib/errors";
+import { publicLinks } from "../services/resume";
 
 const idParam = z.object({ id: z.string().uuid() });
 const percent = z.number().min(0).max(100).nullable().optional();
@@ -81,7 +82,7 @@ export async function placementRoutes(app: FastifyInstance) {
     const detail = await driveDetail(db, tenantOf(req), parse(idParam, req.params).id);
     const name = detail.drive.company.replace(/[^\w-]+/g, "-").toLowerCase();
     reply.header("content-type", "text/csv; charset=utf-8").header("content-disposition", `attachment; filename="${name}-registrations.csv"`);
-    return driveCsv(detail);
+    return driveCsv(detail, await publicLinks(db, detail.applicants.map((a) => a.userId)));
   });
 
   app.post("/console/placements/:id/status", { preHandler: manage }, async (req) => {

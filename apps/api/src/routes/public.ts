@@ -8,6 +8,7 @@ import { parse } from "../lib/http";
 import { getObject } from "../lib/storage";
 import { effectiveBranding } from "../services/branding";
 import { verifyCertificate } from "../services/certificates";
+import { publicProfile } from "../services/resume";
 import { getSamlConnection } from "../services/saml";
 import { getConnection } from "../services/sso";
 import { planHas } from "@playcode/core";
@@ -30,6 +31,12 @@ export async function publicRoutes(app: FastifyInstance) {
     const data = tenant?.branding.logoKey ? await getObject(tenant.branding.logoKey) : null;
     if (!tenant || !data) throw notFound("Logo");
     return reply.header("content-type", tenant.branding.logoType ?? "image/png").header("cache-control", "public, max-age=300").send(data);
+  });
+
+  // A student's public profile, if they published one.
+  app.get("/public/profiles/:code", async (req) => {
+    const { code } = parse(z.object({ code: z.string().regex(/^[A-Za-z0-9]{10}$/) }), req.params);
+    return publicProfile(db, code, app.now());
   });
 
   app.get("/public/certificates/:code", async (req) => {

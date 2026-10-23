@@ -270,18 +270,18 @@ export async function driveDetail(db: Db, tenantId: string, id: string) {
   };
 }
 
-export function driveCsv(detail: Awaited<ReturnType<typeof driveDetail>>): string {
+export function driveCsv(detail: Awaited<ReturnType<typeof driveDetail>>, profileLinks: Map<string, string> = new Map()): string {
   const esc = (v: unknown) => {
     const t = String(v ?? "");
     return `"${(/^[=+\-@\t\r]/.test(t) ? `'${t}` : t).replace(/"/g, '""')}"`;
   };
-  const header = ["name", "roll_no", "email", "cgpa", "backlogs", "class_10", "class_12", "graduation_year", "status", "rounds_cleared", "offer_ctc"];
+  const header = ["name", "roll_no", "email", "cgpa", "backlogs", "class_10", "class_12", "graduation_year", "status", "rounds_cleared", "offer_ctc", "profile_url"];
   return [
     header.join(","),
     ...detail.applicants
       .filter((a) => a.status !== "withdrawn")
       .map((a) =>
-        [a.name, a.rollNo, a.email, a.record?.cgpa, a.record?.backlogs, a.record?.tenthPct, a.record?.twelfthPct, a.record?.graduationYear, a.status, a.roundsCleared, a.offerCtcRupees]
+        [a.name, a.rollNo, a.email, a.record?.cgpa, a.record?.backlogs, a.record?.tenthPct, a.record?.twelfthPct, a.record?.graduationYear, a.status, a.roundsCleared, a.offerCtcRupees, profileLinks.get(a.userId)]
           .map(esc)
           .join(","),
       ),

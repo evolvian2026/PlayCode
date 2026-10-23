@@ -9,7 +9,7 @@ import { useT } from "@/lib/i18n";
 interface PrivacyState {
   noticeVersion: string;
   noticeAccepted: boolean;
-  history: { purpose: "privacy_notice" | "whatsapp"; granted: boolean; noticeVersion: string; source: string; at: string }[];
+  history: { purpose: "privacy_notice" | "whatsapp" | "public_profile"; granted: boolean; noticeVersion: string; source: string; at: string }[];
   erasure: { status: "pending" | "completed" | "rejected" | "cancelled"; reason: string | null; resolution: string | null; createdAt: string } | null;
   canRequestErasure: boolean;
 }
@@ -17,6 +17,7 @@ interface PrivacyState {
 const PURPOSE: Record<PrivacyState["history"][number]["purpose"], string> = {
   privacy_notice: "Privacy notice",
   whatsapp: "WhatsApp reminders",
+  public_profile: "Public profile",
 };
 
 /** Consent, a copy of your data, and deletion: the rights a data principal has under the DPDP Act. */

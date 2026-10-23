@@ -670,7 +670,7 @@ export const ssoConnections = pgTable("sso_connections", {
 
 // ---------- Privacy ----------
 
-export const CONSENT_PURPOSES = ["privacy_notice", "whatsapp"] as const;
+export const CONSENT_PURPOSES = ["privacy_notice", "whatsapp", "public_profile"] as const;
 export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
 
 /** Append-only ledger: every grant and withdrawal, with the notice version shown at the time. */

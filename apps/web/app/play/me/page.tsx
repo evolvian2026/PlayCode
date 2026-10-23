@@ -153,6 +153,14 @@ export default function MePage() {
 
       <Certificates />
 
+      <Link href="/play/resume" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("My resume")}</b>
+          <div className="small muted">{tr("A resume and public profile built from your verified PlayCode record")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
       <LanguageCard />
 
       <PushCard />
