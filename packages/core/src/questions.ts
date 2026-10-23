@@ -12,6 +12,7 @@ export const QUESTION_TYPES = [
   "trace_variable",
   "reverse_mode",
   "pseudocode_mcq",
+  "concept",
   "write_code",
   "sql_query",
 ] as const;
@@ -28,6 +29,7 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   trace_variable: "Trace the variable",
   reverse_mode: "Reverse mode",
   pseudocode_mcq: "Pseudocode",
+  concept: "Concept check",
   write_code: "Write code",
   sql_query: "SQL query",
 };
@@ -36,7 +38,10 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
 export const EXECUTION_TYPES: readonly QuestionType[] = ["write_code", "sql_query"];
 
 export type CodeLanguage = "c" | "java" | "python";
-export type Language = CodeLanguage | "pseudocode" | "sql";
+/** "theory": concept questions (DBMS, operating systems, networks) with no code. */
+export type Language = CodeLanguage | "pseudocode" | "sql" | "theory";
+
+export const LANGUAGE_LABELS: Record<Language, string> = { c: "C", java: "Java", python: "Python", pseudocode: "Pseudocode", sql: "SQL", theory: "Concepts" };
 
 export const CODE_LANGUAGE_LABELS: Record<CodeLanguage, string> = { c: "C", java: "Java", python: "Python" };
 
@@ -125,6 +130,7 @@ export const ANSWER_KIND_BY_TYPE: Record<QuestionType, Answer["kind"][]> = {
   trace_variable: ["text", "option"],
   reverse_mode: ["option"],
   pseudocode_mcq: ["option"],
+  concept: ["option"],
   write_code: ["tests"],
   sql_query: ["sql"],
 };

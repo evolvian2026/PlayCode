@@ -260,7 +260,7 @@ export async function setStatus(db: Db, bank: Bank, actorId: string, id: string,
 
 // ---------- AI drafting ----------
 
-export const DRAFTABLE: QuestionType[] = ["predict_output", "spot_bug", "complexity", "trace_variable", "pseudocode_mcq", "fill_blank", "which_snippet", "write_code", "sql_query"];
+export const DRAFTABLE: QuestionType[] = ["predict_output", "spot_bug", "complexity", "trace_variable", "pseudocode_mcq", "concept", "fill_blank", "which_snippet", "write_code", "sql_query"];
 
 const TYPE_GUIDE: Partial<Record<QuestionType, string>> = {
   predict_output: "A complete program in `code`; the student types what it prints. Put the exact output in acceptedAnswers. No options.",
@@ -270,6 +270,8 @@ const TYPE_GUIDE: Partial<Record<QuestionType, string>> = {
   pseudocode_mcq: "Pseudocode in `code` in the style of placement aptitude tests (BEGIN/END, SET, WHILE, PRINT); four options, one correct.",
   fill_blank: "A program in `code` with one blank written as ____; four options for what fills the blank so the program does what the stem says, one correct.",
   which_snippet: "No `code`; four short code snippets as options, exactly one of which does what the stem asks.",
+  concept:
+    "A concept question on DBMS, operating systems or computer networks, as asked in campus placement tests (TCS NQT, Infosys, Wipro). No `code`; a short scenario in the stem where it helps; four plain-text options, exactly one correct, with distractors that are common misconceptions.",
 };
 
 /** Turn an AI draft into a studio question (not saved). Code and SQL types are not drafted. */

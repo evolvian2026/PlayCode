@@ -57,4 +57,13 @@ export const PACKS: SeedPack[] = [
     passMark: 75,
     profile: "product",
   },
+  {
+    id: "mission-service-fundamentals",
+    kind: "mission",
+    title: "CS fundamentals round",
+    description: "DBMS, operating systems and networks, as in the technical section of service-company tests.",
+    questionIds: ["dbms-keys-1", "dbms-keys-3", "dbms-txn-1", "dbms-txn-2", "os-sched-1", "os-sched-4", "os-mem-1", "os-mem-3", "net-layers-1", "net-addr-1"],
+    passMark: 60,
+    profile: "service",
+  },
 ];

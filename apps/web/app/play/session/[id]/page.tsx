@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { LANGUAGE_LABELS } from "@playcode/core";
 import { EvaluationView } from "@/components/CodeAnswer";
 import { draftToResponse, emptyDraft, QuestionInput, type Draft } from "@/components/QuestionInput";
 import { Icon } from "@/components/Icon";
@@ -233,7 +234,7 @@ export default function SessionPlayer() {
 
       <div className="row wrap" style={{ gap: 6 }}>
         <span className="pill accent">{t(question.typeLabel)}</span>
-        <span className="pill">{question.body.language === "pseudocode" ? "Pseudocode" : question.body.language.toUpperCase()}</span>
+        <span className="pill">{question.body.language === "pseudocode" || question.body.language === "theory" ? t(LANGUAGE_LABELS[question.body.language]) : question.body.language.toUpperCase()}</span>
         <span className="pill">{t(DIFFICULTY[question.difficulty]!)}</span>
         <span className="muted small" style={{ marginLeft: "auto" }}>
           {session.answered + 1} / {session.total}

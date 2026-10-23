@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { QUESTION_TYPE_LABELS, type QuestionType } from "@playcode/core";
+import { LANGUAGE_LABELS, QUESTION_TYPE_LABELS, type Language, type QuestionType } from "@playcode/core";
 import { ErrorBox, Loading, timeAgo } from "@/components/ui";
 import { useApi } from "@/lib/api";
 import { startAndOpen } from "@/lib/start";
@@ -36,7 +36,7 @@ export default function MistakesPage() {
             <div key={m.questionId} className="card tight">
               <div style={{ fontWeight: 600 }}>{m.stem}</div>
               <div className="muted small">
-                {QUESTION_TYPE_LABELS[m.type]} · {m.language} · wrong {m.wrongCount}× · {timeAgo(m.lastWrongAt)}
+                {QUESTION_TYPE_LABELS[m.type]} · {LANGUAGE_LABELS[m.language as Language] ?? m.language} · wrong {m.wrongCount}× · {timeAgo(m.lastWrongAt)}
               </div>
             </div>
           ))}

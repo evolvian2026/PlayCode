@@ -60,7 +60,7 @@ export function blankAnswer(type: QuestionType, kind: Answer["kind"] = ANSWER_KI
 
 export function blankInput(type: QuestionType = "predict_output", skillId = ""): StudioInput {
   const answer = blankAnswer(type);
-  const language = type === "sql_query" ? "sql" : type === "pseudocode_mcq" ? "pseudocode" : "python";
+  const language = type === "sql_query" ? "sql" : type === "pseudocode_mcq" ? "pseudocode" : type === "concept" ? "theory" : "python";
   return {
     type,
     skillId,

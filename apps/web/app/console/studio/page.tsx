@@ -106,6 +106,7 @@ function AiDrafts({ info, skills }: { info: StudioInfo; skills: Skill[] }) {
             <option value="c">C</option>
             <option value="java">Java</option>
             <option value="pseudocode">Pseudocode</option>
+            <option value="theory">Concepts (no code)</option>
           </select>
         </div>
         )}

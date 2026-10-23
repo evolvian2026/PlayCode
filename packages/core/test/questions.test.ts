@@ -110,3 +110,23 @@ describe("describeAnswer", () => {
     expect(describeAnswer(parsons)).toBe("def total(xs):\n    s = 0\n    for x in xs: s += x\n    return s");
   });
 });
+
+describe("concept questions", () => {
+  const concept: Question = {
+    id: "c1",
+    type: "concept",
+    skillId: "os.memory",
+    difficulty: 1,
+    body: { stem: "Which is not a deadlock condition?", language: "theory", options: [{ id: "a", text: "Preemption" }, { id: "b", text: "Circular wait" }] },
+    answer: { kind: "option", optionId: "a" },
+    explanation: "No preemption is the condition; preemption breaks deadlocks.",
+    hints: [],
+  };
+
+  it("are plain multiple choice with no code", () => {
+    expect(validateQuestion(concept)).toEqual([]);
+    expect(grade(concept.answer, { kind: "option", optionId: "a" })).toBe(true);
+    expect(JSON.stringify(toStudentView(concept))).not.toContain("optionId");
+    expect(validateQuestion({ ...concept, answer: { kind: "text", accepted: ["Preemption"] } })).not.toEqual([]);
+  });
+});

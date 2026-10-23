@@ -22,7 +22,7 @@ import { blankAnswer, blankInput, DRAFT_STORAGE_KEY, optionId, type QuestionChec
 import type { QuestionView } from "@/lib/types";
 
 const CODE_LANGS: CodeLanguage[] = ["python", "c", "java"];
-const LANG_LABEL: Record<string, string> = { python: "Python", c: "C", java: "Java", pseudocode: "Pseudocode", sql: "SQL" };
+const LANG_LABEL: Record<string, string> = { python: "Python", c: "C", java: "Java", pseudocode: "Pseudocode", sql: "SQL", theory: "Concepts (no code)" };
 const editorLang = (l: string) => (l === "c" || l === "java" || l === "python" || l === "sql" ? l : "python");
 const lines = (s: string) => s.split("\n").map((l) => l.trim()).filter(Boolean);
 
@@ -242,7 +242,7 @@ function Editor() {
                 <div>
                   <label htmlFor="q-lang">Language</label>
                   <select id="q-lang" value={input.body.language} onChange={(e) => setBody({ language: e.target.value as QuestionBody["language"] })}>
-                    {["python", "c", "java", "pseudocode"].map((l) => (
+                    {["python", "c", "java", "pseudocode", "theory"].map((l) => (
                       <option key={l} value={l}>
                         {LANG_LABEL[l]}
                       </option>

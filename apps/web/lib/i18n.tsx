@@ -80,6 +80,7 @@ const HI: Record<string, string> = {
   "Check what your profile shows": "देखें आपकी प्रोफ़ाइल क्या दिखाती है",
   "Leave the talent pool? Companies will no longer find you; invitations you already have stay here.": "टैलेंट पूल छोड़ें? कंपनियाँ अब आपको नहीं ढूँढ पाएँगी; जो आमंत्रण मिल चुके हैं वे यहीं रहेंगे।",
   "Accept? The company will see your email and phone number.": "स्वीकार करें? कंपनी आपका ईमेल और फ़ोन नंबर देख सकेगी।",
+  Concepts: "अवधारणाएँ",
   "Keep it fresh": "याद ताज़ा रखें",
   "1 skill is fading": "1 स्किल भूलने लगी है",
   "{n} skills are fading": "{n} स्किल भूलने लगी हैं",

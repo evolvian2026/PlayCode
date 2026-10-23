@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { describeAnswer, QUESTION_TYPE_LABELS, QUESTION_TYPES, type Answer, type QuestionBody, type QuestionType } from "@playcode/core";
+import { describeAnswer, LANGUAGE_LABELS, QUESTION_TYPE_LABELS, QUESTION_TYPES, type Answer, type Language, type QuestionBody, type QuestionType } from "@playcode/core";
 import { CodeBlock } from "@/components/CodeBlock";
 import { ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
@@ -81,7 +81,7 @@ export default function Content() {
                 </span>
                 <span className="row" style={{ gap: 6 }}>
                   <span className="pill accent">{QUESTION_TYPE_LABELS[q.type]}</span>
-                  <span className="pill">{q.language}</span>
+                  <span className="pill">{LANGUAGE_LABELS[q.language as Language] ?? q.language}</span>
                   <span className="pill">{DIFF[q.difficulty]}</span>
                   <span className="pill">{q.accuracyPct === null ? "no attempts" : `${q.accuracyPct}% of ${q.attempts}`}</span>
                 </span>

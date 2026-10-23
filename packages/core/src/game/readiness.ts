@@ -16,12 +16,12 @@ export const READINESS_PROFILES: ReadinessProfile[] = [
   {
     id: "service",
     name: "Service companies",
-    weights: { basics: 3, loops: 3, conditionals: 2, arrays: 2, strings: 2, functions: 2, pseudocode: 3, oop: 1, coding: 2, sql: 1 },
+    weights: { basics: 3, loops: 3, conditionals: 2, arrays: 2, strings: 2, functions: 2, pseudocode: 3, oop: 1, coding: 2, sql: 1, dbms: 2, os: 1, networks: 1 },
   },
   {
     id: "product",
     name: "Product companies",
-    weights: { arrays: 3, strings: 3, recursion: 3, complexity: 3, functions: 2, oop: 2, pointers: 1, loops: 1, coding: 3, sql: 1 },
+    weights: { arrays: 3, strings: 3, recursion: 3, complexity: 3, functions: 2, oop: 2, pointers: 1, loops: 1, coding: 3, sql: 1, dbms: 1, os: 1 },
   },
 ];
 
