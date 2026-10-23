@@ -38,6 +38,7 @@ const SCOPE_LABELS: Record<string, string> = {
   "assignments:read": "Read assignments",
   "assignments:write": "Create assignments",
   "results:read": "Read results and readiness",
+  "reports:read": "Reporting for BI tools (Power BI, Tableau, Excel)",
 };
 
 function Secret({ label, value }: { label: string; value: string }) {
@@ -256,7 +257,7 @@ export default function Integrations() {
       <div>
         <h1 style={{ margin: 0 }}>Integrations</h1>
         <p className="muted" style={{ margin: 0 }}>
-          Connect PlayCode to your ERP, LMS or hiring system. API reference: GET /v1/users, POST /v1/users, GET /v1/org-units, POST /v1/assignments, GET /v1/results, GET /v1/readiness, GET /v1/students/:id.
+          Connect PlayCode to your ERP, LMS or hiring system. API reference: GET /v1/users, POST /v1/users, GET /v1/org-units, POST /v1/assignments, GET /v1/results, GET /v1/readiness, GET /v1/students/:id. Reporting (scope reports:read, add ?format=csv for CSV): GET /v1/reports/engagement/daily, /v1/reports/skill-mastery, /v1/reports/readiness, /v1/reports/placements.
         </p>
       </div>
       <Clients />

@@ -15,6 +15,7 @@ import { descendants, studentIdsInUnits, tenantUnits } from "../services/scope";
 import { importStudents } from "../services/students";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
 import { hasFeature } from "../services/plan";
+import { reportRoutes } from "./v1-reports";
 
 // Public REST API for ERPs, LMSs and ATSs. Clients use OAuth 2.0 client
 // credentials: POST /v1/oauth/token, then send "Authorization: Bearer <token>".
@@ -89,6 +90,8 @@ export async function v1Routes(app: FastifyInstance) {
       const [client] = await db.select({ revokedAt: apiClients.revokedAt }).from(apiClients).where(eq(apiClients.id, req.api.clientId));
       if (!client || client.revokedAt) throw unauthorized("This API client has been revoked");
     });
+
+    reportRoutes(api, requireScope);
 
     api.get("/v1/org-units", { preHandler: requireScope("users:read") }, async (req) => ({
       data: (await tenantUnits(db, req.api.tenantId)).map((u) => ({ id: u.id, name: u.name, kind: u.kind, parent_id: u.parentId })),
