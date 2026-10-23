@@ -8,6 +8,7 @@ import { parse } from "../lib/http";
 import { getObject } from "../lib/storage";
 import { effectiveBranding } from "../services/branding";
 import { verifyCertificate } from "../services/certificates";
+import { rateLimit } from "../lib/rate-limit";
 import { publicProfile } from "../services/resume";
 import { getSamlConnection } from "../services/saml";
 import { getConnection } from "../services/sso";
@@ -36,11 +37,13 @@ export async function publicRoutes(app: FastifyInstance) {
   // A student's public profile, if they published one.
   app.get("/public/profiles/:code", async (req) => {
     const { code } = parse(z.object({ code: z.string().regex(/^[A-Za-z0-9]{10}$/) }), req.params);
+    await rateLimit(`public-profile:${req.ip}`, 120, 60_000);
     return publicProfile(db, code, app.now());
   });
 
   app.get("/public/certificates/:code", async (req) => {
     const { code } = parse(z.object({ code: z.string().regex(/^[A-Za-z0-9]{10}$/) }), req.params);
+    await rateLimit(`public-cert:${req.ip}`, 120, 60_000);
     return verifyCertificate(db, code);
   });
 }

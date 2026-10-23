@@ -24,6 +24,15 @@ describe("monitoring", () => {
     expect(junk.headers["x-request-id"]).not.toBe("<script>");
   });
 
+  it("sends security headers, and never lets signed-in responses be cached", async () => {
+    const pub = await t.app.inject({ method: "GET", url: "/health" });
+    expect(pub.headers).toMatchObject({ "x-content-type-options": "nosniff", "referrer-policy": "no-referrer", "content-security-policy": "default-src 'none'; frame-ancestors 'none'" });
+    expect(pub.headers["cache-control"]).toBeUndefined();
+    const token = await t.login("student@demo.edu");
+    const me = await t.app.inject({ method: "GET", url: "/me", headers: { authorization: `Bearer ${token}` } });
+    expect(me.headers["cache-control"]).toBe("no-store");
+  });
+
   it("is ready once the database is reachable and fully migrated", async () => {
     const res = await t.app.inject({ method: "GET", url: "/health/ready" });
     expect(res.statusCode).toBe(200);

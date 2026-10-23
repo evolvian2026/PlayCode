@@ -74,6 +74,13 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
 
   app.addHook("onSend", async (req, reply) => {
     reply.header("x-request-id", req.id);
+    // The API serves JSON, files and redirects, never pages: nothing may run or be framed from it.
+    reply.header("x-content-type-options", "nosniff");
+    reply.header("referrer-policy", "no-referrer");
+    reply.header("content-security-policy", "default-src 'none'; frame-ancestors 'none'");
+    if (env.NODE_ENV === "production") reply.header("strict-transport-security", "max-age=31536000; includeSubDomains");
+    // Responses for a signed-in user are never cached by browsers or proxies.
+    if (req.headers.authorization && !reply.hasHeader("cache-control")) reply.header("cache-control", "no-store");
   });
   app.addHook("onResponse", async (req, reply) => {
     observeRequest(req.method, req.routeOptions.url ?? "unmatched", reply.statusCode, reply.elapsedTime / 1000);
