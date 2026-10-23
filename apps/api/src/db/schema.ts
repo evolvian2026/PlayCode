@@ -188,7 +188,7 @@ export const assignments = pgTable(
   (t) => [index("assignments_tenant_idx").on(t.tenantId)],
 );
 
-export type SessionKind = "skill" | "daily" | "pack" | "assignment" | "mistakes";
+export type SessionKind = "skill" | "daily" | "pack" | "assignment" | "mistakes" | "review";
 
 export const sessions = pgTable(
   "sessions",
@@ -270,6 +270,9 @@ export const skillRatings = pgTable(
     attempts: integer("attempts").notNull().default(0),
     correct: integer("correct").notNull().default(0),
     lastPractisedAt: text("last_practised_at"),
+    /** Spaced review: step on the interval ladder and the next due date (YYYY-MM-DD). */
+    reviewStep: integer("review_step").notNull().default(0),
+    reviewDueOn: text("review_due_on"),
   },
   (t) => [primaryKey({ columns: [t.userId, t.skillId] })],
 );
@@ -495,7 +498,7 @@ export const competitions = pgTable(
 
 // ---------- Notifications ----------
 
-export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement";
+export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due";
 
 export const notifications = pgTable(
   "notifications",

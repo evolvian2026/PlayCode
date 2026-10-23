@@ -85,7 +85,7 @@ describe("nudges and notifications", () => {
     expect(first.body.delivered.sent).toBe(0);
     const again = await t.post(tpo, "/admin/nudges/run", { ignoreQuietHours: true });
     // History also lists other messages (e.g. placement drives); count the automatic nudges.
-    const automatic = ["streak_at_risk", "assignment_due", "test_open"];
+    const automatic = ["streak_at_risk", "review_due", "assignment_due", "test_open"];
     const totalAgain = (await t.get(tpo, "/console/nudges")).body.history
       .filter((h: { template: string }) => automatic.includes(h.template))
       .reduce((a: number, h: { total: number }) => a + h.total, 0);
@@ -122,7 +122,7 @@ describe("nudges and notifications", () => {
     expect((await t.put(admin, "/console/settings/nudges", { enabled: false })).body.enabled).toBe(false);
     t.clock.now = new Date(START.getTime() + 2 * 86_400_000);
     const run = await t.post(tpo, "/admin/nudges/run", { ignoreQuietHours: true });
-    expect(run.body.queued).toEqual({ streak: 0, assignment: 0, test: 0 });
+    expect(run.body.queued).toEqual({ streak: 0, review: 0, assignment: 0, test: 0 });
   });
 
   it("notifies a challenged student", async () => {

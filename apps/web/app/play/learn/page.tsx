@@ -8,7 +8,7 @@ import { usePlayer } from "@/lib/player-state";
 import { startAndOpen } from "@/lib/start";
 
 interface MapData {
-  topics: { topic: string; name: string; mastery: number; skills: { id: string; name: string; mastery: number; attempts: number; questionCount: number }[] }[];
+  topics: { topic: string; name: string; mastery: number; skills: { id: string; name: string; mastery: number; attempts: number; questionCount: number; reviewDue: boolean }[] }[];
 }
 
 export default function Learn() {
@@ -43,7 +43,10 @@ export default function Learn() {
             <div key={s.id} className="spread">
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="spread small">
-                  <span style={{ fontWeight: 600 }}>{s.name}</span>
+                  <span style={{ fontWeight: 600 }}>
+                    {s.name}
+                    {s.reviewDue && <span className="pill warn" style={{ marginLeft: 6 }}>fading</span>}
+                  </span>
                   <span className="muted">{s.attempts ? `${s.mastery}%` : "new"}</span>
                 </div>
                 <Bar value={s.mastery} tone={masteryTone(s.mastery)} />

@@ -8,7 +8,8 @@ export type StartInput =
   | { kind: "daily" }
   | { kind: "pack"; packId: string }
   | { kind: "assignment"; assignmentId: string }
-  | { kind: "mistakes" };
+  | { kind: "mistakes" }
+  | { kind: "review" };
 
 /** Start (or resume) a session and open the player. Returns an error message on failure. */
 export async function startAndOpen(input: StartInput, push: (href: string) => void): Promise<string | null> {

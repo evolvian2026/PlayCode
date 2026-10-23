@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, gt, inArray, isNotNull, lte, sql } from "drizzle-orm";
-import { addDays, localDate } from "@playcode/core";
+import { addDays, dueForReview, isoWeekKey, localDate, masteryFromRating } from "@playcode/core";
 import type { Db } from "../db/client";
-import { assessmentAttempts, assessments, assignments, playerProfiles, sessions, tenants, users } from "../db/schema";
+import { assessmentAttempts, assessments, assignments, playerProfiles, questions, sessions, skillRatings, tenants, users } from "../db/schema";
 import { readinessFor } from "./analytics";
 import { appLink, enqueue, type NewNotification } from "./notifications";
+import { quickVisibleTo } from "./practice";
 import { descendants, studentIdsInUnits, tenantUnits } from "./scope";
 
 /** Local hour in a time zone, 0-23. */
@@ -12,14 +13,18 @@ function localHour(now: Date, timeZone: string): number {
   return Number(new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", hourCycle: "h23" }).format(now));
 }
 
+/** Students with at least this many skills due for review get a weekly reminder. */
+export const REVIEW_NUDGE_MIN_SKILLS = 3;
+
 /**
  * Automatic nudges, meant to run hourly: streaks at risk (evenings only),
- * assignments due within a day, and open tests not yet started. Each nudge is
- * sent once thanks to its dedupe key.
+ * skills fading (late afternoon, at most weekly), assignments due within a
+ * day, and open tests not yet started. Each nudge is sent once thanks to its
+ * dedupe key.
  */
 export async function runNudges(db: Db, now: Date, opts: { tenantId?: string; ignoreQuietHours?: boolean } = {}) {
   const tenantRows = await db.select().from(tenants).where(opts.tenantId ? eq(tenants.id, opts.tenantId) : undefined);
-  const summary = { streak: 0, assignment: 0, test: 0 };
+  const summary = { streak: 0, review: 0, assignment: 0, test: 0 };
   for (const tenant of tenantRows) {
     if (tenant.settings.nudges === false) continue;
     const today = localDate(now, tenant.timeZone);
@@ -45,6 +50,33 @@ export async function runNudges(db: Db, now: Date, opts: { tenantId?: string; ig
       }
     }
     summary.streak += items.length;
+
+    // Fading skills: once a week, between 4 pm and 6 pm, for students with several skills due.
+    if (opts.ignoreQuietHours || (hour >= 16 && hour < 18)) {
+      const rows = await db
+        .select({ userId: skillRatings.userId, skillId: skillRatings.skillId, rating: skillRatings.rating, step: skillRatings.reviewStep, dueOn: skillRatings.reviewDueOn })
+        .from(skillRatings)
+        .innerJoin(users, eq(users.id, skillRatings.userId))
+        .where(and(eq(users.tenantId, tenant.id), eq(users.status, "active"), isNotNull(skillRatings.reviewDueOn), lte(skillRatings.reviewDueOn, today)));
+      // As on the home screen: only skills a quick review can cover.
+      const quick = new Set((await db.selectDistinct({ skillId: questions.skillId }).from(questions).where(quickVisibleTo(tenant.id))).map((q) => q.skillId));
+      const byUser = new Map<string, typeof rows>();
+      for (const r of rows.filter((r) => quick.has(r.skillId))) (byUser.get(r.userId) ?? byUser.set(r.userId, []).get(r.userId)!).push(r);
+      for (const [userId, list] of byUser) {
+        const due = dueForReview(list.map((r) => ({ ...r, mastery: masteryFromRating(r.rating) })), today);
+        if (due.length < REVIEW_NUDGE_MIN_SKILLS) continue;
+        items.push({
+          tenantId: tenant.id,
+          userId,
+          template: "review_due",
+          title: `${due.length} skills are fading`,
+          body: "A five-minute review keeps them ready for placement tests.",
+          link: appLink("/play"),
+          dedupeKey: `review:${userId}:${isoWeekKey(today)}`,
+        });
+        summary.review++;
+      }
+    }
 
     const units = await tenantUnits(db, tenant.id);
     // Assignments closing within 24 hours, for students who have not finished.

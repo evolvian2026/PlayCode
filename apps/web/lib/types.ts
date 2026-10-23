@@ -54,7 +54,7 @@ export interface QuestionView {
 
 export interface SessionView {
   id: string;
-  kind: "skill" | "daily" | "pack" | "assignment" | "mistakes";
+  kind: "skill" | "daily" | "pack" | "assignment" | "mistakes" | "review";
   title: string;
   total: number;
   answered: number;

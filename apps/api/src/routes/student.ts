@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { isoWeekKey, masteryFromRating, QUESTION_TYPES } from "@playcode/core";
+import { isoWeekKey, masteryFromRating, QUESTION_TYPES, REVIEW_MAX_SKILLS, REVIEW_PER_SKILL } from "@playcode/core";
 import { z } from "zod";
 import { db } from "../db/client";
 import { assignments, duels, mistakes, packs, questions, sessions, skillRatings, skills } from "../db/schema";
@@ -18,6 +18,7 @@ import { getOrCreateProfile, profileSummary } from "../services/profile";
 import { studentUnitIdsWithAncestors } from "../services/scope";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
 import { reportQuestion } from "../services/quality";
+import { reviewDue } from "../services/review";
 
 const responseSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("option"), optionId: z.string().max(20) }),
@@ -36,6 +37,7 @@ const startSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("pack"), packId: z.string() }),
   z.object({ kind: z.literal("assignment"), assignmentId: z.string().uuid() }),
   z.object({ kind: z.literal("mistakes") }),
+  z.object({ kind: z.literal("review") }),
 ]);
 
 async function studentAssignments(ctx: StudentCtx) {
@@ -113,6 +115,11 @@ export async function studentRoutes(app: FastifyInstance) {
       .from(duels)
       .where(and(eq(duels.opponentId, ctx.userId), eq(duels.status, "waiting"), gte(duels.createdAt, new Date(ctx.now.getTime() - 2 * 60_000))));
     const tests = (await studentAssessments(db, ctx)).filter((a) => a.state === "open" || a.state === "in_progress");
+    const due = await reviewDue(db, ctx.tenantId, ctx.userId, today);
+    const [reviewSession] = await db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(and(eq(sessions.userId, ctx.userId), eq(sessions.kind, "review"), eq(sessions.day, today), isNull(sessions.finishedAt)));
     return {
       tenant: { name: tenant.name },
       today,
@@ -126,6 +133,12 @@ export async function studentRoutes(app: FastifyInstance) {
       duelInvites,
       tests: tests.map((a) => ({ id: a.id, title: a.title, state: a.state, closeAt: a.closeAt, durationMinutes: a.durationMinutes })),
       suggestedSkill: suggested ? { id: suggested.id, name: suggested.name, topicName: suggested.topicName } : null,
+      review: {
+        dueCount: due.length,
+        skills: due.slice(0, REVIEW_MAX_SKILLS).map((d) => ({ id: d.skillId, name: d.name, overdueDays: d.overdueDays })),
+        questionCount: Math.min(due.length, REVIEW_MAX_SKILLS) * REVIEW_PER_SKILL,
+        sessionId: reviewSession?.id ?? null,
+      },
     };
   });
 
@@ -141,6 +154,8 @@ export async function studentRoutes(app: FastifyInstance) {
         .groupBy(questions.skillId),
     ]);
     const rated = new Map(ratings.map((r) => [r.skillId, r]));
+    const today = tenantToday(await getTenant(db, ctx.tenantId), ctx.now);
+    const dueIds = new Set((await reviewDue(db, ctx.tenantId, ctx.userId, today)).map((d) => d.skillId));
     const countBySkill = new Map(counts.map((c) => [c.skillId, c.count]));
     const topics: { topic: string; name: string; mastery: number; skills: unknown[] }[] = [];
     for (const s of skillRows) {
@@ -153,6 +168,8 @@ export async function studentRoutes(app: FastifyInstance) {
         mastery: r ? masteryFromRating(r.rating) : 0,
         attempts: r?.attempts ?? 0,
         questionCount: countBySkill.get(s.id) ?? 0,
+        reviewDue: dueIds.has(s.id),
+        reviewDueOn: r?.reviewDueOn ?? null,
       });
     }
     for (const t of topics) {

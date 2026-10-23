@@ -7,6 +7,7 @@ export * from "./game/lives";
 export * from "./game/league";
 export * from "./game/rating";
 export * from "./game/readiness";
+export * from "./game/review";
 export * from "./game/badges";
 export * from "./code";
 export * from "./assessment";

@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import {
+  afterAnswer,
   computeXp,
   describeAnswer,
   EXECUTION_TYPES,
@@ -45,6 +46,7 @@ import { checkPathCompletion } from "./paths";
 import { deliverDue, emitEvent } from "./webhooks";
 import { getOrCreateProfile, profileSummary, streakColumns, streakState } from "./profile";
 import { studentUnitIdsWithAncestors } from "./scope";
+import { pickReviewQuestions } from "./review";
 import { getTenant, streakRules, tenantToday } from "./tenant";
 
 export const SKILL_SESSION_LENGTH = 8;
@@ -104,7 +106,8 @@ export type StartInput =
   | { kind: "daily" }
   | { kind: "pack"; packId: string }
   | { kind: "assignment"; assignmentId: string }
-  | { kind: "mistakes" };
+  | { kind: "mistakes" }
+  | { kind: "review" };
 
 export async function startSession(db: Db, ctx: StudentCtx, input: StartInput) {
   const tenant = await getTenant(db, ctx.tenantId);
@@ -194,6 +197,19 @@ export async function startSession(db: Db, ctx: StudentCtx, input: StartInput) {
       values = { ...base, questionIds: open.map((m) => m.questionId) };
       break;
     }
+    case "review": {
+      // One review a day: reopen today's if there is one.
+      const [existing] = await db
+        .select()
+        .from(sessions)
+        .where(and(eq(sessions.userId, ctx.userId), eq(sessions.kind, "review"), eq(sessions.day, today), isNull(sessions.finishedAt)));
+      if (existing) return sessionView(db, existing);
+      const picked = await pickReviewQuestions(db, { tenantId: ctx.tenantId, userId: ctx.userId, today, now: ctx.now });
+      if (picked.questionIds.length === 0) throw badRequest("Nothing to review today. Your skills are fresh.");
+      // No hearts: a review checks what is remembered and shouldn't cost anything to try.
+      values = { ...base, day: today, questionIds: picked.questionIds };
+      break;
+    }
   }
   const [session] = await db.insert(sessions).values({ ...values, startedAt: ctx.now }).returning();
   return sessionView(db, session!);
@@ -206,6 +222,7 @@ async function sessionTitle(db: DbOrTx, s: SessionRow): Promise<{ title: string;
   }
   if (s.kind === "daily") return { title: "Daily challenge", passMark: null };
   if (s.kind === "mistakes") return { title: "Mistake review", passMark: null };
+  if (s.kind === "review") return { title: "Skill review", passMark: null };
   if (s.kind === "assignment" && s.assignmentId) {
     const [a] = await db.select({ title: assignments.title }).from(assignments).where(eq(assignments.id, s.assignmentId));
     const pack = s.packId ? (await db.select({ passMark: packs.passMark }).from(packs).where(eq(packs.id, s.packId)))[0] : undefined;
@@ -349,9 +366,10 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
 
     // Ratings: student mastery on the skill, and calibration of the question.
     const ratings = updateRatings(player, { rating: q.rating, attempts: q.attempts }, correct);
+    const review = afterAnswer({ step: rating?.reviewStep ?? 0, dueOn: rating?.reviewDueOn ?? null }, correct, today);
     await tx
       .insert(skillRatings)
-      .values({ userId: ctx.userId, skillId: q.skillId, rating: ratings.playerRating, attempts: 1, correct: correct ? 1 : 0, lastPractisedAt: today })
+      .values({ userId: ctx.userId, skillId: q.skillId, rating: ratings.playerRating, attempts: 1, correct: correct ? 1 : 0, lastPractisedAt: today, reviewStep: review.step, reviewDueOn: review.dueOn })
       .onConflictDoUpdate({
         target: [skillRatings.userId, skillRatings.skillId],
         set: {
@@ -359,6 +377,8 @@ export async function answerQuestion(db: Db, ctx: StudentCtx, sessionId: string,
           attempts: sql`${skillRatings.attempts} + 1`,
           correct: sql`${skillRatings.correct} + ${correct ? 1 : 0}`,
           lastPractisedAt: today,
+          reviewStep: review.step,
+          reviewDueOn: review.dueOn,
         },
       });
     await tx

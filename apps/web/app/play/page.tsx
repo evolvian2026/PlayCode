@@ -23,6 +23,7 @@ interface Home {
   duelInvites: number;
   tests: { id: string; title: string; state: string; closeAt: string; durationMinutes: number }[];
   suggestedSkill: { id: string; name: string; topicName: string } | null;
+  review: { dueCount: number; skills: { id: string; name: string; overdueDays: number }[]; questionCount: number; sessionId: string | null };
 }
 
 /** "in 5 h", "in 2 d": how long until a deadline. */
@@ -219,6 +220,21 @@ export default function PlayHome() {
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {data.review.dueCount > 0 && (
+        <div className="card spread">
+          <div>
+            <div className="muted small">{t("Keep it fresh")}</div>
+            <div style={{ fontWeight: 700 }}>{t(data.review.dueCount === 1 ? "1 skill is fading" : "{n} skills are fading", { n: data.review.dueCount })}</div>
+            <div className="muted small">
+              {data.review.skills.map((s) => s.name).join(", ")} · {t("{n} questions, no hearts", { n: data.review.questionCount })}
+            </div>
+          </div>
+          <button className="btn primary" disabled={busy} onClick={() => start({ kind: "review" })}>
+            {t(data.review.sessionId ? "Continue" : "Review")}
+          </button>
         </div>
       )}
 

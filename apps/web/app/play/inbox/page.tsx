@@ -12,6 +12,7 @@ interface Inbox {
 const LABEL: Record<string, string> = {
   announcement: "From your institution",
   streak_at_risk: "Streak",
+  review_due: "Review",
   assignment_due: "Assignment",
   test_open: "Test",
   duel_invite: "Duel",
