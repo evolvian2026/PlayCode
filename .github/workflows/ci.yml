@@ -4,10 +4,17 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
+    name: Typecheck, content and tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16
@@ -29,14 +36,80 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      # Java runs the content checks for Java questions; Python and gcc ship with the runner.
+      # The code runner compiles C and Java and runs Python; gcc and Python ship with the runner.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
       - run: pnpm install --frozen-lockfile
+      # Fails on high or critical advisories.
+      - run: pnpm audit --audit-level high
       - run: pnpm typecheck
+      # Runs every bundled question's code to prove its stated answer.
+      - run: pnpm verify:content
       - run: pnpm test
         env:
           TEST_DATABASE_URL: postgres://playcode:playcode@localhost:5432/playcode_test
+
+  app:
+    name: Build, accessibility and backups
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: playcode
+          POSTGRES_PASSWORD: playcode
+          POSTGRES_DB: playcode
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U playcode"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://playcode:playcode@localhost:5432/playcode
+      JWT_SECRET: ci-only-secret-ci-only-secret-ci-only
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @playcode/web build
+      - run: pnpm db:migrate && pnpm db:seed
+      - name: Start the API and web app
+        run: |
+          pnpm --filter @playcode/api start > api.log 2>&1 &
+          pnpm --filter @playcode/web start > web.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:4000/health/ready > /dev/null && curl -sf http://localhost:3000/login > /dev/null && exit 0
+            sleep 2
+          done
+          cat api.log web.log
+          exit 1
+      - name: Accessibility (axe-core, WCAG 2.1 AA)
+        run: |
+          npm install -g playwright@1.56.1
+          playwright install --with-deps chromium
+          PW="$(npm root -g)/playwright" pnpm --filter @playcode/web a11y
+      - name: Back up and restore
+        env:
+          BACKUP_DIR: ${{ runner.temp }}/backups
+          ADMIN_DATABASE_URL: postgres://playcode:playcode@localhost:5432/postgres
+        run: |
+          pg_dump --version
+          ops/backup.sh
+          ops/restore-check.sh
+      - if: failure()
+        run: tail -n 200 api.log web.log || true
