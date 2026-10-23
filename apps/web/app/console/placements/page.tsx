@@ -237,6 +237,89 @@ function RecordsImport({ onDone }: { onDone: () => void }) {
   );
 }
 
+interface InstitutionTalent {
+  open: boolean;
+  inPool: number;
+  companies: { company: string; invited: number; accepted: number }[];
+  invites: { id: string; userId: string; student: string; rollNo: string | null; company: string; roleTitle: string; status: string; createdAt: string }[];
+}
+
+/** Companies finding students through the talent pool, and the switch that lets students join. */
+function TalentPool() {
+  const { data, error, reload, setData } = useApi<InstitutionTalent>("/console/talent/institution");
+  const [busy, setBusy] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  if (error) return <ErrorBox message={error.message} onRetry={reload} />;
+  if (!data) return null;
+
+  async function setOpen(open: boolean) {
+    if (!open && !window.confirm("Close the talent pool? Companies will stop finding your students at once.")) return;
+    setBusy(true);
+    setSaveError(null);
+    try {
+      await api("/console/talent/institution", { method: "PUT", body: { open } });
+      setData({ ...data!, open });
+    } catch (e) {
+      setSaveError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card stack">
+      <div className="spread wrap">
+        <div>
+          <h2 style={{ margin: 0 }}>Talent pool</h2>
+          <p className="small muted" style={{ margin: 0 }}>
+            {data.open
+              ? `Open: ${data.inPool} student${data.inPool === 1 ? "" : "s"} chose to be found by companies hiring on PlayCode. Companies see their verified record, and their contact details only when a student accepts an invitation.`
+              : "Closed. When open, students can choose to be found by companies hiring on PlayCode, by their measured readiness and skills."}
+          </p>
+        </div>
+        <button className={`btn ${data.open ? "" : "primary"}`} disabled={busy} onClick={() => setOpen(!data.open)}>
+          {data.open ? "Close the pool" : "Open the talent pool"}
+        </button>
+      </div>
+      {saveError && <ErrorBox message={saveError} />}
+      {data.companies.length > 0 && (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Company</th>
+                <th>Students invited</th>
+                <th>Accepted</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.companies.map((c) => (
+                <tr key={c.company}>
+                  <td>{c.company}</td>
+                  <td>{c.invited}</td>
+                  <td>{c.accepted}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {data.invites.length > 0 && (
+        <details>
+          <summary className="small">Latest invitations</summary>
+          <ul className="small" style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+            {data.invites.slice(0, 20).map((i) => (
+              <li key={i.id}>
+                <Link href={`/console/students/${i.userId}`}>{i.student}</Link> · {i.company}, {i.roleTitle} · {i.status}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export default function PlacementsPage() {
   const { data, error, loading, reload } = useApi<{ drives: DriveRow[] }>("/console/placements");
   const [panel, setPanel] = useState<"none" | "drive" | "records">("none");
@@ -274,6 +357,7 @@ export default function PlacementsPage() {
           }}
         />
       )}
+      <TalentPool />
       {error && <ErrorBox message={error.message} onRetry={reload} />}
       {loading && !data ? (
         <Loading />

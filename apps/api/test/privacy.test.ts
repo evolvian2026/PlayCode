@@ -21,12 +21,15 @@ afterAll(async () => {
 describe("consent", () => {
   it("records the privacy notice and WhatsApp choices in a ledger", async () => {
     const student = await t.login("student@demo.edu");
-    expect((await t.get(student, "/privacy")).body).toMatchObject({ noticeAccepted: false, history: [], canRequestErasure: true });
+    // The seed puts this student in the talent pool, so the ledger starts with that consent.
+    const before = (await t.get(student, "/privacy")).body;
+    expect(before).toMatchObject({ noticeAccepted: false, canRequestErasure: true });
+    expect(before.history.map((h: { purpose: string; granted: boolean }) => `${h.purpose}:${h.granted}`)).toEqual(["talent_pool:true"]);
     expect((await t.post(student, "/privacy/notice", { accept: true })).body.noticeAccepted).toBe(true);
     await t.put(student, "/student/settings", { whatsapp: false });
     await t.put(student, "/student/settings", { whatsapp: true });
     const { history } = (await t.get(student, "/privacy")).body;
-    expect(history.map((h: { purpose: string; granted: boolean }) => `${h.purpose}:${h.granted}`).sort()).toEqual(["privacy_notice:true", "whatsapp:false", "whatsapp:true"]);
+    expect(history.map((h: { purpose: string; granted: boolean }) => `${h.purpose}:${h.granted}`).sort()).toEqual(["privacy_notice:true", "talent_pool:true", "whatsapp:false", "whatsapp:true"]);
     expect((await t.get(admin, "/privacy")).body.canRequestErasure).toBe(false);
   });
 });

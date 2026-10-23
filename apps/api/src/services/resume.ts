@@ -123,7 +123,11 @@ export type ResumeData = Awaited<ReturnType<typeof resumeData>>;
 export async function publicProfile(db: Db, code: string, now: Date) {
   const [row] = await db.select().from(studentProfiles).where(eq(studentProfiles.publicCode, code));
   if (!row) throw notFound("Profile");
-  const d = await resumeData(db, row.userId, now);
+  return shareableProfile(await resumeData(db, row.userId, now), now);
+}
+
+/** What a student's public profile (and a company looking at the talent pool) may see. */
+export function shareableProfile(d: ResumeData, now: Date) {
   return {
     name: d.name,
     headline: d.headline,

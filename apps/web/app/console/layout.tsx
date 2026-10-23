@@ -9,7 +9,7 @@ import { LicenceBanner } from "@/components/LicenceBanner";
 import { Icon } from "@/components/Icon";
 import { logoSrc } from "@/lib/branding";
 
-type NavItem = { href: string; label: string; icon: string; perm: string | string[] | null; feature?: Feature; tenantOnly?: boolean; superAdmin?: boolean; accounts?: boolean };
+type NavItem = { href: string; label: string; icon: string; perm: string | string[] | null; feature?: Feature; tenantOnly?: boolean; superAdmin?: boolean; accounts?: boolean; company?: boolean };
 
 const NAV: NavItem[] = [
   { href: "/console", label: "Overview", icon: "chart", perm: null },
@@ -20,6 +20,7 @@ const NAV: NavItem[] = [
   { href: "/console/placements", label: "Placements", icon: "briefcase", perm: "placements.manage", feature: "placements" },
   { href: "/console/interviews", label: "Mock interviews", icon: "chat", perm: ["analytics.institution", "analytics.department", "analytics.own_units"], feature: "ai_interviews" },
   { href: "/console/drives", label: "Hiring drives", icon: "users", perm: "drives.manage", feature: "hiring_drives" },
+  { href: "/console/talent", label: "Talent pool", icon: "user", perm: "drives.manage", feature: "talent_search", company: true },
   { href: "/console/engage", label: "Engagement", icon: "megaphone", perm: null },
   { href: "/console/batches", label: "Batches", icon: "layers", perm: null },
   { href: "/console/reports", label: "Reports", icon: "chart", perm: ["analytics.institution", "analytics.department", "analytics.own_units"] },
@@ -39,6 +40,7 @@ const NAV: NavItem[] = [
 function visible(n: NavItem, me: { permissions: string[]; user: { roles: string[] }; tenant: { plan: string; type?: string } | null }) {
   if (n.superAdmin) return me.user.roles.includes("super_admin") && !me.tenant;
   if (n.tenantOnly && !me.tenant) return false;
+  if (n.company && me.tenant?.type !== "company") return false;
   // Account views: PlayCode staff outside an institution, or a partner looking at its colleges.
   if (n.accounts && !(me.tenant ? me.tenant.type === "partner" : me.user.roles.includes("super_admin"))) return false;
   if (n.perm && ![n.perm].flat().some((p) => me.permissions.includes(p))) return false;

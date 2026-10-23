@@ -22,6 +22,7 @@ export const FEATURES = [
   "hiring_drives",
   "placements",
   "ai_interviews",
+  "talent_search",
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
@@ -42,6 +43,7 @@ export const FEATURE_LABELS: Record<Feature, string> = {
   hiring_drives: "Hiring drives",
   placements: "Campus placements",
   ai_interviews: "AI mock interviews",
+  talent_search: "Talent pool search",
 };
 
 export interface PlanSpec {
@@ -74,7 +76,7 @@ export const PLAN_SPECS: Record<Plan, PlanSpec> = {
   pro: { name: "Pro", features: PRO, seatPricePaise: 6_000, aiTokensPerMonth: 2_000_000, aiOveragePerMillionPaise: 0 },
   enterprise: {
     name: "Enterprise",
-    features: [...PRO, "ai_proctoring", "ai_drafting", "saml", "lti", "api"],
+    features: [...PRO, "ai_proctoring", "ai_drafting", "saml", "lti", "api", "talent_search"],
     seatPricePaise: 12_000,
     aiTokensPerMonth: 10_000_000,
     aiOveragePerMillionPaise: 40_000,

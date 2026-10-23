@@ -46,6 +46,8 @@ export interface TenantSettings {
   aiProctoring?: boolean;
   /** Days after a test closes before its webcam snapshots are deleted (default 90). */
   snapshotRetentionDays?: number;
+  /** Students may join the talent pool, where companies on PlayCode can find and invite them. */
+  talentPool?: boolean;
 }
 
 export interface TenantBranding {
@@ -498,7 +500,7 @@ export const competitions = pgTable(
 
 // ---------- Notifications ----------
 
-export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due";
+export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite";
 
 export const notifications = pgTable(
   "notifications",
@@ -675,7 +677,7 @@ export const ssoConnections = pgTable("sso_connections", {
 
 // ---------- Privacy ----------
 
-export const CONSENT_PURPOSES = ["privacy_notice", "whatsapp", "public_profile"] as const;
+export const CONSENT_PURPOSES = ["privacy_notice", "whatsapp", "public_profile", "talent_pool"] as const;
 export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
 
 /** Append-only ledger: every grant and withdrawal, with the notice version shown at the time. */
@@ -1215,8 +1217,35 @@ export const studentProfiles = pgTable("student_profiles", {
   hide: jsonb("hide").$type<{ readiness?: boolean; interview?: boolean; marks?: boolean }>().notNull().default({}),
   /** Public profile at /p/<code>; null while private. */
   publicCode: text("public_code").unique(),
+  /** In the talent pool: companies on PlayCode can find this student and invite them. */
+  discoverable: boolean("discoverable").notNull().default(false),
+  /** What the student is looking for, as filters for companies. Empty: anything. */
+  lookingFor: jsonb("looking_for").$type<{ locations?: string[]; companyTypes?: CompanyType[] }>().notNull().default({}),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export type TalentInviteStatus = "pending" | "accepted" | "declined";
+
+/** A company asking a talent-pool student to apply. Contact details are shared only once the student accepts. */
+export const talentInvites = pgTable(
+  "talent_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    /** The student's institution when invited, for the placement cell's view. */
+    institutionId: uuid("institution_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    driveId: uuid("drive_id").references(() => drives.id, { onDelete: "set null" }),
+    roleTitle: text("role_title").notNull(),
+    message: text("message").notNull(),
+    status: text("status").$type<TalentInviteStatus>().notNull().default("pending"),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+  },
+  (t) => [index("talent_invites_user_idx").on(t.userId, t.createdAt), index("talent_invites_company_idx").on(t.companyId, t.createdAt), index("talent_invites_institution_idx").on(t.institutionId, t.createdAt)],
+);
 
 // ---------- Billing notices ----------
 

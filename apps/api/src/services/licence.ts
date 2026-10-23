@@ -16,7 +16,7 @@ export async function tenantLicence(db: DbOrTx, tenantId: string, now: Date): Pr
 }
 
 /** What still works for a read-only account: signing in and out, privacy rights, billing (so it can be paid), and account settings. */
-const READ_ONLY_ALLOWED = ["/auth/", "/privacy", "/console/privacy", "/console/billing", "/console/security", "/push/", "/student/notifications/read", "/student/settings", "/admin/", "/me"];
+const READ_ONLY_ALLOWED = ["/auth/", "/privacy", "/console/privacy", "/console/billing", "/console/security", "/push/", "/student/notifications/read", "/student/settings", "/student/talent", "/admin/", "/me"];
 
 export class LicenceExpiredError extends HttpError {
   constructor(name: string, validUntil: string) {

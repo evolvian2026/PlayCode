@@ -23,6 +23,7 @@ import { driveRoutes } from "./routes/drives";
 import { interviewRoutes } from "./routes/interviews";
 import { ltiRoutes } from "./routes/lti";
 import { resumeRoutes } from "./routes/resume";
+import { talentRoutes } from "./routes/talent";
 import { pathRoutes } from "./routes/paths";
 import { placementRoutes } from "./routes/placements";
 import { privacyRoutes } from "./routes/privacy";
@@ -149,5 +150,6 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(placementRoutes);
   await app.register(interviewRoutes);
   await app.register(resumeRoutes);
+  await app.register(talentRoutes);
   return app;
 }

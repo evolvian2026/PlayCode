@@ -15,6 +15,7 @@ import { closeLeagueWeek } from "../services/leagues";
 import { answerQuestion, startSession, type StartInput } from "../services/practice";
 import { createPath } from "../services/paths";
 import { requestErasure } from "../services/privacy";
+import { sendInvite, setDiscoverable, setInstitutionPool } from "../services/talent";
 import { db, pool, type Db } from "./client";
 import { runMigrations } from "./migrate";
 import { seedInterview, seedPlacements } from "./seed-placements";
@@ -320,6 +321,20 @@ export async function seedDemo(now = new Date()): Promise<void> {
     }
     await submitOwn(db, { ...ctx, now: new Date(ctx.now.getTime() + 40 * 60_000) }, attempt.id);
   }
+
+  // The talent pool: the demo college opens it, some students join, and Acme (on Enterprise) invites one.
+  await db.update(tenants).set({ plan: "enterprise" }).where(eq(tenants.id, acme!.id));
+  const [demoAdmin] = await db.select().from(users).where(eq(users.email, "admin@demo.edu"));
+  await setInstitutionPool(db, { tenantId, actorId: demoAdmin!.id, open: true });
+  for (const [i, s] of students.slice(0, 10).entries()) {
+    await setDiscoverable(db, { tenantId, userId: s.id, now: new Date(now.getTime() - 5 * 86_400_000) }, { discoverable: true, lookingFor: i % 3 === 0 ? { locations: ["Bengaluru", "Pune"] } : {} });
+  }
+  await sendInvite(db, { tenantId: acme!.id, userId: hr.id, now: new Date(now.getTime() - 3600_000) }, {
+    userId: demoStudent.id,
+    roleTitle: "Graduate Engineer Trainee",
+    message: "Hi Riya, your loops and arrays work stood out. We are hiring graduate engineers in Pune and Bengaluru; take our campus test if you are interested.",
+    driveId: drive.id,
+  });
 
   console.log(`Seeded demo institution with ${students.length} students. Password for every account: ${DEMO_PASSWORD}`);
 }

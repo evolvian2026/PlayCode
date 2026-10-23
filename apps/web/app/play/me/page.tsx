@@ -161,6 +161,14 @@ export default function MePage() {
         <Icon name="arrow" />
       </Link>
 
+      <Link href="/play/talent" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Get found by companies")}</b>
+          <div className="small muted">{tr("Join the talent pool and see invitations from companies")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
       <LanguageCard />
 
       <PushCard />
