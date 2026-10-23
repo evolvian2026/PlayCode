@@ -25,15 +25,16 @@ export interface ProfileInput {
   headline: string;
   about: string;
   links: { github?: string; linkedin?: string; portfolio?: string };
+  hide: { readiness?: boolean; interview?: boolean; marks?: boolean };
 }
 
 export async function getOwnProfile(db: DbOrTx, userId: string) {
   const [row] = await db.select().from(studentProfiles).where(eq(studentProfiles.userId, userId));
-  return { headline: row?.headline ?? "", about: row?.about ?? "", links: row?.links ?? {}, publicUrl: row?.publicCode ? appLink(`/p/${row.publicCode}`) : null };
+  return { headline: row?.headline ?? "", about: row?.about ?? "", links: row?.links ?? {}, hide: row?.hide ?? {}, publicUrl: row?.publicCode ? appLink(`/p/${row.publicCode}`) : null };
 }
 
 export async function saveProfile(db: Db, args: { userId: string; tenantId: string; input: ProfileInput; now: Date }) {
-  const values = { headline: args.input.headline, about: args.input.about, links: args.input.links, updatedAt: args.now };
+  const values = { headline: args.input.headline, about: args.input.about, links: args.input.links, hide: args.input.hide, updatedAt: args.now };
   await db
     .insert(studentProfiles)
     .values({ userId: args.userId, tenantId: args.tenantId, ...values })
@@ -91,6 +92,7 @@ export async function resumeData(db: Db, userId: string, now: Date) {
     about: own.about,
     links: own.links,
     publicUrl: own.publicUrl,
+    hide: own.hide,
     institution: tenant!.name,
     appName: branding.appName,
     program: units.find((u) => u.kind === "batch")?.name ?? units[0]?.name ?? null,
@@ -131,11 +133,11 @@ export async function publicProfile(db: Db, code: string, now: Date) {
     appName: d.appName,
     program: d.program,
     graduationYear: d.academic?.graduationYear ?? null,
-    readiness: d.readiness,
+    readiness: d.hide.readiness ? [] : d.readiness,
     skills: d.skills.map(({ name, mastery }) => ({ name, mastery })),
     certificates: d.certificates,
     practice: d.practice,
-    mockInterview: d.mockInterview ? { track: d.mockInterview.track, overall: d.mockInterview.overall } : null,
+    mockInterview: d.mockInterview && !d.hide.interview ? { track: d.mockInterview.track, overall: d.mockInterview.overall } : null,
     verifiedAt: now,
   };
 }
@@ -175,15 +177,16 @@ export function renderResumePdf(d: ResumeData, opts: { compress?: boolean } = {}
 
   heading("Education");
   doc.font("Helvetica-Bold").fontSize(10.5).fillColor(ink).text(d.institution);
-  const edu = [d.program, d.academic?.graduationYear ? `Graduating ${d.academic.graduationYear}` : null, d.academic?.cgpa != null ? `CGPA ${d.academic.cgpa}` : null].filter(Boolean).join("  ·  ");
+  const marks = d.hide.marks ? null : d.academic;
+  const edu = [d.program, d.academic?.graduationYear ? `Graduating ${d.academic.graduationYear}` : null, marks?.cgpa != null ? `CGPA ${marks.cgpa}` : null].filter(Boolean).join("  ·  ");
   if (edu) doc.font("Helvetica").fontSize(9.5).fillColor(muted).text(edu);
-  const school = [d.academic?.twelfthPct != null ? `Class 12: ${d.academic.twelfthPct}%` : null, d.academic?.tenthPct != null ? `Class 10: ${d.academic.tenthPct}%` : null].filter(Boolean).join("  ·  ");
+  const school = [marks?.twelfthPct != null ? `Class 12: ${marks.twelfthPct}%` : null, marks?.tenthPct != null ? `Class 10: ${marks.tenthPct}%` : null].filter(Boolean).join("  ·  ");
   if (school) doc.font("Helvetica").fontSize(9.5).fillColor(muted).text(school);
 
   heading(`Verified on ${d.appName}`);
   doc.font("Helvetica").fontSize(9).fillColor(muted).text("Measured from practice on the platform, not self-reported.", { width });
   doc.moveDown(0.4);
-  for (const r of d.readiness) {
+  for (const r of d.hide.readiness ? [] : d.readiness) {
     const y = doc.y;
     doc.font("Helvetica").fontSize(9.5).fillColor(ink).text(`${r.name} readiness`, 48, y, { width: 170 });
     doc.rect(222, y + 2, 200, 7).fillColor("#ececf4").fill();
@@ -202,7 +205,7 @@ export function renderResumePdf(d: ResumeData, opts: { compress?: boolean } = {}
       [`${p.questionsSolved} practice questions solved`, `${p.codingProblemsSolved} coding problems`, `${p.sqlProblemsSolved} SQL problems`, `${p.activeDays90} practice days in the last 90`, `longest streak ${p.longestStreak} days`].join("  ·  "),
       { width },
     );
-  if (d.mockInterview) {
+  if (d.mockInterview && !d.hide.interview) {
     const s = d.mockInterview.scores;
     doc.text(
       `Mock technical interview (${d.mockInterview.track} company): ${d.mockInterview.overall}/5 overall; problem solving ${s.problemSolving}, fundamentals ${s.fundamentals}, communication ${s.communication}, code ${s.code}.`,

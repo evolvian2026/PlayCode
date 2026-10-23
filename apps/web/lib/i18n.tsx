@@ -265,6 +265,7 @@ const HI: Record<string, string> = {
   "Turn off on this phone": "इस फ़ोन पर बंद करें",
   "Turn on notifications": "नोटिफ़िकेशन चालू करें",
   "Notifications are blocked for this site. Allow them in your browser settings.": "इस साइट के लिए नोटिफ़िकेशन बंद हैं। अपने ब्राउज़र की सेटिंग में इन्हें चालू करें।",
+  "This browser couldn't set up notifications. Try again, or use Chrome, Edge or Firefox.": "यह ब्राउज़र नोटिफ़िकेशन सेट नहीं कर सका। फिर से कोशिश करें, या Chrome, Edge या Firefox इस्तेमाल करें।",
 
   // Resume
   "My resume": "मेरा रिज़्यूमे",
@@ -290,6 +291,10 @@ const HI: Record<string, string> = {
   "Link copied": "लिंक कॉपी हो गया",
   "Make private": "प्राइवेट करें",
   "Create public link": "पब्लिक लिंक बनाएँ",
+  "Show on my resume and public profile:": "मेरे रिज़्यूमे और पब्लिक प्रोफ़ाइल पर दिखाएँ:",
+  "Readiness scores": "रेडीनेस स्कोर",
+  "Mock interview score": "मॉक इंटरव्यू स्कोर",
+  "CGPA and class 10/12 marks (resume PDF only)": "CGPA और कक्षा 10/12 के अंक (सिर्फ़ रिज़्यूमे PDF में)",
 };
 
 const STORAGE_KEY = "playcode.locale";

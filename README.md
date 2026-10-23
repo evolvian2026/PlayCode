@@ -63,6 +63,12 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - Online invoice payment: institution admins pay issued invoices through a Razorpay payment link. The invoice is marked paid from Razorpay's signed webhook or the signed browser callback, whichever arrives first.
 - Customer health (`/console/health`) for PlayCode staff and partners: per customer, students and seats, weekly active students and the trend against a month ago, answers per active student, staff using the console, assignments, AI tokens, licence end and overdue invoices, with a healthy / watch / at-risk call and its reasons. Partners see their own colleges.
 
+**Phase 8 additions**
+- Push notifications: students turn on notifications per device from their profile, and every reminder (streaks, assignments, tests, placement drives, announcements) also arrives as a phone or desktop notification from the installed web app. It is free to send, so it reaches students without WhatsApp. Tapping one opens the right page.
+- Verified resume and public profile (`/play/resume`): a resume PDF built from the student's PlayCode record (readiness, mastered skills, certificates, coding practice, latest mock interview, academic record) plus their own headline, summary and links. Students choose whether readiness scores, the mock interview score and their marks appear, and can publish a public profile at `/p/<code>` for recruiters (never with email, roll number or marks); hiding it kills the link. Teachers download resumes from a student's page, and drive exports include the profile link where one is published.
+- Billing emails: each new invoice is emailed with its PDF to the customer's accounts email and admins, with a reminder three days before it is due, weekly reminders while overdue (four at most), and licence-renewal reminders 60, 30 and 7 days before a licence ends.
+- Reporting API for BI tools (scope `reports:read`): `GET /v1/reports/engagement/daily` (per day, overall or per section), `/v1/reports/skill-mastery`, `/v1/reports/readiness` and `/v1/reports/placements`, as JSON or CSV (`?format=csv`), with cursor paging. Power BI, Tableau, Looker Studio or Excel can pull them on a schedule.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -138,7 +144,7 @@ Scheduled jobs (run them from cron or your scheduler):
 | Job | When | Command |
 | --- | --- | --- |
 | Close league week | Mondays after midnight, tenant time | `pnpm --filter @playcode/api league:close` |
-| Nudges, notification delivery, missed snapshot reviews, weekly report emails | Hourly (streak reminders only fire 6-9 pm local time) | `pnpm --filter @playcode/api nudges:run` |
+| Nudges, notification delivery (in-app, push, WhatsApp), missed snapshot reviews, weekly report emails, billing emails | Hourly (streak reminders only fire 6-9 pm local time) | `pnpm --filter @playcode/api nudges:run` |
 | Webhook and LMS grade retries | Every minute | `pnpm --filter @playcode/api webhooks:deliver` |
 
 Webhooks are sent straight away when an event happens; the job retries failures
@@ -176,6 +182,12 @@ Placements: academic records come from the placement cell's CSV (roll number or 
 
 Mock interviews use the same Claude setup as the other AI features and count against the plan's AI allowance. Each interview is about 10 requests (one per answer plus the opening question and the scorecard).
 
+Push notifications: generate keys once with `npx web-push generate-vapid-keys` and set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a `mailto:` address). Notifications go out with the rest of the outbox (the hourly job, and straight after announcements). The site must be served over HTTPS. On iPhone, students first add PlayCode to the home screen. Without the keys, the option is hidden.
+
+Billing emails need `SMTP_URL`; they go out from the hourly job and are recorded in `billing_notices`, so each is sent once. Licence end dates are reminders only: nothing is locked when a licence ends.
+
+Reporting API: create an API client with the "Reporting for BI tools" scope under Integrations. Engagement days follow the institution's time zone; readiness is as of the request; placement rows carry the readiness and practice snapshot taken when the student registered.
+
 Running several API instances: put them behind a load balancer (WebSocket upgrades must be allowed); they share Postgres for live events (each instance keeps one extra LISTEN connection), rate limits, webhook and grade outboxes and SAML request ids. Run the scheduled jobs from one place only. The code-execution queue limits concurrency per instance, so size `EXECUTION_CONCURRENCY` per instance against your Judge0 capacity. `REALTIME_FANOUT=off` keeps live events within one instance.
 
 Other operations:
@@ -199,4 +211,4 @@ Other operations:
 
 - **Sessions are checked against the account and its device session on every request**, so disabling or erasing an account, or signing a device out, takes effect at once. This costs one indexed lookup per request.
 
-Not built yet: automatic invoice reminders and Razorpay refunds, voice mock interviews, SAML single logout and encrypted assertions, PostgreSQL row-level security, languages other than English and Hindi, and native mobile apps (the web app is an installable PWA).
+Not built yet: Razorpay refunds, locking accounts when a licence ends, voice mock interviews, SAML single logout and encrypted assertions, PostgreSQL row-level security, languages other than English and Hindi, and native mobile apps (the web app is an installable PWA).

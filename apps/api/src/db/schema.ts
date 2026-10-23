@@ -1187,6 +1187,8 @@ export const studentProfiles = pgTable("student_profiles", {
   headline: text("headline").notNull().default(""),
   about: text("about").notNull().default(""),
   links: jsonb("links").$type<{ github?: string; linkedin?: string; portfolio?: string }>().notNull().default({}),
+  /** What the student leaves out of their resume and public profile (everything is shown by default). */
+  hide: jsonb("hide").$type<{ readiness?: boolean; interview?: boolean; marks?: boolean }>().notNull().default({}),
   /** Public profile at /p/<code>; null while private. */
   publicCode: text("public_code").unique(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

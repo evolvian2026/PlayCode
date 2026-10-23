@@ -9,6 +9,7 @@ interface Profile {
   headline: string;
   about: string;
   links: { github?: string; linkedin?: string; portfolio?: string };
+  hide: { readiness?: boolean; interview?: boolean; marks?: boolean };
   publicUrl: string | null;
 }
 
@@ -45,7 +46,7 @@ export default function ResumePage() {
     setBusy(true);
     setErr(null);
     try {
-      const res = await api<{ profile: Profile }>("/student/resume", { method: "PUT", body: { headline: form!.headline, about: form!.about, links: form!.links } });
+      const res = await api<{ profile: Profile }>("/student/resume", { method: "PUT", body: { headline: form!.headline, about: form!.about, links: form!.links, hide: form!.hide } });
       setForm(res.profile);
       setMsg(t("Saved"));
     } catch (e2) {
@@ -99,6 +100,21 @@ export default function ResumePage() {
         {link("linkedin")}
         {link("github")}
         {link("portfolio")}
+        <div className="stack" style={{ gap: 4 }}>
+          <span className="small muted">{t("Show on my resume and public profile:")}</span>
+          {(
+            [
+              ["readiness", "Readiness scores"],
+              ["interview", "Mock interview score"],
+              ["marks", "CGPA and class 10/12 marks (resume PDF only)"],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key} className="row small" style={{ gap: 8, fontWeight: 500 }}>
+              <input type="checkbox" style={{ width: "auto" }} checked={!form.hide[key]} onChange={(e) => setForm({ ...form, hide: { ...form.hide, [key]: !e.target.checked } })} />
+              {t(label)}
+            </label>
+          ))}
+        </div>
         {err && <ErrorBox message={err} />}
         <div className="row">
           <button className="btn small" disabled={busy}>

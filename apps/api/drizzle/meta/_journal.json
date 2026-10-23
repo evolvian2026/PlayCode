@@ -169,6 +169,13 @@
       "when": 1792720895166,
       "tag": "0023_phase8",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792722122733,
+      "tag": "0024_resume_hide",
+      "breakpoints": true
     }
   ]
 }

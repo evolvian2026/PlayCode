@@ -25,9 +25,15 @@ export async function currentSubscription(): Promise<PushSubscription | null> {
 export async function enablePush(publicKey: string): Promise<string | null> {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return "Notifications are blocked for this site. Allow them in your browser settings.";
-  const reg = await navigator.serviceWorker.register("/sw.js");
-  await navigator.serviceWorker.ready;
-  const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) as BufferSource }));
+  let sub: PushSubscription;
+  try {
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    await navigator.serviceWorker.ready;
+    sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) as BufferSource }));
+  } catch {
+    // The browser's own push service refused (private window, unsupported browser, no Google services).
+    return "This browser couldn't set up notifications. Try again, or use Chrome, Edge or Firefox.";
+  }
   const json = sub.toJSON();
   await api("/push/subscribe", { body: { endpoint: json.endpoint, keys: json.keys } });
   return null;

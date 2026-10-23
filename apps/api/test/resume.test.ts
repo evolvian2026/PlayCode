@@ -27,7 +27,7 @@ afterAll(async () => {
 describe("student resume", () => {
   it("builds the record from PlayCode activity", async () => {
     const { profile, resume } = (await t.get(riya, "/student/resume")).body;
-    expect(profile).toEqual({ headline: "", about: "", links: {}, publicUrl: null });
+    expect(profile).toEqual({ headline: "", about: "", links: {}, hide: {}, publicUrl: null });
     expect(resume).toMatchObject({ name: "Riya Kapoor", institution: "Demo Institute of Technology", academic: { cgpa: 8.1, graduationYear: 2027 }, mockInterview: { overall: 4, track: "service" } });
     expect(resume.readiness.map((r: { id: string }) => r.id)).toEqual(["service", "product"]);
     expect(resume.practice.questionsSolved).toBeGreaterThan(0);
@@ -64,6 +64,18 @@ describe("student resume", () => {
     const [u] = await db.select().from(users).where(eq(users.email, "student@demo.edu"));
     const ledger = (await db.select().from(consents).where(eq(consents.userId, u!.id))).filter((c) => c.purpose === "public_profile");
     expect(ledger.map((c) => c.granted)).toEqual([true, false, true]);
+  });
+
+  it("leaves out what the student chooses to hide", async () => {
+    await t.put(riya, "/student/resume", { headline: "Final-year CSE student, Java and SQL", hide: { readiness: true, interview: true, marks: true } });
+    const [u] = await db.select().from(users).where(eq(users.email, "student@demo.edu"));
+    const text = pdfText(await renderResumePdf(await resumeData(db, u!.id, t.clock.now), { compress: false }));
+    for (const s of ["CGPA", "readiness", "Mock technical interview", "Class 12"]) expect(text).not.toContain(s);
+    expect(text).toContain("Graduating 2027");
+    const code = (await t.get(riya, "/student/resume")).body.profile.publicUrl.split("/p/")[1];
+    const pub = (await t.app.inject({ method: "GET", url: `/public/profiles/${code}` })).json();
+    expect(pub).toMatchObject({ readiness: [], mockInterview: null });
+    await t.put(riya, "/student/resume", { headline: "Final-year CSE student, Java and SQL" });
   });
 
   it("lets teachers download resumes of students in their scope", async () => {

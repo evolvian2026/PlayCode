@@ -19,6 +19,7 @@ export async function resumeRoutes(app: FastifyInstance) {
         headline: z.string().trim().max(120).default(""),
         about: z.string().trim().max(800).default(""),
         links: z.object({ github: url, linkedin: url, portfolio: url }).default({}),
+        hide: z.object({ readiness: z.boolean().optional(), interview: z.boolean().optional(), marks: z.boolean().optional() }).default({}),
       }),
       req.body,
     );
