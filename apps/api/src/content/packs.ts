@@ -66,4 +66,13 @@ export const PACKS: SeedPack[] = [
     passMark: 60,
     profile: "service",
   },
+  {
+    id: "mission-service-aptitude",
+    kind: "mission",
+    title: "Aptitude round",
+    description: "Quantitative aptitude and logical reasoning, as in the first section of service-company tests.",
+    questionIds: ["apt-arith-1", "apt-arith-2", "apt-arith-4", "apt-time-1", "apt-time-2", "apt-num-2", "apt-num-3", "rsn-series-1", "rsn-series-5", "rsn-puzzle-3"],
+    passMark: 60,
+    profile: "service",
+  },
 ];

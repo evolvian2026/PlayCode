@@ -16,7 +16,7 @@ export const READINESS_PROFILES: ReadinessProfile[] = [
   {
     id: "service",
     name: "Service companies",
-    weights: { basics: 3, loops: 3, conditionals: 2, arrays: 2, strings: 2, functions: 2, pseudocode: 3, oop: 1, coding: 2, sql: 1, dbms: 2, os: 1, networks: 1 },
+    weights: { basics: 3, loops: 3, conditionals: 2, arrays: 2, strings: 2, functions: 2, pseudocode: 3, oop: 1, coding: 2, sql: 1, dbms: 2, os: 1, networks: 1, aptitude: 2, reasoning: 2 },
   },
   {
     id: "product",

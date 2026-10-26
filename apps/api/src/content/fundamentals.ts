@@ -22,7 +22,12 @@ const IDS = "abcd";
 const opts = (...texts: string[]): Option[] => texts.map((text, i) => ({ id: IDS[i]!, text }));
 const pick = (index: number): Answer => ({ kind: "option", optionId: IDS[index]! });
 
-function concept(base: { id: string; skillId: string; difficulty: Difficulty; stem: string; explanation: string; hints?: string[]; verify?: string }, options: string[], correct: number): SeedQuestion {
+/** A no-code multiple-choice question; `verify` is a Python program that prints the correct option. */
+export function concept(
+  base: { id: string; skillId: string; difficulty: Difficulty; stem: string; explanation: string; hints?: string[]; verify?: string; tag?: string },
+  options: string[],
+  correct: number,
+): SeedQuestion {
   const verify: Verify | undefined = base.verify ? { runner: "python", program: base.verify } : undefined;
   return {
     id: base.id,
@@ -33,7 +38,7 @@ function concept(base: { id: string; skillId: string; difficulty: Difficulty; st
     answer: pick(correct),
     explanation: base.explanation,
     hints: base.hints ?? [],
-    tags: ["service_fundamentals"],
+    tags: [base.tag ?? "service_fundamentals"],
     verify,
   };
 }
