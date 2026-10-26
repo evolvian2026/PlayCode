@@ -4,12 +4,36 @@ import { cpp } from "@codemirror/lang-cpp";
 import { java } from "@codemirror/lang-java";
 import { python } from "@codemirror/lang-python";
 import { sql } from "@codemirror/lang-sql";
-import { Compartment, EditorState } from "@codemirror/state";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { Compartment, EditorState, Prec } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView, keymap } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { indentWithTab } from "@codemirror/commands";
+import { tags as t } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
+
+// One Dark's coral (names) and stone (comments, line numbers) fall just under
+// WCAG AA contrast on its background; these lighter shades pass, even on the
+// active line, and keep the theme's look.
+const CORAL = "#ec808a";
+const STONE = "#939daf";
+const contrastFix = [
+  Prec.highest(
+    syntaxHighlighting(
+      HighlightStyle.define([
+        { tag: [t.name, t.deleted, t.character, t.propertyName, t.macroName], color: CORAL },
+        { tag: [t.meta, t.comment], color: STONE },
+        // One Dark's own colours for the kinds of name it tells apart, so only plain names change.
+        { tag: [t.function(t.variableName), t.labelName], color: "#61afef" },
+        { tag: [t.constant(t.name), t.standard(t.name)], color: "#d19a66" },
+        { tag: [t.definition(t.name)], color: "#abb2bf" },
+        { tag: [t.typeName, t.className], color: "#e5c07b" },
+      ]),
+    ),
+  ),
+  EditorView.theme({ ".cm-gutters": { color: STONE } }, { dark: true }),
+];
 
 export type EditorLanguage = "python" | "c" | "java" | "sql";
 
@@ -56,6 +80,7 @@ export function CodeEditor({
           basicSetup,
           keymap.of([indentWithTab]),
           oneDark,
+          contrastFix,
           lang.current.of(LANGS[language]()),
           ro.current.of(EditorState.readOnly.of(readOnly)),
           // An explicit tabindex keeps read-only editors focusable, so keyboard users can scroll long code.

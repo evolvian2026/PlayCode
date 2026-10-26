@@ -46,6 +46,7 @@ function DoubtCard({ d, onDone }: { d: Doubt; onDone: () => void }) {
   const [shared, setShared] = useState(d.status === "open" ? true : d.shared);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const code = d.question.type === "write_code" || d.question.type === "sql_query";
 
   async function act(path: string, body?: unknown) {
     setBusy(true);
@@ -76,10 +77,11 @@ function DoubtCard({ d, onDone }: { d: Doubt; onDone: () => void }) {
           <div style={{ whiteSpace: "pre-line" }}>{d.question.stem}</div>
           {d.question.code && <CodeBlock code={d.question.code} />}
           <div>
-            <b>They answered:</b> <span style={{ color: d.lastAnswer?.correct ? "var(--good-ink)" : "var(--bad-ink)", whiteSpace: "pre-wrap" }}>{describe(d)}</span>
+            <b>They answered:</b>{" "}
+            <span style={{ color: d.lastAnswer?.correct ? "var(--good-ink)" : "var(--bad-ink)", whiteSpace: "pre-wrap", fontFamily: code ? "var(--mono)" : undefined }}>{describe(d)}</span>
           </div>
           <div>
-            <b>Correct answer:</b> <span style={{ whiteSpace: "pre-wrap" }}>{d.question.correctAnswer}</span>
+            <b>Correct answer:</b> <span style={{ whiteSpace: "pre-wrap", fontFamily: code ? "var(--mono)" : undefined }}>{d.question.correctAnswer}</span>
           </div>
           <div className="muted">{d.question.explanation}</div>
         </div>
