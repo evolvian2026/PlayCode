@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, Verdict, CodeLanguage, CompanyType, Delivery, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -497,6 +497,20 @@ export const competitions = pgTable(
   },
   (t) => [index("competitions_tenant_idx").on(t.tenantId)],
 );
+
+// ---------- Study plans ----------
+
+/** A student's day-by-day plan to a target (a placement drive or a date). One per student; rebuilding replaces it. */
+export const studyPlans = pgTable("study_plans", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  /** What the plan works towards. */
+  target: jsonb("target").$type<{ label: string; date: string; profile: "service" | "product"; driveId: string | null }>().notNull(),
+  days: jsonb("days").$type<PlanDay[]>().notNull(),
+  createdAt: createdAt(),
+});
 
 // ---------- Coding contests ----------
 

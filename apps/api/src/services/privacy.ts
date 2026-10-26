@@ -35,6 +35,7 @@ import {
   responses,
   sessions,
   skillRatings,
+  studyPlans,
   talentInvites,
   tenants,
   users,
@@ -135,6 +136,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .from(placementApplications)
       .innerJoin(placementDrives, eq(placementDrives.id, placementApplications.driveId))
       .where(eq(placementApplications.userId, userId)),
+    studyPlan: (await db.select({ target: studyPlans.target, days: studyPlans.days, createdAt: studyPlans.createdAt }).from(studyPlans).where(eq(studyPlans.userId, userId)))[0] ?? null,
     contestSubmissions: await db
       .select({ contest: contests.title, questionId: contestSubmissions.questionId, response: contestSubmissions.response, verdict: contestSubmissions.verdict, submittedAt: contestSubmissions.createdAt })
       .from(contestSubmissions)
@@ -244,6 +246,7 @@ export async function resolveErasure(
     await tx.delete(talentInvites).where(eq(talentInvites.userId, user.id));
     // Contest code goes; the student drops off past scoreboards.
     await tx.delete(contestSubmissions).where(eq(contestSubmissions.userId, user.id));
+    await tx.delete(studyPlans).where(eq(studyPlans.userId, user.id));
     await tx.delete(playerProfiles).where(eq(playerProfiles.userId, user.id));
     await tx.delete(memberships).where(eq(memberships.userId, user.id));
     // Duels stay so opponents keep their history; the player now shows as "Deleted user".

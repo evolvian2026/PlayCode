@@ -161,6 +161,14 @@ export default function MePage() {
         <Icon name="arrow" />
       </Link>
 
+      <Link href="/play/plan" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Study plan")}</b>
+          <div className="small muted">{tr("A day-by-day plan to your next placement test")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
       <Link href="/play/talent" className="card spread" style={{ color: "inherit" }}>
         <div>
           <b>{tr("Get found by companies")}</b>

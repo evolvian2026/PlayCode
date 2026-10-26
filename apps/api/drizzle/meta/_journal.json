@@ -239,6 +239,13 @@
       "when": 1792989546853,
       "tag": "0033_contests",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792990059427,
+      "tag": "0034_study_plans",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,7 @@ import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
 import type { EventItem } from "@/components/Events";
 import { startAndOpen, type StartInput } from "@/lib/start";
+import { startFor, type StudyPlan } from "@/lib/plan";
 import type { ProfileSummary, StudentPath } from "@/lib/types";
 import { useLocale, useT, type Translate } from "@/lib/i18n";
 
@@ -63,6 +64,40 @@ function PlacementCard({ drives }: { drives: PlacementDrive[] }) {
       </div>
       <Icon name="briefcase" />
     </Link>
+  );
+}
+
+/** Today's task from the student's study plan. */
+function PlanCard() {
+  const t = useT();
+  const router = useRouter();
+  const { data } = useApi<{ plan: StudyPlan | null }>("/student/plan");
+  const [error, setError] = useState<string | null>(null);
+  const plan = data?.plan;
+  if (!plan?.today) return null;
+  const today = plan.today;
+  return (
+    <div className="card stack" style={{ gap: 8 }}>
+      <div className="spread">
+        <div>
+          <div className="muted small">
+            {t("Study plan")} · {plan.target.label} · {t("{n} days to go", { n: plan.daysLeft })}
+          </div>
+          <b>{t(today.title)}</b>
+        </div>
+        {today.status === "done" ? (
+          <span className="pill good">{t("Done")}</span>
+        ) : (
+          <button className="btn primary small" onClick={async () => setError(await startAndOpen(startFor(today), router.push))}>
+            {t("Start")}
+          </button>
+        )}
+      </div>
+      {error && <ErrorBox message={error} />}
+      <Link href="/play/plan" className="small">
+        {t("{done} of {due} days done so far", { done: plan.doneSoFar, due: plan.dueSoFar })}
+      </Link>
+    </div>
   );
 }
 
@@ -181,6 +216,8 @@ export default function PlayHome() {
           ))}
         </div>
       )}
+
+      <PlanCard />
 
       <ContestCard />
 
