@@ -66,6 +66,25 @@ function PlacementCard({ drives }: { drives: PlacementDrive[] }) {
   );
 }
 
+/** A contest that is running, or starts within a week. */
+function ContestCard() {
+  const t = useT();
+  const { data } = useApi<{ contests: { id: string; title: string; state: string; startsAt: string }[] }>("/student/contests");
+  const soon = (data?.contests ?? []).filter((c) => c.state === "live" || c.state === "frozen" || (c.state === "upcoming" && new Date(c.startsAt).getTime() - Date.now() < 7 * 86_400_000));
+  const c = soon.find((x) => x.state !== "upcoming") ?? soon[soon.length - 1];
+  if (!c) return null;
+  return (
+    <Link href={`/play/contests/${c.id}`} className="card spread" style={{ color: "inherit" }}>
+      <div>
+        <div className="muted small">{t("Coding contest")}</div>
+        <b>{c.title}</b>
+        <div className="small muted">{c.state === "upcoming" ? t("Starts {when}", { when: new Date(c.startsAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) }) : t("Live now")}</div>
+      </div>
+      <Icon name="trophy" />
+    </Link>
+  );
+}
+
 export default function PlayHome() {
   const me = useMe();
   const t = useT();
@@ -162,6 +181,8 @@ export default function PlayHome() {
           ))}
         </div>
       )}
+
+      <ContestCard />
 
       <PlacementCard drives={placements.data?.drives ?? []} />
 

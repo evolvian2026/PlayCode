@@ -9,6 +9,8 @@ import {
   authSessions,
   certificates,
   coachHints,
+  contestSubmissions,
+  contests,
   consents,
   driveCandidates,
   drives,
@@ -133,6 +135,11 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .from(placementApplications)
       .innerJoin(placementDrives, eq(placementDrives.id, placementApplications.driveId))
       .where(eq(placementApplications.userId, userId)),
+    contestSubmissions: await db
+      .select({ contest: contests.title, questionId: contestSubmissions.questionId, response: contestSubmissions.response, verdict: contestSubmissions.verdict, submittedAt: contestSubmissions.createdAt })
+      .from(contestSubmissions)
+      .innerJoin(contests, eq(contests.id, contestSubmissions.contestId))
+      .where(eq(contestSubmissions.userId, userId)),
     talentInvitations: await db
       .select({ company: tenants.name, roleTitle: talentInvites.roleTitle, message: talentInvites.message, status: talentInvites.status, sentAt: talentInvites.createdAt, respondedAt: talentInvites.respondedAt })
       .from(talentInvites)
@@ -235,6 +242,8 @@ export async function resolveErasure(
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, user.id));
     await tx.delete(studentProfiles).where(eq(studentProfiles.userId, user.id));
     await tx.delete(talentInvites).where(eq(talentInvites.userId, user.id));
+    // Contest code goes; the student drops off past scoreboards.
+    await tx.delete(contestSubmissions).where(eq(contestSubmissions.userId, user.id));
     await tx.delete(playerProfiles).where(eq(playerProfiles.userId, user.id));
     await tx.delete(memberships).where(eq(memberships.userId, user.id));
     // Duels stay so opponents keep their history; the player now shows as "Deleted user".

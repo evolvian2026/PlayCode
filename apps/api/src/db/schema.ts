@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, CodeLanguage, CompanyType, Delivery, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, Verdict, CodeLanguage, CompanyType, Delivery, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -498,9 +498,50 @@ export const competitions = pgTable(
   (t) => [index("competitions_tenant_idx").on(t.tenantId)],
 );
 
+// ---------- Coding contests ----------
+
+/** A timed, ICPC-style coding contest, run by a college (tenantId) or by PlayCode across colleges (tenantId null). */
+export const contests = pgTable(
+  "contests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    /** Coding and SQL questions, in the order shown (A, B, C...). */
+    problemIds: jsonb("problem_ids").$type<string[]>().notNull(),
+    /** College contest: org units taking part (empty = every student). PlayCode contest: the colleges taking part. */
+    audienceIds: jsonb("audience_ids").$type<string[]>().notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    /** The public scoreboard freezes this many minutes before the end. */
+    freezeMinutes: integer("freeze_minutes").notNull().default(0),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("contests_tenant_idx").on(t.tenantId, t.startsAt)],
+);
+
+export const contestSubmissions = pgTable(
+  "contest_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    contestId: uuid("contest_id").notNull().references(() => contests.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    questionId: text("question_id").notNull().references(() => questions.id),
+    response: jsonb("response").$type<StudentResponse>().notNull(),
+    verdict: text("verdict").$type<Verdict>().notNull(),
+    passed: integer("passed").notNull().default(0),
+    total: integer("total").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index("contest_submissions_contest_idx").on(t.contestId, t.createdAt), index("contest_submissions_user_idx").on(t.userId, t.contestId)],
+);
+
 // ---------- Notifications ----------
 
-export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite";
+export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest";
 
 export const notifications = pgTable(
   "notifications",

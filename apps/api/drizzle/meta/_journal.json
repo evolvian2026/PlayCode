@@ -232,6 +232,13 @@
       "when": 1792739771136,
       "tag": "0032_institution_metrics",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792989546853,
+      "tag": "0033_contests",
+      "breakpoints": true
     }
   ]
 }

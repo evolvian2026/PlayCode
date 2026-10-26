@@ -16,11 +16,12 @@ import { answerQuestion, startSession, type StartInput } from "../services/pract
 import { createPath } from "../services/paths";
 import { requestErasure } from "../services/privacy";
 import { snapshotBenchmarks } from "../services/benchmarks";
+import { createContest } from "../services/contests";
 import { sendInvite, setDiscoverable, setInstitutionPool } from "../services/talent";
 import { db, pool, type Db } from "./client";
 import { runMigrations } from "./migrate";
 import { seedInterview, seedPlacements } from "./seed-placements";
-import { assessments, assignments, competitions, memberships, orgUnits, packs, questionReports, questions, responses, skills, tenants, users } from "./schema";
+import { assessments, assignments, competitions, contestSubmissions, memberships, orgUnits, packs, questionReports, questions, responses, skills, tenants, users } from "./schema";
 
 export const DEMO_PASSWORD = "playcode123";
 
@@ -336,6 +337,48 @@ export async function seedDemo(now = new Date()): Promise<void> {
     message: "Hi Riya, your loops and arrays work stood out. We are hiring graduate engineers in Pune and Bengaluru; take our campus test if you are interested.",
     driveId: drive.id,
   });
+
+  // A coding contest running now, with a few submissions on the board.
+  const contest = await createContest(db, {
+    tenantId,
+    actorId: demoAdmin!.id,
+    input: {
+      title: "Diwali coding cup",
+      description: "Three problems, two hours. Any language.",
+      problemIds: ["code-sum-two", "code-even-odd", "code-palindrome"],
+      audienceIds: [],
+      startsAt: new Date(now.getTime() - 40 * 60_000),
+      endsAt: new Date(now.getTime() + 80 * 60_000),
+      freezeMinutes: 20,
+    },
+    now,
+  });
+  const byCode = new Map(QUESTIONS.map((q) => [q.id, q]));
+  const attempts: [number, string, "accepted" | "wrong_answer", number][] = [
+    [1, "code-sum-two", "accepted", 6],
+    [1, "code-even-odd", "wrong_answer", 15],
+    [1, "code-even-odd", "accepted", 22],
+    [2, "code-sum-two", "accepted", 9],
+    [3, "code-sum-two", "wrong_answer", 12],
+    [3, "code-sum-two", "accepted", 18],
+    [3, "code-palindrome", "accepted", 35],
+    [4, "code-even-odd", "wrong_answer", 30],
+  ];
+  for (const [i, questionId, verdict, minute] of attempts) {
+    const q = byCode.get(questionId)!;
+    const tests = q.answer.kind === "tests" ? q.answer.tests.length : 1;
+    await db.insert(contestSubmissions).values({
+      contestId: contest.id,
+      userId: students[i]!.id,
+      tenantId,
+      questionId,
+      response: { kind: "code", language: "python", source: verdict === "accepted" ? q.solutions!.python! : "print(0)" },
+      verdict,
+      passed: verdict === "accepted" ? tests : 1,
+      total: tests,
+      createdAt: new Date(contest.startsAt.getTime() + minute * 60_000),
+    });
+  }
 
   // A peer-benchmark snapshot for the demo college (comparisons appear once there are 5 measured peers).
   await snapshotBenchmarks(db, now);
