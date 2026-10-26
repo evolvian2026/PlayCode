@@ -196,7 +196,8 @@ export const assignments = pgTable(
   (t) => [index("assignments_tenant_idx").on(t.tenantId)],
 );
 
-export type SessionKind = "skill" | "daily" | "pack" | "assignment" | "mistakes" | "review";
+/** "offline": a pack downloaded to answer without a connection, marked when it syncs. */
+export type SessionKind = "skill" | "daily" | "pack" | "assignment" | "mistakes" | "review" | "offline";
 
 export const sessions = pgTable(
   "sessions",

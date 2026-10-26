@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DIVISION_LABELS, type Division } from "@playcode/core";
 import { useMe } from "@/components/Auth";
 import { Icon } from "@/components/Icon";
@@ -13,6 +13,7 @@ import { startAndOpen, type StartInput } from "@/lib/start";
 import { startFor, type StudyPlan } from "@/lib/plan";
 import type { ProfileSummary, StudentPath } from "@/lib/types";
 import { useLocale, useT, type Translate } from "@/lib/i18n";
+import { unsyncedAnswers } from "@/lib/offline";
 
 interface Home {
   tenant: { name: string };
@@ -98,6 +99,23 @@ function PlanCard() {
         {t("{done} of {due} days done so far", { done: plan.doneSoFar, due: plan.dueSoFar })}
       </Link>
     </div>
+  );
+}
+
+/** Answers given offline that haven't been checked yet. */
+function OfflineCard() {
+  const t = useT();
+  const [waiting, setWaiting] = useState(0);
+  useEffect(() => setWaiting(unsyncedAnswers()), []);
+  if (!waiting) return null;
+  return (
+    <Link href="/offline" className="card spread" style={{ color: "inherit", borderColor: "var(--accent)" }}>
+      <div>
+        <b>{t("{n} offline answers to check", { n: waiting })}</b>
+        <div className="small muted">{t("You're online: check them to get your XP and streak.")}</div>
+      </div>
+      <Icon name="arrow" />
+    </Link>
   );
 }
 
@@ -226,6 +244,7 @@ export default function PlayHome() {
         <Icon name="bolt" />
       </Link>
 
+      <OfflineCard />
       <ContestCard />
 
       <PlacementCard drives={placements.data?.drives ?? []} />

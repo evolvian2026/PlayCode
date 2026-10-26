@@ -14,7 +14,14 @@ export function CodeBlock({
 }) {
   const lines = code.split("\n");
   return (
-    <div className="code" role={onLineClick ? "listbox" : undefined} aria-label={label ?? "Code"} aria-multiselectable={onLineClick ? true : undefined}>
+    // Read-only code is a focusable region, so keyboard users can scroll long lines on a phone.
+    <div
+      className="code"
+      role={onLineClick ? "listbox" : "region"}
+      tabIndex={onLineClick ? undefined : 0}
+      aria-label={label ?? "Code"}
+      aria-multiselectable={onLineClick ? true : undefined}
+    >
       {lines.map((text, i) => {
         const n = i + 1;
         const cls = `line${onLineClick ? " selectable" : ""} ${lineClass?.(n) ?? ""}`;

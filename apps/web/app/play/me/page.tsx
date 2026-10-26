@@ -161,6 +161,14 @@ export default function MePage() {
         <Icon name="arrow" />
       </Link>
 
+      <Link href="/offline" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Practise offline")}</b>
+          <div className="small muted">{tr("Download questions to answer with no signal; they're checked when you're back online")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
       <Link href="/play/mocks" className="card spread" style={{ color: "inherit" }}>
         <div>
           <b>{tr("Mock tests")}</b>
