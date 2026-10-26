@@ -18,6 +18,8 @@ const LABEL: Record<string, string> = {
   test_open: "Test",
   duel_invite: "Duel",
   placement: "Placements",
+  contest: "Contest",
+  squad: "Squad",
 };
 
 export default function InboxPage() {

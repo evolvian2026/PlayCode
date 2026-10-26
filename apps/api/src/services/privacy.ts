@@ -11,6 +11,8 @@ import {
   coachHints,
   contestSubmissions,
   mockAttempts,
+  squadMembers,
+  squads,
   contests,
   consents,
   driveCandidates,
@@ -49,6 +51,7 @@ import { audit } from "../lib/audit";
 import { conflict, forbidden, notFound } from "../lib/errors";
 import { deleteObject } from "../lib/storage";
 import { deliverDue, emitEvent } from "./webhooks";
+import { leaveSquad } from "./squads";
 
 // Data-protection tools in the spirit of India's DPDP Act 2023 (and GDPR):
 // a consent ledger, a copy of everything held about a person, and erasure on
@@ -151,6 +154,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .from(contestSubmissions)
       .innerJoin(contests, eq(contests.id, contestSubmissions.contestId))
       .where(eq(contestSubmissions.userId, userId)),
+    squad: (await db.select({ name: squads.name, joinedAt: squadMembers.joinedAt }).from(squadMembers).innerJoin(squads, eq(squads.id, squadMembers.squadId)).where(eq(squadMembers.userId, userId)))[0] ?? null,
     mockTests: await db
       .select({ pattern: mockAttempts.pattern, questions: mockAttempts.questions, answers: mockAttempts.answers, status: mockAttempts.status, startedAt: mockAttempts.startedAt, submittedAt: mockAttempts.submittedAt, sections: mockAttempts.sectionScores })
       .from(mockAttempts)
@@ -261,6 +265,7 @@ export async function resolveErasure(
     await tx.delete(contestSubmissions).where(eq(contestSubmissions.userId, user.id));
     await tx.delete(studyPlans).where(eq(studyPlans.userId, user.id));
     await tx.delete(mockAttempts).where(eq(mockAttempts.userId, user.id));
+    await leaveSquad(tx, user.id);
     await tx.delete(liveQuizAnswers).where(eq(liveQuizAnswers.userId, user.id));
     await tx.delete(liveQuizPlayers).where(eq(liveQuizPlayers.userId, user.id));
     await tx.delete(playerProfiles).where(eq(playerProfiles.userId, user.id));

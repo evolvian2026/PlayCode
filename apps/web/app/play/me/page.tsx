@@ -161,6 +161,14 @@ export default function MePage() {
         <Icon name="arrow" />
       </Link>
 
+      <Link href="/play/squad" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Study squad")}</b>
+          <div className="small muted">{tr("Practise with classmates towards a weekly goal")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
       <Link href="/offline" className="card spread" style={{ color: "inherit" }}>
         <div>
           <b>{tr("Practise offline")}</b>

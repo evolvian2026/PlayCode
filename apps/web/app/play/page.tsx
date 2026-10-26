@@ -102,6 +102,25 @@ function PlanCard() {
   );
 }
 
+/** The student's squad and its progress this week. */
+function SquadCard() {
+  const t = useT();
+  const { data } = useApi<{ squad: { name: string; streakWeeks: number; week: { answers: number; goal: number; reached: boolean } } | null }>("/student/squad");
+  const squad = data?.squad;
+  if (!squad) return null;
+  return (
+    <Link href="/play/squad" className="card stack" style={{ color: "inherit", gap: 6 }}>
+      <div className="spread small">
+        <b>{squad.name}</b>
+        <span className="muted">
+          {t("{n} of {goal} answers this week", { n: squad.week.answers, goal: squad.week.goal })}
+        </span>
+      </div>
+      <Bar value={Math.min(100, Math.round((squad.week.answers / squad.week.goal) * 100))} tone={squad.week.reached ? "good" : undefined} label={t("Weekly goal")} />
+    </Link>
+  );
+}
+
 /** Answers given offline that haven't been checked yet. */
 function OfflineCard() {
   const t = useT();
@@ -245,6 +264,7 @@ export default function PlayHome() {
       </Link>
 
       <OfflineCard />
+      <SquadCard />
       <ContestCard />
 
       <PlacementCard drives={placements.data?.drives ?? []} />

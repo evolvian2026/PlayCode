@@ -644,6 +644,29 @@ export const contests = pgTable(
 );
 
 /** Each participant's final place and rating change in a finished contest. */
+/** A study squad: a few classmates with a shared weekly goal of answers. */
+export const squads = pgTable(
+  "squads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** What classmates type to join. */
+    code: text("code").notNull().unique(),
+    weeklyGoal: integer("weekly_goal").notNull().default(100),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("squads_tenant_idx").on(t.tenantId)],
+);
+
+/** One squad per student. */
+export const squadMembers = pgTable("squad_members", {
+  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  squadId: uuid("squad_id").notNull().references(() => squads.id, { onDelete: "cascade" }),
+  joinedAt: timestamp("joined_at", { withTimezone: true }).notNull(),
+}, (t) => [index("squad_members_squad_idx").on(t.squadId)]);
+
 /** A self-serve mock test on a company pattern (packages/core mock-test.ts): sections in order, each timed. */
 export const mockAttempts = pgTable(
   "mock_attempts",
@@ -705,7 +728,7 @@ export const contestSubmissions = pgTable(
 
 // ---------- Notifications ----------
 
-export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest";
+export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest" | "squad";
 
 export const notifications = pgTable(
   "notifications",

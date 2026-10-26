@@ -302,6 +302,13 @@
       "when": 1792998895781,
       "tag": "0042_remedial",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1793001887778,
+      "tag": "0043_squads",
+      "breakpoints": true
     }
   ]
 }
