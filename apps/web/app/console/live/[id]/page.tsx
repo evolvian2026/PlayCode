@@ -144,12 +144,13 @@ export default function HostScreen() {
           {data.question.body.code && <CodeBlock code={data.question.body.code} />}
           {data.question.body.options && (
             <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
-              {data.question.body.options.map((o) => {
+              {data.question.body.options.map((o, i) => {
                 const right = data.answer?.optionId === o.id;
                 const count = data.spread?.[o.id] ?? 0;
                 return (
                   <div key={o.id} className="card tight" style={{ borderColor: right ? "var(--good-ink)" : undefined, borderWidth: right ? 2 : undefined, whiteSpace: "pre-wrap", fontFamily: o.code ? "var(--mono)" : undefined }}>
-                    <b>{o.id.toUpperCase()}.</b> {o.text}
+                    {/* Labelled by position: options are shuffled the same way on every phone. */}
+                    <b>{"ABCDEFGH"[i]}.</b> {o.text}
                     {data.spread && <div className="small muted">{count} answer{count === 1 ? "" : "s"}</div>}
                   </div>
                 );

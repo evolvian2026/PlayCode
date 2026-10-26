@@ -119,10 +119,10 @@ export default function LivePlayer() {
         <div className="card stack">
           <h2 style={{ margin: 0 }}>{data.status === "ended" ? t("Final results") : t("Leaderboard")}</h2>
           {data.me && <div className="small">{t("You are {rank} of {n}", { rank: data.me.rank, n: data.me.of })}</div>}
-          <ol className="small" style={{ margin: 0, paddingLeft: 18 }}>
+          <ol className="small" style={{ margin: 0, paddingLeft: 0, listStyle: "none" }}>
             {data.leaderboard.map((r, i) => (
               <li key={i}>
-                {r.name} · {r.score}
+                {r.rank}. {r.name} · {r.score}
               </li>
             ))}
           </ol>
