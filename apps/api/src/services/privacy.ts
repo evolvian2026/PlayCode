@@ -12,6 +12,7 @@ import {
   contestSubmissions,
   mockAttempts,
   squadMembers,
+  doubts,
   squads,
   contests,
   consents,
@@ -154,6 +155,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .from(contestSubmissions)
       .innerJoin(contests, eq(contests.id, contestSubmissions.contestId))
       .where(eq(contestSubmissions.userId, userId)),
+    doubts: await db.select({ questionId: doubts.questionId, text: doubts.text, status: doubts.status, answer: doubts.answer, askedAt: doubts.createdAt, answeredAt: doubts.answeredAt }).from(doubts).where(eq(doubts.userId, userId)),
     squad: (await db.select({ name: squads.name, joinedAt: squadMembers.joinedAt }).from(squadMembers).innerJoin(squads, eq(squads.id, squadMembers.squadId)).where(eq(squadMembers.userId, userId)))[0] ?? null,
     mockTests: await db
       .select({ pattern: mockAttempts.pattern, questions: mockAttempts.questions, answers: mockAttempts.answers, status: mockAttempts.status, startedAt: mockAttempts.startedAt, submittedAt: mockAttempts.submittedAt, sections: mockAttempts.sectionScores })
@@ -266,6 +268,7 @@ export async function resolveErasure(
     await tx.delete(studyPlans).where(eq(studyPlans.userId, user.id));
     await tx.delete(mockAttempts).where(eq(mockAttempts.userId, user.id));
     await leaveSquad(tx, user.id);
+    await tx.delete(doubts).where(eq(doubts.userId, user.id));
     await tx.delete(liveQuizAnswers).where(eq(liveQuizAnswers.userId, user.id));
     await tx.delete(liveQuizPlayers).where(eq(liveQuizPlayers.userId, user.id));
     await tx.delete(playerProfiles).where(eq(playerProfiles.userId, user.id));

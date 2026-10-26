@@ -644,6 +644,26 @@ export const contests = pgTable(
 );
 
 /** Each participant's final place and rating change in a finished contest. */
+/** A student's question to their teachers about a question they answered. */
+export const doubts = pgTable(
+  "doubts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    questionId: text("question_id").notNull().references(() => questions.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    status: text("status").$type<"open" | "answered" | "closed">().notNull().default("open"),
+    answer: text("answer"),
+    /** Shown, without names, to other students of the institution after they answer the question. */
+    shared: boolean("shared").notNull().default(false),
+    answeredBy: uuid("answered_by").references(() => users.id, { onDelete: "set null" }),
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("doubts_tenant_status_idx").on(t.tenantId, t.status, t.createdAt), index("doubts_question_idx").on(t.questionId, t.tenantId)],
+);
+
 /** A study squad: a few classmates with a shared weekly goal of answers. */
 export const squads = pgTable(
   "squads",
@@ -728,7 +748,7 @@ export const contestSubmissions = pgTable(
 
 // ---------- Notifications ----------
 
-export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest" | "squad";
+export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest" | "squad" | "doubt";
 
 export const notifications = pgTable(
   "notifications",

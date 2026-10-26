@@ -22,6 +22,8 @@ export const PERMISSIONS = [
   "api.manage",
   "drives.manage",
   "placements.manage",
+  /** Answer students' doubts about questions (within the user's scope). */
+  "doubts.answer",
   "practice.play",
 ] as const;
 
@@ -105,6 +107,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "api.manage",
     "drives.manage",
     "placements.manage",
+    "doubts.answer",
   ],
   tpo: [
     "users.manage",
@@ -119,9 +122,10 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "reports.export",
     "leagues.manage",
     "placements.manage",
+    "doubts.answer",
   ],
-  hod: ["content.private.manage", "content.view", "assignments.manage", "assessments.manage", "assessments.proctor", "events.manage", "nudges.send", "analytics.department", "reports.export"],
-  faculty: ["content.view", "assignments.manage", "assessments.manage", "assessments.proctor", "nudges.send", "analytics.own_units", "reports.export"],
+  hod: ["content.private.manage", "content.view", "assignments.manage", "assessments.manage", "assessments.proctor", "events.manage", "nudges.send", "analytics.department", "reports.export", "doubts.answer"],
+  faculty: ["content.view", "assignments.manage", "assessments.manage", "assessments.proctor", "nudges.send", "analytics.own_units", "reports.export", "doubts.answer"],
   proctor: ["assessments.proctor", "analytics.own_units"],
   recruiter: ["drives.manage", "assessments.manage", "assessments.proctor", "analytics.institution", "content.view", "reports.export"],
   student: ["practice.play"],

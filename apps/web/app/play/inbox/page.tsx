@@ -20,6 +20,7 @@ const LABEL: Record<string, string> = {
   placement: "Placements",
   contest: "Contest",
   squad: "Squad",
+  doubt: "Doubts",
 };
 
 export default function InboxPage() {

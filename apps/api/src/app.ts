@@ -32,6 +32,7 @@ import { scimConsoleRoutes, scimRoutes } from "./routes/scim";
 import { mockRoutes } from "./routes/mocks";
 import { offlineRoutes } from "./routes/offline";
 import { squadRoutes } from "./routes/squads";
+import { doubtRoutes } from "./routes/doubts";
 import { pathRoutes } from "./routes/paths";
 import { placementRoutes } from "./routes/placements";
 import { privacyRoutes } from "./routes/privacy";
@@ -168,6 +169,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(mockRoutes);
   await app.register(offlineRoutes);
   await app.register(squadRoutes);
+  await app.register(doubtRoutes);
   await app.register(scimConsoleRoutes, { prefix: "/console" });
   return app;
 }

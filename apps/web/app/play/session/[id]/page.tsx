@@ -7,6 +7,7 @@ import { LANGUAGE_LABELS } from "@playcode/core";
 import { EvaluationView } from "@/components/CodeAnswer";
 import { draftToResponse, emptyDraft, QuestionInput, type Draft } from "@/components/QuestionInput";
 import { Icon } from "@/components/Icon";
+import { AskDoubt } from "@/components/Doubts";
 import { ReportQuestion } from "@/components/ReportQuestion";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
@@ -287,6 +288,7 @@ export default function SessionPlayer() {
               ))}
             </div>
           )}
+          {question && <AskDoubt key={`doubt-${question.id}`} questionId={question.id} />}
           {question && <ReportQuestion key={question.id} questionId={question.id} />}
           <button className="btn primary big" onClick={next} autoFocus>
             {t(result.session.finished ? "See results" : "Continue")}
