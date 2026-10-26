@@ -62,7 +62,8 @@ function Scoreboard({ view }: { view: ContestView }) {
       {view.scoreboard.rows.length === 0 ? (
         <div className="small muted">{t("No submissions yet.")}</div>
       ) : (
-        <div className="table-wrap">
+        // Focusable so keyboard users can scroll it sideways on a phone.
+        <div className="table-wrap" tabIndex={0}>
           <table>
             <thead>
               <tr>

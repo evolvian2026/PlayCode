@@ -58,7 +58,8 @@ export function CodeEditor({
           oneDark,
           lang.current.of(LANGS[language]()),
           ro.current.of(EditorState.readOnly.of(readOnly)),
-          EditorView.contentAttributes.of({ "aria-label": label }),
+          // An explicit tabindex keeps read-only editors focusable, so keyboard users can scroll long code.
+          EditorView.contentAttributes.of({ "aria-label": label, tabindex: "0" }),
           ...(wrap ? [EditorView.lineWrapping] : []),
           EditorView.theme({ "&": { minHeight: `${minHeight}px`, fontSize: "0.88rem" }, ".cm-scroller": { fontFamily: "var(--mono)" } }),
           EditorView.updateListener.of((u) => {
