@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import PDFDocument from "pdfkit";
-import { masteryFromRating, READINESS_PROFILES } from "@playcode/core";
+import { EXECUTION_TYPES, masteryFromRating, QUESTION_TYPES, READINESS_PROFILES } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { academicRecords, certificates, interviews, memberships, orgUnits, playerProfiles, questions, responses, skillRatings, skills, studentProfiles, tenants, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -106,7 +106,8 @@ export async function resumeData(db: Db, userId: string, now: Date) {
       .slice(0, 12),
     certificates: certs.map((c) => ({ title: c.title, code: c.code, scorePct: c.scorePct, issuedAt: c.issuedAt, verifyUrl: appLink(`/verify/${c.code}`) })),
     practice: {
-      questionsSolved: count(["predict_output", "spot_bug", "fill_blank", "reorder", "which_snippet", "complexity", "trace", "reverse", "pseudocode"]),
+      // Every quick question type: everything but coding and SQL problems.
+      questionsSolved: count(QUESTION_TYPES.filter((t) => !EXECUTION_TYPES.includes(t))),
       codingProblemsSolved: count(["write_code"]),
       sqlProblemsSolved: count(["sql_query"]),
       activeDays90: activeDays?.n ?? 0,

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "../src/db/client";
 import { consents, users } from "../src/db/schema";
@@ -7,6 +7,7 @@ import { setup, type TestApp } from "./helpers";
 
 let t: TestApp;
 let riya: string;
+let riyaId: string;
 
 function pdfText(pdf: Buffer): string {
   return [...pdf.toString("latin1").matchAll(/\[((?:<[0-9a-f]+>\s*-?[\d.]*\s*)+)\]\s*TJ/g)]
@@ -17,6 +18,7 @@ function pdfText(pdf: Buffer): string {
 beforeAll(async () => {
   t = await setup();
   riya = await t.login("student@demo.edu");
+  [{ id: riyaId }] = (await db.select({ id: users.id }).from(users).where(eq(users.email, "student@demo.edu"))) as [{ id: string }];
 });
 
 afterAll(async () => {
@@ -31,6 +33,11 @@ describe("student resume", () => {
     expect(resume).toMatchObject({ name: "Riya Kapoor", institution: "Demo Institute of Technology", academic: { cgpa: 8.1, graduationYear: 2027 }, mockInterview: { overall: 4, track: "service" } });
     expect(resume.readiness.map((r: { id: string }) => r.id)).toEqual(["service", "product"]);
     expect(resume.practice.questionsSolved).toBeGreaterThan(0);
+    // Every quick question type counts (Parsons, trace, pseudocode and concept questions too), each question once.
+    const [{ n }] = (await db.execute<{ n: number }>(sql`
+      select count(distinct r.question_id)::int as n from responses r join questions q on q.id = r.question_id
+      where r.user_id = ${riyaId} and r.correct and q.type not in ('write_code', 'sql_query')`)).rows as [{ n: number }];
+    expect(resume.practice.questionsSolved).toBe(n);
     expect(resume.practice.activeDays90).toBeGreaterThan(0);
     for (const s of resume.skills) expect(s.mastery).toBeGreaterThanOrEqual(60);
   });
