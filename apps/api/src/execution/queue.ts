@@ -3,7 +3,7 @@
 // API runs as several instances, move this to a shared queue (BullMQ/SQS).
 
 export type Priority = "assessment" | "duel" | "practice";
-const RANK: Record<Priority, number> = { assessment: 0, duel: 1, practice: 2 };
+export const RANK: Record<Priority, number> = { assessment: 0, duel: 1, practice: 2 };
 
 interface Job {
   rank: number;

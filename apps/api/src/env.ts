@@ -12,6 +12,8 @@ const schema = z.object({
     .optional()
     .transform((v) => v === "true"),
   EXECUTION_CONCURRENCY: z.coerce.number().int().min(1).default(4),
+  /** "inline": each API instance runs code itself. "queue": runs go to a Postgres queue that worker processes (pnpm worker) take from. */
+  EXECUTION_MODE: z.enum(["inline", "queue"]).default("inline"),
   JUDGE0_URL: z.string().url().optional(),
   JUDGE0_TOKEN: z.string().optional(),
   JUDGE0_LANGUAGE_IDS: z.string().optional(),

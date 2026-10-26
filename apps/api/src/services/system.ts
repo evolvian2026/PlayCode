@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { queueBacklog } from "../execution/job-queue";
 import { join } from "node:path";
 import { eq, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
@@ -39,11 +40,15 @@ export async function readiness(db: Db) {
 
 export async function backlog(db: Db) {
   const count = async (q: Promise<{ n: number }[]>) => Number((await q)[0]?.n ?? 0);
+  const runs = await queueBacklog(db);
   return {
     notificationsPending: await count(db.select({ n: sql<number>`count(*)::int` }).from(notifications).where(eq(notifications.status, "pending"))),
     webhooksPending: await count(db.select({ n: sql<number>`count(*)::int` }).from(webhookDeliveries).where(eq(webhookDeliveries.status, "pending"))),
     webhooksFailed: await count(db.select({ n: sql<number>`count(*)::int` }).from(webhookDeliveries).where(eq(webhookDeliveries.status, "failed"))),
     lmsScoresPending: await count(db.select({ n: sql<number>`count(*)::int` }).from(ltiScores).where(eq(ltiScores.status, "pending"))),
+    /** Code runs waiting for, and being run by, execution workers (EXECUTION_MODE=queue). */
+    codeRunsQueued: runs.queued,
+    codeRunsRunning: runs.running,
   };
 }
 
@@ -69,5 +74,6 @@ export async function systemGauges(db: Db, now: Date): Promise<Gauge[]> {
     },
     { name: "playcode_outbox_pending", help: "Items waiting to be delivered.", values: [{ labels: { outbox: "notifications" }, value: queues.notificationsPending }, { labels: { outbox: "webhooks" }, value: queues.webhooksPending }, { labels: { outbox: "lms_scores" }, value: queues.lmsScoresPending }] },
     { name: "playcode_webhook_deliveries_failed", help: "Webhook deliveries that gave up after all retries.", values: [{ value: queues.webhooksFailed }] },
+    { name: "playcode_code_runs", help: "Code runs in the execution queue, by state.", values: [{ labels: { state: "queued" }, value: queues.codeRunsQueued }, { labels: { state: "running" }, value: queues.codeRunsRunning }] },
   ];
 }

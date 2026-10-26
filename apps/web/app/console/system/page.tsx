@@ -14,7 +14,7 @@ interface Status {
     failuresRecently: number;
     healthy: boolean;
   }[];
-  backlog: { notificationsPending: number; webhooksPending: number; webhooksFailed: number; lmsScoresPending: number };
+  backlog: { notificationsPending: number; webhooksPending: number; webhooksFailed: number; lmsScoresPending: number; codeRunsQueued: number; codeRunsRunning: number };
   databaseBytes: number;
   version: string | null;
   checkedAt: string;
@@ -46,6 +46,7 @@ export default function SystemStatus() {
         <Stat label="Scheduled jobs" value={unhealthy ? `${unhealthy} need attention` : "All running"} />
         <Stat label="Messages waiting" value={data.backlog.notificationsPending} sub={`${data.backlog.webhooksPending} webhooks, ${data.backlog.lmsScoresPending} LMS grades`} />
         <Stat label="Failed webhooks" value={data.backlog.webhooksFailed} sub="gave up after all retries" />
+        <Stat label="Code runs queued" value={data.backlog.codeRunsQueued} sub={`${data.backlog.codeRunsRunning} running on workers`} />
         <Stat label="Database size" value={`${(data.databaseBytes / 1024 / 1024).toFixed(0)} MB`} />
       </div>
       <div className="card" style={{ padding: 0 }}>

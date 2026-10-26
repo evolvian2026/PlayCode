@@ -501,6 +501,30 @@ export const competitions = pgTable(
   (t) => [index("competitions_tenant_idx").on(t.tenantId)],
 );
 
+// ---------- Code execution queue ----------
+
+/** A program run waiting for, or done by, an execution worker (EXECUTION_MODE=queue). Deleted a day after it finishes. */
+export const executionJobs = pgTable(
+  "execution_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 0 tests and contests, 1 duels, 2 practice: lower runs first. */
+    priority: integer("priority").notNull(),
+    language: text("language").$type<CodeLanguage>().notNull(),
+    source: text("source").notNull(),
+    inputs: jsonb("inputs").$type<string[]>().notNull(),
+    status: text("status").$type<"queued" | "running" | "done" | "failed">().notNull().default("queued"),
+    attempts: integer("attempts").notNull().default(0),
+    workerId: text("worker_id"),
+    result: jsonb("result").$type<{ status: string; stdout: string; stderr: string; timeMs: number }[]>(),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [index("execution_jobs_queue_idx").on(t.status, t.priority, t.createdAt)],
+);
+
 // ---------- Live classroom quizzes ----------
 
 /** A quiz a teacher runs live in class: one question at a time, students answer on their phones. */

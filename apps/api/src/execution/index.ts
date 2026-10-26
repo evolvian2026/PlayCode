@@ -1,7 +1,9 @@
 import { needsExecution, outputsMatch, resultSetsMatch, type CodeLanguage, type Question, type StudentResponse } from "@playcode/core";
+import { db } from "../db/client";
 import { env } from "../env";
 import { HttpError, badRequest } from "../lib/errors";
 import { rateLimit } from "../lib/rate-limit";
+import { runQueued } from "./job-queue";
 import { Judge0Runner } from "./judge0-runner";
 import { LocalRunner } from "./local-runner";
 import { ExecutionQueue, type Priority } from "./queue";
@@ -10,7 +12,7 @@ import type { RunOutcome, Runner } from "./types";
 
 export type { Priority } from "./queue";
 
-function createRunner(): Runner {
+export function createRunner(): Runner {
   if (env.EXECUTION_BACKEND === "judge0") {
     if (!env.JUDGE0_URL) throw new Error("EXECUTION_BACKEND=judge0 needs JUDGE0_URL");
     return new Judge0Runner(env.JUDGE0_URL, env.JUDGE0_TOKEN, env.JUDGE0_LANGUAGE_IDS);
@@ -23,6 +25,18 @@ function createRunner(): Runner {
 
 let runner: Runner | null = null;
 const queue = new ExecutionQueue(env.EXECUTION_CONCURRENCY);
+let mode = env.EXECUTION_MODE;
+
+/** Tests switch between running code here and through the worker queue. */
+export function setExecutionMode(m: "inline" | "queue"): void {
+  mode = m;
+}
+
+/** Run a program here (inline) or on a worker (queue), in priority order either way. */
+function execute(priority: Priority, language: CodeLanguage, source: string, inputs: string[]): Promise<RunOutcome[]> {
+  if (mode === "queue") return runQueued(db, priority, language, source, inputs);
+  return queue.run(priority, () => getRunner().run(language, source, inputs));
+}
 
 export function getRunner(): Runner {
   return (runner ??= createRunner());
@@ -41,7 +55,7 @@ export const MAX_SOURCE_BYTES = 20_000;
 
 /** Run a whole program (authoring checks): one compile, one run per stdin input. */
 export function runProgram(language: CodeLanguage, source: string, inputs: string[] = [""], priority: Priority = "practice"): Promise<RunOutcome[]> {
-  return queue.run(priority, () => getRunner().run(language, source, inputs));
+  return execute(priority, language, source, inputs);
 }
 
 export interface TestResult {
@@ -85,7 +99,7 @@ async function runTests(q: Question, language: CodeLanguage, source: string, onl
   if (q.answer.kind !== "tests") throw new Error("not a coding question");
   checkLanguage(q, language, source);
   const tests = q.answer.tests.filter((t) => !onlySamples || !t.hidden);
-  const outcomes = await queue.run(priority, () => getRunner().run(language, source, tests.map((t) => t.input)));
+  const outcomes = await execute(priority, language, source, tests.map((t) => t.input));
   const results: TestResult[] = tests.map((t, i) => {
     const o = outcomes[i]!;
     const passed = o.status === "ok" && outputsMatch(t.output, o.stdout);
@@ -109,7 +123,7 @@ async function runTests(q: Question, language: CodeLanguage, source: string, onl
 
 async function runSql(schema: string, query: string, priority: Priority): Promise<SqlResult> {
   if (Buffer.byteLength(query) > MAX_SOURCE_BYTES) throw badRequest("Your query is too long");
-  const [o] = await queue.run(priority, () => getRunner().run("python", SQL_HARNESS, [JSON.stringify({ schema, query })]));
+  const [o] = await execute(priority, "python", SQL_HARNESS, [JSON.stringify({ schema, query })]);
   if (!o || o.status !== "ok") return { ok: false, columns: [], rows: [], error: o?.status === "timeout" ? "The query took too long" : "The query could not be run" };
   return parseSqlOutput(o.stdout);
 }

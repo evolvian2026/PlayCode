@@ -17,7 +17,8 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json",
     "verify:content": "tsx src/content/verify-cli.ts",
-    "webhooks:deliver": "tsx src/scripts/deliver-webhooks.ts"
+    "webhooks:deliver": "tsx src/scripts/deliver-webhooks.ts",
+    "worker": "tsx src/worker.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.1.0",

@@ -11,6 +11,7 @@ import { HttpError } from "./lib/errors";
 import { safeEqual, sha256 } from "./lib/crypto";
 import { observeRequest, renderMetrics } from "./lib/metrics";
 import { readiness, systemGauges } from "./services/system";
+import { closeQueueListener } from "./execution/job-queue";
 import { startFanout, stopFanout, subscribe } from "./lib/realtime";
 import { accountRoutes } from "./routes/account";
 import { adminRoutes } from "./routes/admin";
@@ -105,6 +106,8 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     if (!safeEqual(sha256(sent), sha256(token))) return reply.status(401).send({ error: { code: "unauthorized", message: "Bad metrics token" } });
     return reply.header("content-type", "text/plain; version=0.0.4").send(renderMetrics(await systemGauges(db, app.now())));
   });
+
+  app.addHook("onClose", async () => closeQueueListener());
 
   // Live events (duels, proctoring). Browsers cannot set headers on a
   // WebSocket, so the token comes as a query parameter.
