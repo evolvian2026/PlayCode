@@ -644,6 +644,42 @@ export const contests = pgTable(
 );
 
 /** Each participant's final place and rating change in a finished contest. */
+/** Feedback from a human mock interview, on the PANEL_RUBRIC in packages/core. */
+export interface PanelFeedback {
+  scores: Record<string, number>;
+  overall: number;
+  recommendation: "ready" | "almost" | "not_yet";
+  strengths: string;
+  improvements: string;
+  by: string;
+}
+
+/** A slot for a mock interview with a real interviewer (faculty or alumni), bookable by one student. */
+export const interviewSlots = pgTable(
+  "interview_slots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    /** Alumni often have no account, so the interviewer is a name; the creator records feedback for them. */
+    interviewerName: text("interviewer_name").notNull(),
+    kind: text("kind").$type<"technical" | "hr" | "general">().notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    /** A room or a meeting link. */
+    location: text("location").notNull().default(""),
+    /** Batches or sections whose students may book; empty for everyone. */
+    unitIds: jsonb("unit_ids").$type<string[]>().notNull().default([]),
+    status: text("status").$type<"open" | "booked" | "cancelled" | "done" | "no_show">().notNull().default("open"),
+    bookedBy: uuid("booked_by").references(() => users.id, { onDelete: "set null" }),
+    bookedAt: timestamp("booked_at", { withTimezone: true }),
+    feedback: jsonb("feedback").$type<PanelFeedback>(),
+    feedbackAt: timestamp("feedback_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("interview_slots_tenant_idx").on(t.tenantId, t.startsAt), index("interview_slots_booked_idx").on(t.bookedBy)],
+);
+
 /** An AI review of an accepted coding answer: one per response, kept so it is never paid for twice. */
 export const codeReviews = pgTable("code_reviews", {
   responseId: uuid("response_id").primaryKey().references(() => responses.id, { onDelete: "cascade" }),
@@ -758,7 +794,7 @@ export const contestSubmissions = pgTable(
 
 // ---------- Notifications ----------
 
-export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest" | "squad" | "doubt";
+export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest" | "squad" | "doubt" | "interview_slot";
 
 export const notifications = pgTable(
   "notifications",

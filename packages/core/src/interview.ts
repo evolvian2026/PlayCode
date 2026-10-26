@@ -27,3 +27,22 @@ export const HR_DIMENSIONS = [
 export function interviewDimensions(track: InterviewTrack): readonly (readonly [string, string])[] {
   return track === "hr" ? HR_DIMENSIONS : TECHNICAL_DIMENSIONS;
 }
+
+/** The rubric an interviewer (faculty or alumni) fills after a mock interview in person or on a call. */
+export const PANEL_RUBRIC = [
+  ["communication", "Communication"],
+  ["technical", "Technical knowledge"],
+  ["problemSolving", "Problem solving"],
+  ["confidence", "Confidence and presence"],
+] as const;
+
+export type PanelRecommendation = "ready" | "almost" | "not_yet";
+
+export const PANEL_RECOMMENDATIONS: Record<PanelRecommendation, string> = {
+  ready: "Ready for interviews",
+  almost: "Almost there",
+  not_yet: "Needs more practice",
+};
+
+export const PANEL_KINDS = { technical: "Technical", hr: "HR", general: "General" } as const;
+export type PanelKind = keyof typeof PANEL_KINDS;

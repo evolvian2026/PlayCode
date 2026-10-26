@@ -161,6 +161,14 @@ export default function MePage() {
         <Icon name="arrow" />
       </Link>
 
+      <Link href="/play/panel" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Mock interviews with people")}</b>
+          <div className="small muted">{tr("Book a practice interview with a teacher or an alumnus")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
       <Link href="/play/doubts" className="card spread" style={{ color: "inherit" }}>
         <div>
           <b>{tr("My doubts")}</b>

@@ -3,6 +3,7 @@ import { sendBillingNotices } from "../services/billing-mail";
 import { finalizeContests } from "../services/contests";
 import { finalizeExpiredMocks } from "../services/mocks";
 import { squadReminders } from "../services/squads";
+import { slotReminders } from "../services/interview-slots";
 import { recordJob } from "../services/jobs";
 import { processOutbox } from "../services/notifications";
 import { runNudges } from "../services/nudges";
@@ -23,6 +24,7 @@ try {
       contestsFinalized: (await finalizeContests(db, now)).finalized,
       mocksFinalized: (await finalizeExpiredMocks(db, now)).finalized,
       squadReminders: await squadReminders(db, now),
+      interviewReminders: await slotReminders(db, now),
       delivered: await processOutbox(db, now, 5000),
       snapshotsReviewed: await reviewPendingSnapshots(db, now),
       reports: await sendDueReports(db, now),

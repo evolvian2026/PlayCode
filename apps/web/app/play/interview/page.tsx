@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { INTERVIEW_TRACK_LABELS, interviewDimensions, type InterviewTrack } from "@playcode/core";
@@ -387,6 +388,13 @@ function InterviewHome() {
         )}
         {error && <ErrorBox message={error} />}
       </div>
+      <Link href="/play/panel" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{t("Mock interviews with people")}</b>
+          <div className="small muted">{t("Book a practice interview with a teacher or an alumnus")}</div>
+        </div>
+        <span aria-hidden="true">→</span>
+      </Link>
       {d.interviews.length > 0 && (
         <div className="card stack">
           <h2 style={{ margin: 0 }}>{t("Past interviews")}</h2>

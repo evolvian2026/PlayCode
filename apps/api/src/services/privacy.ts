@@ -14,6 +14,7 @@ import {
   squadMembers,
   doubts,
   codeReviews,
+  interviewSlots,
   squads,
   contests,
   consents,
@@ -54,6 +55,7 @@ import { conflict, forbidden, notFound } from "../lib/errors";
 import { deleteObject } from "../lib/storage";
 import { deliverDue, emitEvent } from "./webhooks";
 import { leaveSquad } from "./squads";
+import { forgetBookings } from "./interview-slots";
 
 // Data-protection tools in the spirit of India's DPDP Act 2023 (and GDPR):
 // a consent ledger, a copy of everything held about a person, and erasure on
@@ -157,6 +159,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .innerJoin(contests, eq(contests.id, contestSubmissions.contestId))
       .where(eq(contestSubmissions.userId, userId)),
     codeReviews: await db.select({ questionId: codeReviews.questionId, review: codeReviews.review, at: codeReviews.createdAt }).from(codeReviews).where(eq(codeReviews.userId, userId)),
+    panelInterviews: await db.select({ interviewer: interviewSlots.interviewerName, kind: interviewSlots.kind, startsAt: interviewSlots.startsAt, status: interviewSlots.status, feedback: interviewSlots.feedback }).from(interviewSlots).where(eq(interviewSlots.bookedBy, userId)),
     doubts: await db.select({ questionId: doubts.questionId, text: doubts.text, status: doubts.status, answer: doubts.answer, askedAt: doubts.createdAt, answeredAt: doubts.answeredAt }).from(doubts).where(eq(doubts.userId, userId)),
     squad: (await db.select({ name: squads.name, joinedAt: squadMembers.joinedAt }).from(squadMembers).innerJoin(squads, eq(squads.id, squadMembers.squadId)).where(eq(squadMembers.userId, userId)))[0] ?? null,
     mockTests: await db
@@ -272,6 +275,7 @@ export async function resolveErasure(
     await leaveSquad(tx, user.id);
     await tx.delete(doubts).where(eq(doubts.userId, user.id));
     await tx.delete(codeReviews).where(eq(codeReviews.userId, user.id));
+    await forgetBookings(tx, user.id);
     await tx.delete(liveQuizAnswers).where(eq(liveQuizAnswers.userId, user.id));
     await tx.delete(liveQuizPlayers).where(eq(liveQuizPlayers.userId, user.id));
     await tx.delete(playerProfiles).where(eq(playerProfiles.userId, user.id));
