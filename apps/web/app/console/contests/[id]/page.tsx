@@ -19,7 +19,8 @@ interface StaffView {
   endsAt: string;
   freezeMinutes: number;
   problems: { letter: string; id: string; stem: string; solvedBy: number; submissions: number }[];
-  scoreboard: (BoardRow & { userId: string | null })[];
+  finalized: boolean;
+  scoreboard: (BoardRow & { userId: string | null; rating: { before: number; after: number } | null })[];
 }
 
 interface Pair {
@@ -141,6 +142,7 @@ export default function ContestDetail() {
                 {data.problems.map((p) => (
                   <th key={p.id}>{p.letter}</th>
                 ))}
+                {data.finalized && <th>Rating</th>}
               </tr>
             </thead>
             <tbody>
@@ -168,6 +170,11 @@ export default function ContestDetail() {
                       </td>
                     );
                   })}
+                  {data.finalized && (
+                    <td className="small">
+                      {r.rating ? `${r.rating.after} (${r.rating.after >= r.rating.before ? "+" : ""}${r.rating.after - r.rating.before})` : ""}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

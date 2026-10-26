@@ -114,6 +114,8 @@ export async function resumeData(db: Db, userId: string, now: Date) {
       longestStreak: profile[0]?.streakLongest ?? 0,
     },
     mockInterview: latest?.scorecard ? { track: latest.track, overall: latest.scorecard.overall, scores: latest.scorecard.scores, at: latest.finishedAt } : null,
+    /** Coding contests: the rating once at least one contest is rated. */
+    contests: profile[0]?.contestsRated ? { rating: profile[0].contestRating, rated: profile[0].contestsRated } : null,
     generatedAt: now,
   };
 }
@@ -143,6 +145,7 @@ export function shareableProfile(d: ResumeData, now: Date) {
     certificates: d.certificates,
     practice: d.practice,
     mockInterview: d.mockInterview && !d.hide.interview ? { track: d.mockInterview.track, overall: d.mockInterview.overall } : null,
+    contests: d.contests,
     verifiedAt: now,
   };
 }
@@ -217,6 +220,7 @@ export function renderResumePdf(d: ResumeData, opts: { compress?: boolean } = {}
       { width },
     );
   }
+  if (d.contests) doc.text(`Coding contest rating ${d.contests.rating} over ${d.contests.rated} rated contest${d.contests.rated === 1 ? "" : "s"}.`, { width });
 
   if (d.skills.length) {
     heading("Skills mastered");

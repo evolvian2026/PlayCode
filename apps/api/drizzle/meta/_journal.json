@@ -253,6 +253,13 @@
       "when": 1792990278315,
       "tag": "0035_insight_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792993161694,
+      "tag": "0036_contest_ratings",
+      "breakpoints": true
     }
   ]
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { VERDICT_LABELS, type ContestState, type Verdict } from "@playcode/core";
+import { ordinal, VERDICT_LABELS, type ContestState, type Verdict } from "@playcode/core";
 import { EvaluationView } from "@/components/CodeAnswer";
 import { draftToResponse, emptyDraft, QuestionInput, type Draft } from "@/components/QuestionInput";
 import { ErrorBox, Loading } from "@/components/ui";
@@ -22,6 +22,7 @@ interface ContestView {
   endsAt: string;
   freezeMinutes: number;
   problems: { letter: string; id: string; question: Omit<QuestionView, "hintsUsed" | "coachUsed"> | null; solved: boolean; tries: number }[];
+  result: { rank: number; participants: number; ratingBefore: number; ratingAfter: number; certificateCode: string | null } | null;
   submissions: { id: string; letter: string; verdict: Verdict; passed: number; total: number; at: string }[];
   scoreboard: { frozen: boolean; participants: number; rows: BoardRow[] };
 }
@@ -169,6 +170,23 @@ export default function ContestPage() {
         </div>
         {data.description && <p className="small" style={{ whiteSpace: "pre-wrap" }}>{data.description}</p>}
       </div>
+
+      {data.result && (
+        <div className="card spread wrap" role="status" style={{ borderColor: "var(--good-ink)" }}>
+          <div>
+            <b>{t("You placed {place} of {n}", { place: ordinal(data.result.rank), n: data.result.participants })}</b>
+            <div className="small">
+              {t("Contest rating {before} → {after}", { before: data.result.ratingBefore, after: data.result.ratingAfter })} ({data.result.ratingAfter >= data.result.ratingBefore ? "+" : ""}
+              {data.result.ratingAfter - data.result.ratingBefore})
+            </div>
+          </div>
+          {data.result.certificateCode && (
+            <Link className="btn small" href={`/verify/${data.result.certificateCode}`}>
+              {t("View certificate")}
+            </Link>
+          )}
+        </div>
+      )}
 
       {data.state === "upcoming" ? (
         <div className="card muted">{t("The {n} problems appear here when the contest starts. Submit as often as you like; each rejected try before a correct one adds 20 minutes of penalty.", { n: data.problems.length })}</div>

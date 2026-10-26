@@ -16,6 +16,7 @@ interface Candidate {
   readiness: { service: number; product: number };
   cgpa: number | null;
   masteredSkills: number;
+  contestRating: number | null;
   locations: string[];
   invite: { id: string; status: "pending" | "accepted" | "declined" | "expired" } | null;
 }
@@ -356,6 +357,7 @@ export default function TalentPage() {
                         {c.institution}
                         {c.graduationYear ? ` · ${c.graduationYear}` : ""}
                         {c.cgpa != null ? ` · CGPA ${c.cgpa}` : ""} · {c.masteredSkills} skills mastered
+                        {c.contestRating != null ? ` · contest rating ${c.contestRating}` : ""}
                       </span>
                       {c.headline && <span className="small" style={{ display: "block" }}>{c.headline}</span>}
                     </span>

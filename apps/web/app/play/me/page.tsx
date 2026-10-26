@@ -112,7 +112,7 @@ function WhatsAppSettings() {
 export default function MePage() {
   const me = useMe();
   const tr = useT();
-  const { data, error, loading, reload } = useApi<StudentDetail>("/student/profile");
+  const { data, error, loading, reload } = useApi<StudentDetail & { contest: { rating: number; contests: number } | null }>("/student/profile");
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? "Could not load"} onRetry={reload} />;
 
@@ -186,6 +186,17 @@ export default function MePage() {
       <PrivacyCard />
 
       <DevicesCard />
+
+      {data.contest && (
+        <Link href="/play/contests" className="card spread" style={{ color: "inherit" }}>
+          <div>
+            <div className="muted small">{tr("Contest rating")}</div>
+            <span className="kpi">{data.contest.rating}</span>
+            <div className="small muted">{tr("from {n} rated contests", { n: data.contest.contests })}</div>
+          </div>
+          <Icon name="trophy" />
+        </Link>
+      )}
 
       <div className="card stack">
         <h2>{tr("Placement readiness")}</h2>

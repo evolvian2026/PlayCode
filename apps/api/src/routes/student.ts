@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { isoWeekKey, masteryFromRating, QUESTION_TYPES, REVIEW_MAX_SKILLS, REVIEW_PER_SKILL } from "@playcode/core";
 import { z } from "zod";
 import { db } from "../db/client";
-import { assignments, duels, mistakes, packs, questions, sessions, skillRatings, skills } from "../db/schema";
+import { assignments, duels, mistakes, packs, playerProfiles, questions, sessions, skillRatings, skills } from "../db/schema";
 import { notFound } from "../lib/errors";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { rateLimit } from "../lib/rate-limit";
@@ -331,6 +331,7 @@ export async function studentRoutes(app: FastifyInstance) {
     const tenant = await getTenant(db, ctx.tenantId);
     const detail = await studentDetail(db, { userId: ctx.userId, today: tenantToday(tenant, ctx.now), rules: streakRules(tenant) });
     if (!detail) throw notFound("Profile");
-    return detail;
+    const [p] = await db.select({ rating: playerProfiles.contestRating, contests: playerProfiles.contestsRated }).from(playerProfiles).where(eq(playerProfiles.userId, ctx.userId));
+    return { ...detail, contest: p?.contests ? { rating: p.rating, contests: p.contests } : null };
   });
 }

@@ -1,12 +1,14 @@
-import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
-import { codeSimilarity, contestState, scoreboard, toStudentView, type StudentResponse, type Verdict } from "@playcode/core";
+import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { codeSimilarity, CONTEST_START_RATING, contestRatingChanges, contestState, ordinal, scoreboard, toStudentView, type StudentResponse, type Verdict } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
-import { contests, contestSubmissions, questions, tenants, users } from "../db/schema";
+import { certificates, contestResults, contests, contestSubmissions, playerProfiles, questions, tenants, users } from "../db/schema";
 import { evaluate, tryRun, checkRunRate, type Evaluation } from "../execution";
 import { audit } from "../lib/audit";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { rateLimit } from "../lib/rate-limit";
-import { appLink, enqueue } from "./notifications";
+import { certificateCode as certificateCode_ } from "./certificates";
+import { appLink, enqueue, type NewNotification } from "./notifications";
+import { getOrCreateProfile } from "./profile";
 import { toCoreQuestion } from "./practice";
 import { descendants, studentIdsInUnits, studentUnitIdsWithAncestors, tenantUnits } from "./scope";
 
@@ -206,6 +208,7 @@ export async function contestView(db: Db, ctx: Ctx, id: string) {
         tries: mine.length,
       };
     }),
+    result: state === "ended" ? await myContestResult(db, c.id, ctx.userId) : null,
     submissions: mySubs.slice(0, 50).map((s) => ({ id: s.id, letter: LETTERS[c.problemIds.indexOf(s.questionId)]!, verdict: s.verdict, passed: s.passed, total: s.total, at: s.createdAt })),
     scoreboard: {
       frozen,
@@ -309,12 +312,14 @@ export async function staffContestView(db: Db, tenantId: string | null, id: stri
   const { rows, subs } = await board(db, c, now, { frozen: false });
   const people = rows.length ? await db.select({ id: users.id, name: users.name, rollNo: users.rollNo, tenantId: users.tenantId, college: tenants.name }).from(users).leftJoin(tenants, eq(tenants.id, users.tenantId)).where(inArray(users.id, rows.map((r) => r.userId))) : [];
   const qs = await db.select({ id: questions.id, title: questions.body }).from(questions).where(inArray(questions.id, c.problemIds));
+  const results = await db.select().from(contestResults).where(eq(contestResults.contestId, c.id));
   return {
     id: c.id,
     title: c.title,
     description: c.description,
     byPlayCode: c.tenantId === null,
     state: contestState(c, now),
+    finalized: c.finalizedAt !== null,
     startsAt: c.startsAt,
     endsAt: c.endsAt,
     freezeMinutes: c.freezeMinutes,
@@ -331,7 +336,15 @@ export async function staffContestView(db: Db, tenantId: string | null, id: stri
     scoreboard: rows.map((r) => {
       const p = people.find((x) => x.id === r.userId);
       const own = !tenantId || p?.tenantId === tenantId;
-      return { ...r, userId: own ? r.userId : null, name: own ? p?.name ?? "" : (p?.name.split(/\s+/)[0] ?? ""), rollNo: own ? p?.rollNo ?? null : null, college: c.tenantId ? null : p?.college ?? null };
+      const res = results.find((x) => x.userId === r.userId);
+      return {
+        ...r,
+        userId: own ? r.userId : null,
+        name: own ? p?.name ?? "" : (p?.name.split(/\s+/)[0] ?? ""),
+        rollNo: own ? p?.rollNo ?? null : null,
+        college: c.tenantId ? null : p?.college ?? null,
+        rating: res && own ? { before: res.ratingBefore, after: res.ratingAfter } : null,
+      };
     }),
   };
 }
@@ -376,4 +389,74 @@ export async function contestProblems(db: Db, tenantId: string | null) {
 
 export function assertCollegeContestScope(tenantId: string | null) {
   if (!tenantId) throw forbidden("Sign in to a college to run its contests");
+}
+
+// ---------- Results ----------
+
+/**
+ * Once a contest has ended: record each participant's place, update contest
+ * ratings, give the top three (who solved something) a verifiable certificate,
+ * and tell everyone their result. Runs from the hourly job; each contest is
+ * claimed once, so two instances never finalise the same one.
+ */
+export async function finalizeContests(db: Db, now: Date) {
+  const due = await db.select().from(contests).where(and(lte(contests.endsAt, now), isNull(contests.finalizedAt)));
+  let finalized = 0;
+  for (const c of due) {
+    const [claimed] = await db.update(contests).set({ finalizedAt: now }).where(and(eq(contests.id, c.id), isNull(contests.finalizedAt))).returning({ id: contests.id });
+    if (!claimed) continue;
+    const { rows } = await board(db, c, now, { frozen: false });
+    if (rows.length) {
+      const ids = rows.map((r) => r.userId);
+      const people = await db.select({ id: users.id, tenantId: users.tenantId }).from(users).where(inArray(users.id, ids));
+      const profiles = await db.select({ userId: playerProfiles.userId, rating: playerProfiles.contestRating, contests: playerProfiles.contestsRated }).from(playerProfiles).where(inArray(playerProfiles.userId, ids));
+      const changes = contestRatingChanges(
+        rows.map((r) => {
+          const p = profiles.find((x) => x.userId === r.userId);
+          return { userId: r.userId, rank: r.rank, rating: p?.rating ?? CONTEST_START_RATING, contests: p?.contests ?? 0 };
+        }),
+      );
+      const items: NewNotification[] = [];
+      await db.transaction(async (tx) => {
+        for (const r of rows) {
+          const change = changes.find((x) => x.userId === r.userId)!;
+          const tenantId = people.find((p) => p.id === r.userId)?.tenantId;
+          if (!tenantId) continue;
+          let certificateCode: string | null = null;
+          if (r.rank <= 3 && r.solved > 0) {
+            const [cert] = await tx
+              .insert(certificates)
+              .values({ code: certificateCode_(), tenantId, userId: r.userId, kind: "contest", refId: c.id, title: `${c.title}: ${ordinal(r.rank)} place`, scorePct: Math.round((r.solved / c.problemIds.length) * 100), issuedAt: now })
+              .onConflictDoNothing()
+              .returning({ code: certificates.code });
+            certificateCode = cert?.code ?? null;
+          }
+          await tx.insert(contestResults).values({ contestId: c.id, userId: r.userId, rank: r.rank, participants: rows.length, solved: r.solved, penalty: r.penalty, ratingBefore: change.before, ratingAfter: change.after, certificateCode }).onConflictDoNothing();
+          await getOrCreateProfile(tx, r.userId, tenantId);
+          await tx
+            .update(playerProfiles)
+            .set({ contestRating: change.after, contestsRated: sql`${playerProfiles.contestsRated} + 1` })
+            .where(eq(playerProfiles.userId, r.userId));
+          items.push({
+            tenantId,
+            userId: r.userId,
+            template: "contest",
+            title: `Results: ${c.title}`,
+            body: `You placed ${ordinal(r.rank)} of ${rows.length} with ${r.solved} solved. Contest rating ${change.before} → ${change.after}.${certificateCode ? " You won a certificate." : ""}`,
+            link: appLink(`/play/contests/${c.id}`),
+            dedupeKey: `contest-result:${c.id}:${r.userId}`,
+          });
+        }
+      });
+      await enqueue(db, items);
+    }
+    finalized++;
+  }
+  return { finalized };
+}
+
+/** A student's result in a finished contest, once it is out. */
+export async function myContestResult(db: DbOrTx, contestId: string, userId: string) {
+  const [r] = await db.select().from(contestResults).where(and(eq(contestResults.contestId, contestId), eq(contestResults.userId, userId)));
+  return r ? { rank: r.rank, participants: r.participants, ratingBefore: r.ratingBefore, ratingAfter: r.ratingAfter, certificateCode: r.certificateCode } : null;
 }

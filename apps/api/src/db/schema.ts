@@ -260,6 +260,9 @@ export const playerProfiles = pgTable("player_profiles", {
   duelWins: integer("duel_wins").notNull().default(0),
   duelLosses: integer("duel_losses").notNull().default(0),
   duelDraws: integer("duel_draws").notNull().default(0),
+  /** Coding contest rating (multi-player Elo) and how many rated contests it rests on. */
+  contestRating: integer("contest_rating").notNull().default(1200),
+  contestsRated: integer("contests_rated").notNull().default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -554,8 +557,27 @@ export const contests = pgTable(
     freezeMinutes: integer("freeze_minutes").notNull().default(0),
     createdBy: uuid("created_by").notNull().references(() => users.id),
     createdAt: createdAt(),
+    /** Set once results, ratings and certificates are out. */
+    finalizedAt: timestamp("finalized_at", { withTimezone: true }),
   },
   (t) => [index("contests_tenant_idx").on(t.tenantId, t.startsAt)],
+);
+
+/** Each participant's final place and rating change in a finished contest. */
+export const contestResults = pgTable(
+  "contest_results",
+  {
+    contestId: uuid("contest_id").notNull().references(() => contests.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    rank: integer("rank").notNull(),
+    participants: integer("participants").notNull(),
+    solved: integer("solved").notNull(),
+    penalty: integer("penalty").notNull(),
+    ratingBefore: integer("rating_before").notNull(),
+    ratingAfter: integer("rating_after").notNull(),
+    certificateCode: text("certificate_code"),
+  },
+  (t) => [primaryKey({ columns: [t.contestId, t.userId] }), index("contest_results_user_idx").on(t.userId)],
 );
 
 export const contestSubmissions = pgTable(
@@ -613,7 +635,7 @@ export const certificates = pgTable(
     code: text("code").primaryKey(),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    kind: text("kind").$type<"mission" | "path">().notNull(),
+    kind: text("kind").$type<"mission" | "path" | "contest">().notNull(),
     refId: text("ref_id").notNull(),
     title: text("title").notNull(),
     scorePct: integer("score_pct").notNull(),

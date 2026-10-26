@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CODING_QUESTIONS } from "../src/content/coding";
 import { db, pool } from "../src/db/client";
 import { tenants } from "../src/db/schema";
+import { finalizeContests } from "../src/services/contests";
 import { setup, START, type TestApp } from "./helpers";
 
 let t: TestApp;
@@ -125,6 +126,22 @@ describe("coding contests", () => {
     expect(sim.length).toBeGreaterThan(0);
     expect(sim[0]).toMatchObject({ letter: "A", similarityPct: 100 });
     expect((await t.get(tpo, "/console/contests")).body.contests[0]).toMatchObject({ id, state: "ended", participants: 3 });
+  });
+
+  it("publishes results once: places, ratings, certificates for the top three", async () => {
+    expect((await t.get(ana, `/student/contests/${id}`)).body.result).toBeNull(); // not finalised yet
+    expect((await finalizeContests(db, t.clock.now)).finalized).toBe(2); // this one and the seeded demo contest
+    expect((await finalizeContests(db, t.clock.now)).finalized).toBe(0);
+    // Three at 1200: first gains 32, second holds, third loses 32.
+    const view = (await t.get(ana, `/student/contests/${id}`)).body;
+    expect(view.result).toMatchObject({ rank: 2, participants: 3, ratingBefore: 1200, ratingAfter: 1200 });
+    expect(view.result.certificateCode).toBeTruthy();
+    const ben = (await t.get(tpo, `/console/contests/${id}`)).body.scoreboard[0];
+    expect(ben).toMatchObject({ rank: 1, rating: { before: 1200, after: 1232 } });
+    expect((await t.get(cai, "/student/profile")).body.contest).toEqual({ rating: 1168, contests: 1 });
+    expect((await t.get(cai, "/student/certificates")).body.certificates[0].title).toBe("CSE coding cup: 3rd place");
+    expect((await t.get(ana, "/student/notifications")).body.items[0].title).toBe("Results: CSE coding cup");
+    expect((await t.get(ana, "/student/resume")).body.resume.contests).toEqual({ rating: 1200, rated: 1 });
   });
 
   it("runs inter-college contests for PlayCode, with short names across colleges", async () => {

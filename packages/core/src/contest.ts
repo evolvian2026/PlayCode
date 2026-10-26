@@ -83,3 +83,46 @@ export function contestState(c: { startsAt: Date; endsAt: Date; freezeMinutes: n
   if (now >= c.endsAt) return "ended";
   return c.freezeMinutes > 0 && now.getTime() >= c.endsAt.getTime() - c.freezeMinutes * 60_000 ? "frozen" : "live";
 }
+
+// ---------- Contest ratings ----------
+
+/** Everyone's contest rating starts here. */
+export const CONTEST_START_RATING = 1200;
+/** Ratings move faster for a student's first few rated contests. */
+export const PROVISIONAL_CONTESTS = 5;
+
+export interface RatedEntry {
+  userId: string;
+  rank: number;
+  rating: number;
+  /** Rated contests taken before this one. */
+  contests: number;
+}
+
+/**
+ * New ratings after a contest: each participant is compared with every other
+ * as an Elo game (ahead = win, same rank = draw), and the change is the
+ * average over those games, scaled by K (64 while provisional, then 32).
+ */
+export function contestRatingChanges(entries: RatedEntry[]): { userId: string; before: number; after: number; delta: number }[] {
+  const n = entries.length;
+  return entries.map((me) => {
+    if (n < 2) return { userId: me.userId, before: me.rating, after: me.rating, delta: 0 };
+    let sum = 0;
+    for (const other of entries) {
+      if (other === me) continue;
+      const expected = 1 / (1 + 10 ** ((other.rating - me.rating) / 400));
+      const actual = me.rank < other.rank ? 1 : me.rank === other.rank ? 0.5 : 0;
+      sum += actual - expected;
+    }
+    const k = me.contests < PROVISIONAL_CONTESTS ? 64 : 32;
+    const delta = Math.round((k * sum) / (n - 1));
+    return { userId: me.userId, before: me.rating, after: me.rating + delta, delta };
+  });
+}
+
+/** "1st", "2nd", "3rd", "4th"... */
+export function ordinal(n: number): string {
+  const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
+  return `${n}${s}`;
+}

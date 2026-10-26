@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { localDate, masteryFromRating, type CompanyType } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
-import { academicRecords, drives, memberships, orgUnits, skillRatings, studentProfiles, talentInvites, tenants, users, type TalentInviteStatus } from "../db/schema";
+import { academicRecords, drives, memberships, orgUnits, playerProfiles, skillRatings, studentProfiles, talentInvites, tenants, users, type TalentInviteStatus } from "../db/schema";
 import { audit } from "../lib/audit";
 import { badRequest, conflict, forbidden, HttpError, notFound } from "../lib/errors";
 import { readinessFor } from "./analytics";
@@ -129,11 +129,14 @@ async function poolRows(db: DbOrTx, now: Date, userIds?: string[]) {
       hide: studentProfiles.hide,
       graduationYear: academicRecords.graduationYear,
       cgpa: academicRecords.cgpa,
+      contestRating: playerProfiles.contestRating,
+      contestsRated: playerProfiles.contestsRated,
     })
     .from(studentProfiles)
     .innerJoin(users, eq(users.id, studentProfiles.userId))
     .innerJoin(tenants, eq(tenants.id, studentProfiles.tenantId))
     .leftJoin(academicRecords, eq(academicRecords.userId, studentProfiles.userId))
+    .leftJoin(playerProfiles, eq(playerProfiles.userId, studentProfiles.userId))
     .where(and(eq(studentProfiles.discoverable, true), eq(users.status, "active"), eq(tenants.type, "institution"), userIds ? inArray(users.id, userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]) : undefined));
   // The institution can close its pool at any time, which hides its students at once; so does a lapsed licence.
   const open = rows.filter((r) => r.settings.talentPool === true);
@@ -192,6 +195,7 @@ export async function searchTalent(db: Db, ctx: Ctx, q: TalentQuery) {
         readiness: { service: r.readiness.service ?? 0, product: r.readiness.product ?? 0 },
         cgpa: r.hide.marks ? null : r.cgpa,
         masteredSkills: r.mastered.size,
+        contestRating: r.contestsRated ? r.contestRating : null,
         locations: r.lookingFor.locations ?? [],
         invite: invite ? { id: invite.id, status: effective(invite.status, invite.expiresAt, ctx.now) } : null,
       };

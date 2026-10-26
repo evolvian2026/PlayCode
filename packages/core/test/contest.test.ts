@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contestState, scoreboard, type ContestSubmission } from "../src";
+import { contestRatingChanges, contestState, ordinal, scoreboard, type ContestSubmission } from "../src";
 
 const min = (m: number) => m * 60_000;
 const sub = (userId: string, questionId: string, verdict: ContestSubmission["verdict"], atMin: number): ContestSubmission => ({ userId, questionId, verdict, atMs: min(atMin) });
@@ -48,5 +48,37 @@ describe("contest scoreboard", () => {
     expect(contestState(c, new Date("2026-10-26T11:30:00Z"))).toBe("frozen");
     expect(contestState(c, new Date("2026-10-26T12:00:00Z"))).toBe("ended");
     expect(contestState({ ...c, freezeMinutes: 0 }, new Date("2026-10-26T11:59:00Z"))).toBe("live");
+  });
+});
+
+describe("contest ratings", () => {
+  it("raises the ratings of those who place above their expectation", () => {
+    const res = contestRatingChanges([
+      { userId: "a", rank: 1, rating: 1200, contests: 0 },
+      { userId: "b", rank: 2, rating: 1200, contests: 0 },
+      { userId: "c", rank: 3, rating: 1200, contests: 0 },
+    ]);
+    expect(res.map((r) => r.delta)).toEqual([32, 0, -32]);
+    expect(res[0]).toEqual({ userId: "a", before: 1200, after: 1232, delta: 32 });
+  });
+
+  it("moves less for an expected result, and settles after the provisional contests", () => {
+    const strongWins = contestRatingChanges([
+      { userId: "strong", rank: 1, rating: 1600, contests: 10 },
+      { userId: "weak", rank: 2, rating: 1200, contests: 10 },
+    ]);
+    expect(strongWins[0]!.delta).toBe(3);
+    const upset = contestRatingChanges([
+      { userId: "strong", rank: 2, rating: 1600, contests: 10 },
+      { userId: "weak", rank: 1, rating: 1200, contests: 2 },
+    ]);
+    expect(upset.map((r) => r.delta)).toEqual([-29, 58]);
+    // Ties draw; a lone participant isn't rated.
+    expect(contestRatingChanges([{ userId: "x", rank: 1, rating: 1200, contests: 0 }, { userId: "y", rank: 1, rating: 1200, contests: 0 }]).map((r) => r.delta)).toEqual([0, 0]);
+    expect(contestRatingChanges([{ userId: "x", rank: 1, rating: 1300, contests: 3 }])[0]!.delta).toBe(0);
+  });
+
+  it("writes places", () => {
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 101].map(ordinal)).toEqual(["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "101st"]);
   });
 });

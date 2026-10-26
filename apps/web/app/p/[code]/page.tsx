@@ -19,6 +19,7 @@ interface PublicProfile {
   certificates: { title: string; code: string; scorePct: number; issuedAt: string; verifyUrl: string }[];
   practice: { questionsSolved: number; codingProblemsSolved: number; sqlProblemsSolved: number; activeDays90: number; longestStreak: number };
   mockInterview: { track: string; overall: number } | null;
+  contests: { rating: number; rated: number } | null;
   verifiedAt: string;
 }
 
@@ -86,6 +87,11 @@ export default function PublicProfilePage() {
           {data.practice.questionsSolved} practice questions, {data.practice.codingProblemsSolved} coding and {data.practice.sqlProblemsSolved} SQL problems solved · {data.practice.activeDays90} practice days in the last 90 · longest
           streak {data.practice.longestStreak} days
         </div>
+        {data.contests && (
+          <div className="small">
+            Coding contest rating {data.contests.rating} over {data.contests.rated} rated contest{data.contests.rated === 1 ? "" : "s"}
+          </div>
+        )}
         {data.mockInterview && (
           <div className="small">
             Mock technical interview ({data.mockInterview.track} company): {data.mockInterview.overall}/5
