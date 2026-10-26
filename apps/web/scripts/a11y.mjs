@@ -42,6 +42,8 @@ const PAGES = [
   { as: "content@playcode.dev", path: "/console/studio/review", mobile: false },
   { as: "faculty@demo.edu", path: "/console/interviews", mobile: false },
   { as: "student@demo.edu", path: "/play/mocks", mobile: true },
+  { as: "student@demo.edu", path: "/play/squad", mobile: true },
+  { as: "student@demo.edu", path: "/offline", mobile: true },
   { as: "faculty@demo.edu", path: "/console/assignments?new=1&remedial=aptitude.time", mobile: false },
   { as: "superadmin@playcode.dev", path: "/console/health", mobile: false },
   { as: "superadmin@playcode.dev", path: "/console/billing", mobile: false },
