@@ -97,6 +97,12 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - Study plans (`/play/plan`): a student picks a placement drive, or a date and a kind of company, and gets one task a day until then: practise the skill with the largest weighted gap to 70% mastery for that kind of company, review fading skills every seventh day, and a mission as a mock round the day before. Days tick off from real practice (a finished session on the day's skill, a finished review or the mission), today's task is on the home screen, and the plan can be rebuilt from today.
 - Weekly insights: on the overview, staff can have this week's briefing written for their scope (the institution, a unit, or a teacher's own sections): a headline, observations marked going well, watch or act, and up to three suggested actions. The model sees only aggregates (activity this week and last, readiness bands, weakest skills, assignment completion, streaks), never a student's name or record. One briefing per scope per day, cached and metered against the plan's AI allowance (Pro and up).
 
+**Phase 14 additions**
+- Aptitude track: quantitative aptitude (percentages, profit and interest; time, speed and work; number system) and logical reasoning (series and odd one out; coding, directions and arrangements), 23 questions for the aptitude section of service-company tests. The 22 with computable answers are proved by a program in `pnpm verify:content`. There is an aptitude-round mission, and service readiness now weighs aptitude and reasoning.
+- Contest ratings and certificates: when a contest ends, the hourly job publishes its results once: each participant's place, a contest rating change (multi-player Elo against everyone in the standings, starting at 1200; K 64 for the first five rated contests, then 32), a verifiable certificate for the top three who solved something, and a notification. The rating shows on the student's profile, resume (PDF too), public profile and in talent-pool search.
+- Live classroom quizzes (`/console/live`, `/play/live`): a teacher builds a quiz from a mission or a skill (quick questions, 10 to 120 seconds each) and puts the host screen on the projector; students join on their phones with a 6-digit code. The server owns the timer and refuses late or repeated answers; a right answer scores 500 to 1000 points, more the faster it comes. The teacher reveals each answer (or the timer does) with the spread of answers and a leaderboard. Updates go over the realtime channel, with polling as a fallback. Quizzes are deleted after 90 days.
+- Fix: the resume's "questions solved" now counts every quick question type (it was missing Parsons, trace, reverse-mode and pseudocode questions).
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -172,7 +178,7 @@ Scheduled jobs (run them from cron or your scheduler):
 | Job | When | Command |
 | --- | --- | --- |
 | Close league week | Mondays after midnight, tenant time | `pnpm --filter @playcode/api league:close` |
-| Nudges, notification delivery (in-app, push, WhatsApp), missed snapshot reviews, weekly report emails, billing emails | Hourly (streak reminders only fire 6-9 pm local time, fading-skill reminders 4-6 pm and at most weekly) | `pnpm --filter @playcode/api nudges:run` |
+| Nudges, notification delivery (in-app, push, WhatsApp), missed snapshot reviews, weekly report emails, billing emails, contest results and ratings | Hourly (streak reminders only fire 6-9 pm local time, fading-skill reminders 4-6 pm and at most weekly) | `pnpm --filter @playcode/api nudges:run` |
 | Webhook and LMS grade retries | Every minute | `pnpm --filter @playcode/api webhooks:deliver` |
 | Data retention clean-up | Nightly | `pnpm --filter @playcode/api retention:run` |
 | Peer benchmark snapshots | Nightly | `pnpm --filter @playcode/api benchmarks:run` |
@@ -258,6 +264,7 @@ Other operations:
 
 - **Spoken interviews use the browser's speech recognition**, not a speech API of our own: there is no audio upload, storage or extra cost, and it works on most Android phones (Chrome). The trade-off is that Firefox can't do it (students type there) and pace is measured from microphone time, which includes pauses.
 - **Spaced review works per skill, not per question**: placement tests sample a skill rather than repeat a question, and a skill-level ladder keeps the review queue short enough to clear in minutes.
+- **Live quizzes don't feed mastery or XP**: classroom answers are timed and social (a neighbour can see a phone), so they're kept out of the measured record that readiness, the resume and the talent pool rely on.
 - **Contest submissions are judged in the API's execution queue**, at test priority, like proctored tests. For large inter-college contests, run the code on Judge0 (`JUDGE0_URL`) so judging scales separately from the API.
 - **Weekly insights send aggregates only to the AI**: names, roll numbers and individual records stay in PlayCode, so the briefing can't single out a student; the overview's lists remain the place to find who needs help.
 - **The talent pool is opt-in twice**: the institution opens it and each student joins it. Companies search what PlayCode measured rather than self-reported claims, and contact details follow the student's acceptance of a specific invitation, which is the consent the DPDP Act asks for.
