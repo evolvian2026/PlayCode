@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { isStaff, permissionsFor, type Role } from "@playcode/core";
+import { isStaff, permissionsFor, TEXT_SIZES, type Role } from "@playcode/core";
 import { z } from "zod";
 import { db } from "../db/client";
 import { memberships, tenants, users } from "../db/schema";
@@ -33,7 +33,7 @@ export async function loadIdentity(userId: string, activeTenantId?: string | nul
     user,
     roles,
     body: {
-      user: { id: user.id, name: user.name, email: user.email, rollNo: user.rollNo, tenantId: user.tenantId, roles, locale: user.locale },
+      user: { id: user.id, name: user.name, email: user.email, rollNo: user.rollNo, tenantId: user.tenantId, roles, locale: user.locale, display: user.displayPrefs },
       tenant: tenant ? { id: tenant.id, name: tenant.name, plan: tenant.plan, type: tenant.type, slug: tenant.slug } : null,
       branding: tenant ? await effectiveBranding(db, tenant) : null,
       switched: Boolean(tenant && tenant.id !== user.tenantId),
@@ -121,6 +121,25 @@ export async function authRoutes(app: FastifyInstance) {
     const identity = await loadIdentity(req.auth.userId, req.auth.tenantId, req.server.now());
     if (!identity) throw notFound("User");
     return identity.body;
+  });
+
+  // Display preferences (text size, font, motion, contrast) for any signed-in user.
+  app.put("/me/display", { preHandler: authenticate }, async (req) => {
+    const prefs = parse(
+      z
+        .object({
+          textSize: z.enum(TEXT_SIZES).optional(),
+          readableFont: z.boolean().optional(),
+          reduceMotion: z.boolean().optional(),
+          highContrast: z.boolean().optional(),
+        })
+        .strict(),
+      req.body,
+    );
+    const [u] = await db.select({ prefs: users.displayPrefs }).from(users).where(eq(users.id, req.auth.userId));
+    const display = { ...(u?.prefs ?? {}), ...prefs };
+    await db.update(users).set({ displayPrefs: display }).where(eq(users.id, req.auth.userId));
+    return { display };
   });
 
   // ---------- Single sign-on ----------

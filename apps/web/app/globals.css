@@ -72,7 +72,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -710,4 +710,43 @@ li a,
 .small a:not(.btn) {
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+/* Display settings (lib/display.ts). Sizes elsewhere are in rem, so the whole interface scales with the root. */
+html[data-text="large"] {
+  font-size: 112.5%;
+}
+html[data-text="larger"] {
+  font-size: 125%;
+}
+/* No web fonts (the CSP allows none): a wide, plain system face with more room between letters, words and lines. */
+html[data-font="readable"] {
+  --font: Verdana, Tahoma, "DejaVu Sans", "Noto Sans", sans-serif;
+}
+html[data-font="readable"] body {
+  letter-spacing: 0.02em;
+  word-spacing: 0.08em;
+  line-height: 1.7;
+}
+html[data-motion="reduce"] *,
+html[data-motion="reduce"] *::before,
+html[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+html[data-contrast="more"] {
+  --muted: #3a3852;
+  --border: #8f8ca8;
+  --shadow: none;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-contrast="more"]:not([data-theme="light"]) {
+    --muted: #d6d4ee;
+    --border: #6e6b99;
+  }
+}
+html[data-contrast="more"] a {
+  text-decoration: underline;
 }

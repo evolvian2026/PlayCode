@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { disablePush } from "@/lib/push";
 import { api, getToken, setToken } from "@/lib/api";
 import { applyBranding } from "@/lib/branding";
+import { applyDisplay } from "@/lib/display";
 import type { Me } from "@/lib/types";
 import { LocaleProvider } from "@/lib/i18n";
 
@@ -21,6 +22,7 @@ export async function signOut() {
   await disablePush().catch(() => {});
   const res = await api<{ redirect?: string | null }>("/auth/logout", { body: {} }).catch(() => null);
   setToken(null);
+  applyDisplay(null); // a shared lab computer shouldn't keep the last student's settings
   // SAML single logout: the identity provider ends its session, then sends the browser back to sign-in.
   window.location.href = res?.redirect ?? "/login";
 }
@@ -45,6 +47,7 @@ export function AuthGate({ area, children }: { area: "play" | "console"; childre
     api<Me>("/me")
       .then((m) => {
         applyBranding(m.branding);
+        applyDisplay(m.user.display);
         if (area === "play" && !m.permissions.includes("practice.play")) router.replace("/console");
         else if (area === "console" && m.home !== "console") router.replace("/play");
         else {

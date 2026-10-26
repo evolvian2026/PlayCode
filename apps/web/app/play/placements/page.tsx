@@ -88,7 +88,7 @@ function DriveCard({ drive, onChange }: { drive: Drive; onChange: (p: Placements
     <div className="card stack" style={{ gap: 10 }}>
       <div className="spread" style={{ alignItems: "flex-start" }}>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 18 }}>{drive.company}</div>
+          <div style={{ fontWeight: 700, fontSize: "1.125rem" }}>{drive.company}</div>
           <div className="small">{drive.roleTitle}</div>
           <div className="small muted">
             {formatLpa(drive.ctcRupees)}

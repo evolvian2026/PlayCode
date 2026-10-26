@@ -1,6 +1,7 @@
 "use client";
 
 import { useMe } from "@/components/Auth";
+import { DisplayCard } from "@/components/DisplayCard";
 import { DevicesCard, TwoFactorCard } from "@/components/SecurityPanel";
 
 export default function Account() {
@@ -20,6 +21,7 @@ export default function Account() {
       )}
       <TwoFactorCard onEnabled={() => me.mfaSetupRequired && window.location.assign("/console")} />
       <DevicesCard />
+      <DisplayCard />
     </div>
   );
 }

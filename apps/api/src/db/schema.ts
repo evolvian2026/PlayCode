@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -85,6 +85,8 @@ export const users = pgTable(
     notifyPrefs: jsonb("notify_prefs").$type<{ whatsapp?: boolean; push?: boolean }>().notNull().default({}),
     /** Interface language: "en" or "hi". */
     locale: text("locale").$type<"en" | "hi">().notNull().default("en"),
+    /** Text size, font, motion and contrast (packages/core display.ts). */
+    displayPrefs: jsonb("display_prefs").$type<DisplayPrefs>().notNull().default({}),
     status: text("status").$type<"active" | "disabled" | "erased">().notNull().default("active"),
     /** Two-factor sign-in (TOTP): the active secret, a secret being set up, and the last time step used (no replays). */
     totpSecretEnc: text("totp_secret_enc"),

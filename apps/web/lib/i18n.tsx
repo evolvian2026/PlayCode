@@ -617,6 +617,19 @@ const HI: Record<string, string> = {
   "Readiness scores": "रेडीनेस स्कोर",
   "Mock interview score": "मॉक इंटरव्यू स्कोर",
   "CGPA and class 10/12 marks (resume PDF only)": "CGPA और कक्षा 10/12 के अंक (सिर्फ़ रिज़्यूमे PDF में)",
+  // Display settings
+  Display: "डिस्प्ले",
+  "Make PlayCode easier to read. Saved to your account, so it applies on every device you sign in on.": "PlayCode को पढ़ने में आसान बनाएँ। यह आपके अकाउंट में सेव होता है, इसलिए हर उस डिवाइस पर लागू होता है जिस पर आप साइन इन करते हैं।",
+  "Text size": "टेक्स्ट का आकार",
+  Normal: "सामान्य",
+  Large: "बड़ा",
+  Larger: "और बड़ा",
+  "Easier-to-read font": "पढ़ने में आसान फ़ॉन्ट",
+  "A plainer font with more space between letters and lines": "सादा फ़ॉन्ट, अक्षरों और पंक्तियों के बीच ज़्यादा जगह के साथ",
+  "Reduce motion": "एनिमेशन कम करें",
+  "Turn off animations": "एनिमेशन बंद करें",
+  "Higher contrast": "ज़्यादा कंट्रास्ट",
+  "Darker text and stronger outlines": "गहरा टेक्स्ट और साफ़ किनारे",
 };
 
 const STORAGE_KEY = "playcode.locale";

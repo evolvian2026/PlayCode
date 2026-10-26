@@ -1,4 +1,4 @@
-import type { Answer, Division, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, DisplayPrefs, Division, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 export interface Branding {
   tenantName: string;
@@ -17,7 +17,7 @@ export interface PublicBranding extends Branding {
 }
 
 export interface Me {
-  user: { id: string; name: string; email: string; rollNo: string | null; tenantId: string | null; roles: Role[]; locale?: "en" | "hi" };
+  user: { id: string; name: string; email: string; rollNo: string | null; tenantId: string | null; roles: Role[]; locale?: "en" | "hi"; display?: DisplayPrefs };
   tenant: { id: string; name: string; plan: string; type: "institution" | "partner" | "company"; slug: string } | null;
   branding: Branding | null;
   switched: boolean;
