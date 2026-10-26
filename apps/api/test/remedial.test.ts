@@ -19,7 +19,7 @@ beforeAll(async () => {
   unitA = ((await t.get(tpo, "/console/org-units")).body.units as { id: string; name: string }[]).find((u) => u.name === "CSE 2027 - A")!.id;
   // Three students: one struggling with time and work (rating 900 = mastery 25), one doing fine (1200 = 50), one who never tried it.
   await t.post(tpo, "/console/students/import", { unitId: unitA, csv: "Low Lata,low.lata@demo.edu,R1\nMid Manoj,mid.manoj@demo.edu,R2\nNew Neha,new.neha@demo.edu,R3", defaultPassword: "student-pass-1" });
-  for (const [key, email] of [["low", "low.lata@demo.edu"], ["mid", "mid.manoj@demo.edu"], ["new", "new.neha@demo.edu"]]) {
+  for (const [key, email] of [["low", "low.lata@demo.edu"], ["mid", "mid.manoj@demo.edu"], ["new", "new.neha@demo.edu"]] as const) {
     ids[key] = (await db.select().from(users).where(eq(users.email, email)))[0]!.id;
     tokens[key] = await t.login(email, "student-pass-1");
   }

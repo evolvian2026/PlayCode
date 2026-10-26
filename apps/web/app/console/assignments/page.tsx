@@ -176,7 +176,7 @@ function NewAssignment({ onCreated, onCancel, remedialSkill }: { onCreated: () =
                 resetWeak();
               }}
             >
-              {u.name} <span className="muted small">({u.kind})</span>
+              {u.name} <span className="small">({u.kind})</span>
             </button>
           ))}
         </div>

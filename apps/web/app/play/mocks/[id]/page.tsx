@@ -290,7 +290,7 @@ export default function MockTest() {
 
       <ol className="row wrap small" aria-label={t("Sections")} style={{ listStyle: "none", padding: 0, margin: 0, gap: 6 }}>
         {view.sections.map((s, i) => (
-          <li key={s.title} className={`pill ${s.state === "open" ? "accent" : ""}`} aria-current={s.state === "open" ? "step" : undefined} style={{ opacity: s.state === "upcoming" ? 0.6 : 1 }}>
+          <li key={s.title} className={`pill ${s.state === "open" ? "accent" : ""}`} aria-current={s.state === "open" ? "step" : undefined}>
             {s.state === "closed" ? "✓ " : ""}
             {i + 1}. {t(s.title)}
           </li>

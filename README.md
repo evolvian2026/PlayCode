@@ -109,6 +109,11 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - Practice after contests: when a contest ends its problems stay open. Submissions are judged on every test as before but marked as practice, kept off the scoreboard, ratings and the copied-code check. Each problem shows its model solution and explanation, students see which problems they solved in practice, and staff see how many practised after.
 - Accessibility: the contest scoreboard and the code editor can be focused and scrolled from the keyboard on phones.
 
+**Phase 16 additions**
+- Verbal ability track: grammar and sentence correction, vocabulary in context, and reading comprehension with sentence order, 21 questions for the English section of service-company tests. Each explanation names the rule or the line of the passage that decides the answer (language keys can't be proved by a program, except sentence order, which is). There is a verbal-ability mission, and service readiness now weighs verbal ability.
+- Mock tests (`/play/mocks`, linked from Me): full timed tests on a service-company pattern (aptitude, reasoning, verbal, programming logic and one coding problem; 60 minutes) and a product-company pattern (CS fundamentals, programming concepts and two coding problems; 67 minutes). Sections run in order, each with its own timer, with no going back; the clock keeps running if the student leaves, and the hourly job marks papers that ran out. Questions come from PlayCode's own bank, favouring those the student hasn't seen in earlier mocks; five mocks a day at most. The report shows section scores against targets, a percentile against each student's latest attempt on the pattern (once 20 students have one), the skill to practise next with a one-tap session, and every answer with the correct one and its explanation. Staff see each student's mock scores on the student page.
+- Catch-up assignments (Assignments → "Catch-up for struggling students", or "Catch-up work" next to a weak skill on the overview): choose skills, batches and a mastery level; PlayCode lists the students below it, staff untick any to leave out, and the practice goes to just them. The report shows average mastery when it was set and now, how many improved and how many reached the level. Reminders, reports, insights and completion counts only count the chosen students.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -185,7 +190,7 @@ Scheduled jobs (run them from cron or your scheduler):
 | Job | When | Command |
 | --- | --- | --- |
 | Close league week | Mondays after midnight, tenant time | `pnpm --filter @playcode/api league:close` |
-| Nudges, notification delivery (in-app, push, WhatsApp), missed snapshot reviews, weekly report emails, billing emails, contest results and ratings | Hourly (streak reminders only fire 6-9 pm local time, fading-skill reminders 4-6 pm and at most weekly) | `pnpm --filter @playcode/api nudges:run` |
+| Nudges, notification delivery (in-app, push, WhatsApp), missed snapshot reviews, weekly report emails, billing emails, contest results and ratings, marking mock tests that ran out | Hourly (streak reminders only fire 6-9 pm local time, fading-skill reminders 4-6 pm and at most weekly) | `pnpm --filter @playcode/api nudges:run` |
 | Webhook and LMS grade retries | Every minute | `pnpm --filter @playcode/api webhooks:deliver` |
 | Data retention clean-up | Nightly | `pnpm --filter @playcode/api retention:run` |
 | Peer benchmark snapshots | Nightly | `pnpm --filter @playcode/api benchmarks:run` |
@@ -281,6 +286,9 @@ Other operations:
 - **Weekly insights send aggregates only to the AI**: names, roll numbers and individual records stay in PlayCode, so the briefing can't single out a student; the overview's lists remain the place to find who needs help.
 - **The talent pool is opt-in twice**: the institution opens it and each student joins it. Companies search what PlayCode measured rather than self-reported claims, and contact details follow the student's acceptance of a specific invitation, which is the consent the DPDP Act asks for.
 - **Readiness now counts CS fundamentals**: students who haven't practised DBMS, OS or networks see their readiness drop when this ships, because those topics count as not yet shown. That is accurate for service-company tests, but worth telling institutions about before it lands.
+- **Readiness now counts verbal ability** for service companies: as with CS fundamentals, students who haven't practised it will see their service readiness drop when this ships, so tell institutions first.
+- **Mock tests don't change mastery or XP**: they are a measurement, taken unproctored at home, so they inform the student and staff without feeding the record that readiness, the resume and the talent pool rely on. Percentiles compare each student's latest attempt, not their best, so retaking until lucky doesn't inflate the comparison.
+- **Catch-up assignments leave out students who never tried the skills** unless staff tick the option: a student with no attempts isn't struggling with the skill, they haven't started, and they usually need a different nudge.
 - **The SAML key pair is one per server**, from the environment, rather than one per institution: IdPs only need PlayCode's certificate, and rotating it is a deploy, not a per-college task.
 
 Not built yet: screen-reader testing by people who use them (the automated check covers WCAG rules it can test), PostgreSQL row-level security, languages other than English and Hindi, and native mobile apps (the web app is an installable PWA).
