@@ -92,6 +92,8 @@ export const users = pgTable(
     totpLastStep: integer("totp_last_step"),
     /** SHA-256 hashes of unused recovery codes. */
     recoveryCodes: jsonb("recovery_codes").$type<string[]>().notNull().default([]),
+    /** The identity provider's id for this person, when provisioned by SCIM. */
+    scimExternalId: text("scim_external_id"),
     lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
@@ -1109,6 +1111,20 @@ export const samlConnections = pgTable("saml_connections", {
   autoProvisionUnitId: uuid("auto_provision_unit_id").references(() => orgUnits.id, { onDelete: "set null" }),
   enabled: boolean("enabled").notNull().default(true),
   createdAt: createdAt(),
+});
+
+/** Directory sync: an institution's identity provider (Okta, Entra ID) creating and updating accounts over SCIM 2.0. */
+export const scimConnections = pgTable("scim_connections", {
+  tenantId: uuid("tenant_id")
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  /** SHA-256 of the bearer token; the token is shown once. */
+  tokenHash: text("token_hash").notNull().unique(),
+  /** New accounts join this unit until a group puts them elsewhere. */
+  defaultUnitId: uuid("default_unit_id").references(() => orgUnits.id, { onDelete: "set null" }),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  createdAt: createdAt(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
 });
 
 /** Outstanding AuthnRequest ids, so each response must answer a request we sent (shared by all API instances). */

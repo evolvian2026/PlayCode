@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { planHas, type Plan } from "@playcode/core";
+import { useMe } from "@/components/Auth";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { applyBranding, logoSrc } from "@/lib/branding";
@@ -583,6 +585,109 @@ function LtiSettings() {
   );
 }
 
+interface ScimInfo {
+  baseUrl: string;
+  connection: { defaultUnitId: string | null; createdAt: string; lastUsedAt: string | null } | null;
+}
+
+function ScimSettings() {
+  const me = useMe();
+  const enterprise = Boolean(me?.tenant && planHas(me.tenant.plan as Plan, "scim"));
+  const { data, error, reload } = useApi<ScimInfo>(enterprise ? "/console/scim" : null);
+  const units = useApi<{ units: { id: string; name: string; kind: string }[] }>(enterprise ? "/console/org-units" : null);
+  const [token, setToken] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  if (!enterprise) return null;
+  if (error) return <ErrorBox message={error.message} onRetry={reload} />;
+  if (!data) return null;
+  const c = data.connection;
+
+  async function run(action: () => Promise<unknown>, done: string) {
+    setSaveError(null);
+    setMsg(null);
+    try {
+      await action();
+      setMsg(done);
+      reload();
+    } catch (err) {
+      setSaveError(errorMessage(err));
+    }
+  }
+
+  const newToken = () => {
+    if (c && !window.confirm("Make a new token? The current one stops working straight away, so update it in your identity provider.")) return;
+    void run(async () => setToken((await api<{ token: string }>("/console/scim/token", { body: {} })).token), "Copy the token now: it won't be shown again.");
+  };
+
+  return (
+    <div className="card stack">
+      <div className="spread">
+        <h2 style={{ margin: 0 }}>Directory sync (SCIM)</h2>
+        {c && <span className="pill good">Connected</span>}
+      </div>
+      <p className="muted small" style={{ margin: 0 }}>
+        Let your identity provider (Microsoft Entra ID, Okta, Google) create and switch off student accounts. Groups become batches or sections with the same
+        name. Staff accounts stay here in the console.
+      </p>
+      <div className="stack small" style={{ gap: 4 }}>
+        <div>
+          Tenant URL: <code className="inline-code">{data.baseUrl}</code>
+        </div>
+        {c && <div className="muted">{c.lastUsedAt ? `Last sync ${new Date(c.lastUsedAt).toLocaleString()}` : "Your identity provider hasn't connected yet."}</div>}
+      </div>
+      {token && (
+        <div className="stack" style={{ gap: 4 }}>
+          <label htmlFor="scim-token">Secret token</label>
+          <input id="scim-token" readOnly value={token} onFocus={(e) => e.target.select()} />
+        </div>
+      )}
+      {c && (
+        <div>
+          <label htmlFor="scim-unit">New students join</label>
+          <select
+            id="scim-unit"
+            value={c.defaultUnitId ?? ""}
+            onChange={(e) => run(() => api("/console/scim", { method: "PUT", body: { defaultUnitId: e.target.value || null } }), "Saved.")}
+          >
+            <option value="">Choose a batch or section</option>
+            {(units.data?.units ?? []).map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+          <p className="muted small" style={{ margin: "4px 0 0" }}>
+            Students who leave every group come back here too.
+          </p>
+        </div>
+      )}
+      {saveError && <ErrorBox message={saveError} />}
+      {msg && <span className="pill good">{msg}</span>}
+      <div className="row wrap">
+        <button className="btn" onClick={newToken}>
+          {c ? "Make a new token" : "Connect and make a token"}
+        </button>
+        {c && (
+          <button
+            className="btn ghost"
+            onClick={() =>
+              window.confirm("Disconnect directory sync? Accounts stay as they are; your identity provider can no longer change them.") &&
+              run(async () => {
+                await api("/console/scim", { method: "DELETE" });
+                setToken(null);
+              }, "Disconnected.")
+            }
+          >
+            Disconnect
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function readFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -699,6 +804,7 @@ export default function Settings() {
       <RetentionSettings />
       <SsoSettings />
       <SamlSettings />
+      <ScimSettings />
       <LtiSettings />
     </div>
   );
