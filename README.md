@@ -126,6 +126,11 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - Mock interviews with people (`/play/panel`, console Interview slots): the placement cell publishes runs of back-to-back slots for chosen batches with a faculty member or an alumnus (who needs no account), students book one at a time and can cancel up to two hours before, the hourly job reminds them the day before, and the interviewer's rubric (communication, technical knowledge, problem solving, confidence, an overall score and a recommendation) comes back to the student. Missed interviews can be marked as such.
 - Accessibility: the code editor's colours for names and comments now meet WCAG AA contrast.
 
+**Phase 19 additions**
+- Coding problem bank: 12 new problems, taking it from 6 to 18: FizzBuzz, GCD and LCM, the missing number, anagrams, letter counts, pair sum, rotating an array, the first unique character, balanced brackets, merging sorted lists, the maximum subarray and the longest substring without repeats. The data-structure ones sit in a new skill, "Arrays, strings and hashing". Each has Python, C and Java reference solutions that `pnpm verify:content` runs against every test, hidden ones included.
+- Display settings (on Me, and the console account page): larger text (two steps), an easier-to-read font with more spacing, reduced motion and higher contrast. They're saved to the account, so they follow the student to the lab computer and their phone, and apply before the page first paints. Signing out clears them from the device.
+- Faster tests: API tests run in parallel, each worker on its own database (see Tests).
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
