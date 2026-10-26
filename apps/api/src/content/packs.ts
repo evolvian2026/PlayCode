@@ -75,4 +75,13 @@ export const PACKS: SeedPack[] = [
     passMark: 60,
     profile: "service",
   },
+  {
+    id: "mission-service-verbal",
+    kind: "mission",
+    title: "Verbal ability round",
+    description: "Grammar, vocabulary and reading comprehension, as in the English section of service-company tests.",
+    questionIds: ["vrb-gram-1", "vrb-gram-2", "vrb-gram-4", "vrb-gram-6", "vrb-vocab-1", "vrb-vocab-3", "vrb-vocab-6", "vrb-read-1", "vrb-read-3", "vrb-read-7"],
+    passMark: 60,
+    profile: "service",
+  },
 ];
