@@ -23,7 +23,7 @@ export function parse<T extends z.ZodTypeAny>(schema: T, data: unknown): z.infer
   if (!result.success) {
     throw badRequest(
       "Invalid request",
-      result.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+      result.error.issues.map((i) => ({ path: i.path.map(String).join("."), message: i.message })),
     );
   }
   return result.data;

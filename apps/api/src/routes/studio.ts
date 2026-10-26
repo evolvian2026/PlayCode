@@ -22,7 +22,7 @@ const body = z.object({
   inputHint: z.string().max(200).optional(),
   examples: z.array(z.object({ input: z.string().max(2000), output: z.string().max(2000) })).max(10).optional(),
   languages: z.array(codeLanguage).max(3).optional(),
-  starterCode: z.record(codeLanguage, z.string().max(20_000)).optional(),
+  starterCode: z.partialRecord(codeLanguage, z.string().max(20_000)).optional(),
   schema: z.string().max(20_000).optional(),
 });
 
@@ -48,7 +48,7 @@ const studioInput = z.object({
   explanation: z.string().min(1).max(4000),
   hints: z.array(z.string().max(500)).max(5).default([]),
   tags: z.array(z.string().max(40)).max(10).default([]),
-  solutions: z.record(codeLanguage, z.string().max(20_000)).nullable().optional(),
+  solutions: z.partialRecord(codeLanguage, z.string().max(20_000)).nullable().optional(),
   checkMode: z.enum(["run", "manual"]).default("manual"),
   origin: z.enum(["studio", "ai"]).optional(),
 });

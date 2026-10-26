@@ -36,7 +36,7 @@ export async function driveRoutes(app: FastifyInstance) {
         password: z.string().min(8).max(100),
         phone: z.string().max(20).optional(),
         college: z.string().max(120).optional(),
-        consent: z.literal(true, { errorMap: () => ({ message: "Please accept the terms to apply" }) }),
+        consent: z.literal(true, { error: "Please accept the terms to apply" }),
       }),
       req.body,
     );
