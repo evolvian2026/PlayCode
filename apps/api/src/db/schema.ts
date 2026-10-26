@@ -639,6 +639,30 @@ export const contests = pgTable(
 );
 
 /** Each participant's final place and rating change in a finished contest. */
+/** A self-serve mock test on a company pattern (packages/core mock-test.ts): sections in order, each timed. */
+export const mockAttempts = pgTable(
+  "mock_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    pattern: text("pattern").$type<"service" | "product">().notNull(),
+    questions: jsonb("questions").$type<AttemptQuestion[]>().notNull(),
+    answers: jsonb("answers").$type<Record<string, { response: StudentResponse; savedAt: string }>>().notNull().default({}),
+    status: text("status").$type<"in_progress" | "submitted">().notNull().default("in_progress"),
+    /** The open section, and when it closes. */
+    section: integer("section").notNull().default(0),
+    sectionDeadline: timestamp("section_deadline", { withTimezone: true }).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    results: jsonb("results").$type<AttemptResult[]>(),
+    score: integer("score_x100"),
+    maxScore: integer("max_score_x100"),
+    sectionScores: jsonb("section_scores").$type<{ title: string; score: number; max: number; correct: number; wrong: number; skipped: number }[]>(),
+  },
+  (t) => [index("mock_attempts_user_idx").on(t.userId, t.startedAt), index("mock_attempts_pattern_idx").on(t.pattern, t.status)],
+);
+
 export const contestResults = pgTable(
   "contest_results",
   {

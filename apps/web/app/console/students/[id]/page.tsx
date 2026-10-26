@@ -86,6 +86,33 @@ export default function StudentPage() {
           )}
         </div>
       </div>
+      {data.mockTests.length > 0 && (
+        <div className="card stack">
+          <h2 style={{ margin: 0 }}>Mock tests</h2>
+          <div className="table-wrap" tabIndex={0}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Pattern</th>
+                  <th>Taken</th>
+                  <th>Score</th>
+                  <th>Sections</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.mockTests.map((m) => (
+                  <tr key={m.id}>
+                    <td>{m.pattern}</td>
+                    <td className="muted small">{formatDate(m.submittedAt)}</td>
+                    <td>{m.pct}%</td>
+                    <td className="small">{m.sections.map((s) => `${s.title} ${s.pct}%`).join(" · ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       <div className="card stack">
         <h2 style={{ margin: 0 }}>Skill mastery</h2>
         <div className="table-wrap">

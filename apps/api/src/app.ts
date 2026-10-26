@@ -29,6 +29,7 @@ import { contestRoutes } from "./routes/contests";
 import { planRoutes } from "./routes/plan";
 import { liveQuizRoutes } from "./routes/live-quiz";
 import { scimConsoleRoutes, scimRoutes } from "./routes/scim";
+import { mockRoutes } from "./routes/mocks";
 import { pathRoutes } from "./routes/paths";
 import { placementRoutes } from "./routes/placements";
 import { privacyRoutes } from "./routes/privacy";
@@ -162,6 +163,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(planRoutes);
   await app.register(liveQuizRoutes);
   await app.register(scimRoutes);
+  await app.register(mockRoutes);
   await app.register(scimConsoleRoutes, { prefix: "/console" });
   return app;
 }

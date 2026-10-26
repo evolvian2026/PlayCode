@@ -1,6 +1,7 @@
 import { db, pool } from "../db/client";
 import { sendBillingNotices } from "../services/billing-mail";
 import { finalizeContests } from "../services/contests";
+import { finalizeExpiredMocks } from "../services/mocks";
 import { recordJob } from "../services/jobs";
 import { processOutbox } from "../services/notifications";
 import { runNudges } from "../services/nudges";
@@ -19,6 +20,7 @@ try {
     await recordJob(db, "nudges", now, async () => ({
       queued: await runNudges(db, now),
       contestsFinalized: (await finalizeContests(db, now)).finalized,
+      mocksFinalized: (await finalizeExpiredMocks(db, now)).finalized,
       delivered: await processOutbox(db, now, 5000),
       snapshotsReviewed: await reviewPendingSnapshots(db, now),
       reports: await sendDueReports(db, now),

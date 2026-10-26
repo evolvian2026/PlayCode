@@ -126,6 +126,7 @@ export interface StudentDetail {
   skills: { skillId: string; name: string; topic: string; topicName: string; mastery: number; attempts: number; accuracyPct: number | null; lastPractisedAt: string | null }[];
   badges: { code: string; name: string; description: string; kind: string }[];
   recentSessions: { id: string; kind: string; startedAt: string; finished: boolean; correctCount: number; total: number; xpEarned: number }[];
+  mockTests: { id: string; pattern: string; submittedAt: string; pct: number; sections: { title: string; pct: number }[] }[];
 }
 
 export interface OrgUnit {

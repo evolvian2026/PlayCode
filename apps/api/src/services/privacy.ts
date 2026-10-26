@@ -10,6 +10,7 @@ import {
   certificates,
   coachHints,
   contestSubmissions,
+  mockAttempts,
   contests,
   consents,
   driveCandidates,
@@ -150,6 +151,10 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .from(contestSubmissions)
       .innerJoin(contests, eq(contests.id, contestSubmissions.contestId))
       .where(eq(contestSubmissions.userId, userId)),
+    mockTests: await db
+      .select({ pattern: mockAttempts.pattern, questions: mockAttempts.questions, answers: mockAttempts.answers, status: mockAttempts.status, startedAt: mockAttempts.startedAt, submittedAt: mockAttempts.submittedAt, sections: mockAttempts.sectionScores })
+      .from(mockAttempts)
+      .where(eq(mockAttempts.userId, userId)),
     talentInvitations: await db
       .select({ company: tenants.name, roleTitle: talentInvites.roleTitle, message: talentInvites.message, status: talentInvites.status, sentAt: talentInvites.createdAt, respondedAt: talentInvites.respondedAt })
       .from(talentInvites)
@@ -255,6 +260,7 @@ export async function resolveErasure(
     // Contest code goes; the student drops off past scoreboards.
     await tx.delete(contestSubmissions).where(eq(contestSubmissions.userId, user.id));
     await tx.delete(studyPlans).where(eq(studyPlans.userId, user.id));
+    await tx.delete(mockAttempts).where(eq(mockAttempts.userId, user.id));
     await tx.delete(liveQuizAnswers).where(eq(liveQuizAnswers.userId, user.id));
     await tx.delete(liveQuizPlayers).where(eq(liveQuizPlayers.userId, user.id));
     await tx.delete(playerProfiles).where(eq(playerProfiles.userId, user.id));

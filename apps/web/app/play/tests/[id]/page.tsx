@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StudentResponse } from "@playcode/core";
 import { EvaluationView } from "@/components/CodeAnswer";
-import { draftToResponse, emptyDraft, QuestionInput, type Draft } from "@/components/QuestionInput";
+import { draftToResponse, emptyDraft, QuestionInput, responseToDraft, type Draft } from "@/components/QuestionInput";
 import { Icon } from "@/components/Icon";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
@@ -33,24 +33,6 @@ function deviceId(): string {
     return id;
   } catch {
     return "no-storage-device";
-  }
-}
-
-function responseToDraft(q: QuestionView, r: StudentResponse | null): Draft {
-  if (!r) return emptyDraft(q);
-  switch (r.kind) {
-    case "option":
-      return { kind: "option", optionId: r.optionId };
-    case "text":
-      return { kind: "text", value: r.value };
-    case "lines":
-      return { kind: "lines", lines: r.lines };
-    case "order":
-      return { kind: "order", ids: r.ids };
-    case "code":
-      return { kind: "code", language: r.language, sources: { ...q.body.starterCode, [r.language]: r.source }, starters: q.body.starterCode };
-    case "sql":
-      return { kind: "sql", query: r.query };
   }
 }
 

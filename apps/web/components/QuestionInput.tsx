@@ -51,6 +51,25 @@ export function draftToResponse(d: Draft): StudentResponse | null {
   }
 }
 
+/** A saved answer back into an editable draft (resuming a test). */
+export function responseToDraft(q: QuestionView, r: StudentResponse | null): Draft {
+  if (!r) return emptyDraft(q);
+  switch (r.kind) {
+    case "option":
+      return { kind: "option", optionId: r.optionId };
+    case "text":
+      return { kind: "text", value: r.value };
+    case "lines":
+      return { kind: "lines", lines: r.lines };
+    case "order":
+      return { kind: "order", ids: r.ids };
+    case "code":
+      return { kind: "code", language: r.language, sources: { ...q.body.starterCode, [r.language]: r.source }, starters: q.body.starterCode };
+    case "sql":
+      return { kind: "sql", query: r.query };
+  }
+}
+
 interface Props {
   question: QuestionView;
   draft: Draft;

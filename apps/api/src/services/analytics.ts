@@ -14,6 +14,7 @@ import type { DbOrTx } from "../db/client";
 import { memberships, mistakes, orgUnits, packs, playerProfiles, responses, sessions, skillRatings, skills, users } from "../db/schema";
 import { sessionScore } from "./practice";
 import { streakState } from "./profile";
+import { mockSummary } from "./mocks";
 
 const DAY_MS = 86_400_000;
 
@@ -249,5 +250,6 @@ export async function studentDetail(db: DbOrTx, args: { userId: string; today: s
       total: s.questionIds.length,
       xpEarned: s.xpEarned,
     })),
+    mockTests: await mockSummary(db, args.userId),
   };
 }
