@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
-import { codeSimilarity, CONTEST_START_RATING, contestRatingChanges, contestState, ordinal, scoreboard, toStudentView, type StudentResponse, type Verdict } from "@playcode/core";
+import { codeSimilarity, CONTEST_START_RATING, contestRatingChanges, contestState, ordinal, scoreboard, toStudentView, type Question, type StudentResponse, type Verdict } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { certificates, contestResults, contests, contestSubmissions, playerProfiles, questions, tenants, users } from "../db/schema";
 import { evaluate, tryRun, checkRunRate, type Evaluation } from "../execution";
@@ -47,6 +47,13 @@ export function verdictOf(e: Evaluation): Verdict {
     if (e.tests.some((t) => t.status === "runtime_error" || t.status === "output_limit")) return "runtime_error";
   } else if (!e.result.ok) return "runtime_error";
   return "wrong_answer";
+}
+
+/** The model answer for a finished contest's problem. */
+function modelSolution(q: Question) {
+  const a = q.answer;
+  const code = a.kind === "tests" ? (a.reference ?? null) : a.kind === "sql" ? { language: "sql", source: a.solution } : null;
+  return { explanation: q.explanation, language: code?.language ?? null, source: code?.source ?? null };
 }
 
 async function validate(db: Db, tenantId: string | null, input: ContestInput, now: Date) {
@@ -138,7 +145,10 @@ export async function studentContests(db: Db, ctx: Ctx) {
   const mine = [];
   for (const c of rows) if (await canEnter(db, c, ctx)) mine.push(c);
   const subs = mine.length
-    ? await db.select().from(contestSubmissions).where(and(eq(contestSubmissions.userId, ctx.userId), inArray(contestSubmissions.contestId, mine.map((c) => c.id))))
+    ? await db
+        .select()
+        .from(contestSubmissions)
+        .where(and(eq(contestSubmissions.userId, ctx.userId), inArray(contestSubmissions.contestId, mine.map((c) => c.id)), eq(contestSubmissions.upsolve, false)))
     : [];
   return {
     contests: mine.map((c) => ({
@@ -166,7 +176,7 @@ async function names(db: DbOrTx, c: Contest, userIds: string[]) {
 }
 
 async function board(db: DbOrTx, c: Contest, now: Date, opts: { frozen: boolean; staff?: boolean }) {
-  const subs = await db.select().from(contestSubmissions).where(eq(contestSubmissions.contestId, c.id));
+  const subs = await db.select().from(contestSubmissions).where(and(eq(contestSubmissions.contestId, c.id), eq(contestSubmissions.upsolve, false)));
   const start = c.startsAt.getTime();
   const freezeAtMs = opts.frozen && contestState(c, now) === "frozen" ? (c.endsAt.getTime() - c.freezeMinutes * 60_000) - start : null;
   const rows = scoreboard(
@@ -183,11 +193,12 @@ export async function contestView(db: Db, ctx: Ctx, id: string) {
   const state = contestState(c, ctx.now);
   const qs = state === "upcoming" ? [] : await db.select().from(questions).where(inArray(questions.id, c.problemIds));
   const { rows, subs, frozen } = await board(db, c, ctx.now, { frozen: true });
+  const practice = state === "ended" ? await db.select().from(contestSubmissions).where(and(eq(contestSubmissions.contestId, c.id), eq(contestSubmissions.userId, ctx.userId), eq(contestSubmissions.upsolve, true))) : [];
   const shown = rows.slice(0, BOARD_ROWS);
   const me = rows.find((r) => r.userId === ctx.userId);
   if (me && !shown.includes(me)) shown.push(me);
   const who = await names(db, c, shown.map((r) => r.userId));
-  const mySubs = subs.filter((s) => s.userId === ctx.userId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const mySubs = [...subs.filter((s) => s.userId === ctx.userId), ...practice].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   return {
     id: c.id,
     title: c.title,
@@ -199,17 +210,20 @@ export async function contestView(db: Db, ctx: Ctx, id: string) {
     freezeMinutes: c.freezeMinutes,
     problems: c.problemIds.map((pid, i) => {
       const q = qs.find((x) => x.id === pid);
-      const mine = mySubs.filter((s) => s.questionId === pid);
+      const mine = mySubs.filter((s) => s.questionId === pid && !s.upsolve);
       return {
         letter: LETTERS[i]!,
         id: pid,
         question: q ? toStudentView(toCoreQuestion(q), c.id) : null,
         solved: mine.some((s) => s.verdict === "accepted"),
         tries: mine.length,
+        upsolved: practice.some((s) => s.questionId === pid && s.verdict === "accepted"),
+        // Once it's over, the model solution is shown so students can learn from what they missed.
+        solution: state === "ended" && q ? modelSolution(toCoreQuestion(q)) : null,
       };
     }),
     result: state === "ended" ? await myContestResult(db, c.id, ctx.userId) : null,
-    submissions: mySubs.slice(0, 50).map((s) => ({ id: s.id, letter: LETTERS[c.problemIds.indexOf(s.questionId)]!, verdict: s.verdict, passed: s.passed, total: s.total, at: s.createdAt })),
+    submissions: mySubs.slice(0, 50).map((s) => ({ id: s.id, letter: LETTERS[c.problemIds.indexOf(s.questionId)]!, verdict: s.verdict, passed: s.passed, total: s.total, at: s.createdAt, upsolve: s.upsolve })),
     scoreboard: {
       frozen,
       participants: rows.length,
@@ -222,11 +236,12 @@ export async function submitToContest(db: Db, ctx: Ctx, id: string, input: { que
   const c = await enterable(db, id, ctx);
   const state = contestState(c, ctx.now);
   if (state === "upcoming") throw badRequest("The contest hasn't started");
-  if (state === "ended") throw badRequest("The contest has ended");
+  // After the end, submissions are practice (upsolving): judged the same, kept off the scoreboard.
+  const upsolve = state === "ended";
   if (!c.problemIds.includes(input.questionId)) throw notFound("Problem");
   await rateLimit(`contest:${c.id}:${ctx.userId}`, SUBMITS_PER_MINUTE, 60_000, ctx.now, "Too many submissions; wait a moment");
   const [q] = await db.select().from(questions).where(eq(questions.id, input.questionId));
-  const evaluation = await evaluate(toCoreQuestion(q!), input.response, "assessment");
+  const evaluation = await evaluate(toCoreQuestion(q!), input.response, upsolve ? "practice" : "assessment");
   // The contest may have ended while the code ran; it was submitted in time.
   const verdict = verdictOf(evaluation);
   const [row] = await db
@@ -240,6 +255,7 @@ export async function submitToContest(db: Db, ctx: Ctx, id: string, input: { que
       verdict,
       passed: evaluation.kind === "code" ? evaluation.passed : evaluation.correct ? 1 : 0,
       total: evaluation.kind === "code" ? evaluation.total : 1,
+      upsolve,
       createdAt: ctx.now,
     })
     .returning();
@@ -249,6 +265,7 @@ export async function submitToContest(db: Db, ctx: Ctx, id: string, input: { que
     verdict,
     passed: row!.passed,
     total: row!.total,
+    upsolve,
     compileError: evaluation.kind === "code" && evaluation.compileError ? evaluation.compileError.slice(0, 2000) : null,
   };
 }
@@ -275,7 +292,12 @@ export async function staffContests(db: Db, tenantId: string | null, now: Date) 
     .limit(100);
   const counts = rows.length
     ? await db
-        .select({ contestId: contestSubmissions.contestId, people: sql<number>`count(distinct ${contestSubmissions.userId})::int`, submissions: sql<number>`count(*)::int` })
+        .select({
+          contestId: contestSubmissions.contestId,
+          people: sql<number>`count(distinct ${contestSubmissions.userId}) filter (where not ${contestSubmissions.upsolve})::int`,
+          submissions: sql<number>`count(*) filter (where not ${contestSubmissions.upsolve})::int`,
+          upsolvers: sql<number>`count(distinct ${contestSubmissions.userId}) filter (where ${contestSubmissions.upsolve})::int`,
+        })
         .from(contestSubmissions)
         .where(inArray(contestSubmissions.contestId, rows.map((r) => r.id)))
         .groupBy(contestSubmissions.contestId)
@@ -292,6 +314,7 @@ export async function staffContests(db: Db, tenantId: string | null, now: Date) 
       problems: c.problemIds.length,
       participants: counts.find((x) => x.contestId === c.id)?.people ?? 0,
       submissions: counts.find((x) => x.contestId === c.id)?.submissions ?? 0,
+      upsolvers: counts.find((x) => x.contestId === c.id)?.upsolvers ?? 0,
     })),
   };
 }
@@ -357,7 +380,7 @@ export async function contestSimilarity(db: Db, tenantId: string | null, id: str
     .select({ sub: contestSubmissions, name: users.name, rollNo: users.rollNo })
     .from(contestSubmissions)
     .innerJoin(users, eq(users.id, contestSubmissions.userId))
-    .where(and(eq(contestSubmissions.contestId, c.id), eq(contestSubmissions.verdict, "accepted"), tenantId ? eq(contestSubmissions.tenantId, tenantId) : undefined))
+    .where(and(eq(contestSubmissions.contestId, c.id), eq(contestSubmissions.verdict, "accepted"), eq(contestSubmissions.upsolve, false), tenantId ? eq(contestSubmissions.tenantId, tenantId) : undefined))
     .orderBy(desc(contestSubmissions.createdAt));
   const pairs: { letter: string; a: { name: string; rollNo: string | null }; b: { name: string; rollNo: string | null }; similarityPct: number }[] = [];
   for (const [i, pid] of c.problemIds.entries()) {

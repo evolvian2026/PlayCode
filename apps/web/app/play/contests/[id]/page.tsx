@@ -21,9 +21,17 @@ interface ContestView {
   startsAt: string;
   endsAt: string;
   freezeMinutes: number;
-  problems: { letter: string; id: string; question: Omit<QuestionView, "hintsUsed" | "coachUsed"> | null; solved: boolean; tries: number }[];
+  problems: {
+    letter: string;
+    id: string;
+    question: Omit<QuestionView, "hintsUsed" | "coachUsed"> | null;
+    solved: boolean;
+    tries: number;
+    upsolved: boolean;
+    solution: { explanation: string; language: string | null; source: string | null } | null;
+  }[];
   result: { rank: number; participants: number; ratingBefore: number; ratingAfter: number; certificateCode: string | null } | null;
-  submissions: { id: string; letter: string; verdict: Verdict; passed: number; total: number; at: string }[];
+  submissions: { id: string; letter: string; verdict: Verdict; passed: number; total: number; at: string; upsolve: boolean }[];
   scoreboard: { frozen: boolean; participants: number; rows: BoardRow[] };
 }
 
@@ -106,9 +114,10 @@ export default function ContestPage() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [busy, setBusy] = useState<"run" | "submit" | null>(null);
   const [runResult, setRunResult] = useState<Evaluation | null>(null);
-  const [verdict, setVerdict] = useState<{ verdict: Verdict; passed: number; total: number; compileError: string | null } | null>(null);
+  const [verdict, setVerdict] = useState<{ verdict: Verdict; passed: number; total: number; upsolve: boolean; compileError: string | null } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const live = data?.state === "live" || data?.state === "frozen";
+  const ended = data?.state === "ended";
   const countdown = useCountdown(data ? (data.state === "upcoming" ? data.startsAt : data.endsAt) : new Date().toISOString());
 
   // Refresh the scoreboard every 20 seconds while the contest runs, and at the start and end.
@@ -207,7 +216,7 @@ export default function ContestPage() {
                 }}
               >
                 {p.letter}
-                {p.solved ? " ✓" : p.tries ? ` (${p.tries})` : ""}
+                {p.solved || p.upsolved ? " ✓" : p.tries ? ` (${p.tries})` : ""}
               </button>
             ))}
           </div>
@@ -216,25 +225,44 @@ export default function ContestPage() {
               <h2 style={{ fontSize: "1.1rem", whiteSpace: "pre-line", margin: 0 }}>
                 {problem!.letter}. {question.body.stem}
               </h2>
+              {ended && (
+                <div className="small muted">
+                  {problem!.solved ? t("You solved this during the contest.") : problem!.upsolved ? t("You solved this in practice after the contest.") : t("The contest is over, but you can keep solving: practice submissions are judged on every test and don't change the scoreboard.")}
+                </div>
+              )}
               <QuestionInput question={question} draft={draft} onChange={(d) => setDrafts({ ...drafts, [question.id]: d })} onSubmit={() => send("submit")} answer={null} />
               {actionError && <ErrorBox message={actionError} />}
               {verdict && (
                 <div className={`card tight ${verdict.verdict === "accepted" ? "good" : ""}`} role="status" style={{ borderColor: verdict.verdict === "accepted" ? "var(--good-ink)" : "var(--bad-ink)" }}>
-                  <b>{t(VERDICT_LABELS[verdict.verdict])}</b>{" "}
+                  <b>{t(VERDICT_LABELS[verdict.verdict])}</b>
+                  {verdict.upsolve ? ` (${t("practice")})` : ""}{" "}
                   {verdict.verdict !== "compile_error" && <span className="small">{t("{passed} of {total} tests passed", { passed: verdict.passed, total: verdict.total })}</span>}
                   {verdict.compileError && <pre className="small" style={{ whiteSpace: "pre-wrap", margin: "6px 0 0" }}>{verdict.compileError}</pre>}
                 </div>
               )}
               {runResult && <EvaluationView evaluation={runResult} title={t(runResult.kind === "code" ? "Sample tests" : "Your query's result")} />}
-              {live && (
+              {(live || ended) && (
                 <div className="row wrap">
                   <button className="btn" disabled={busy !== null} onClick={() => send("run")}>
                     {busy === "run" ? t("Running...") : t("Run samples")}
                   </button>
                   <button className="btn primary" disabled={busy !== null} onClick={() => send("submit")}>
-                    {busy === "submit" ? t("Judging...") : t("Submit")}
+                    {busy === "submit" ? t("Judging...") : ended ? t("Submit for practice") : t("Submit")}
                   </button>
                 </div>
+              )}
+              {problem!.solution && (
+                <details className="card">
+                  <summary style={{ fontWeight: 600 }}>{t("Model solution")}</summary>
+                  <p className="small" style={{ whiteSpace: "pre-wrap" }}>
+                    {problem!.solution.explanation}
+                  </p>
+                  {problem!.solution.source && (
+                    <pre className="small" style={{ fontFamily: "var(--mono)", overflowX: "auto", margin: 0 }}>
+                      {problem!.solution.source}
+                    </pre>
+                  )}
+                </details>
               )}
             </section>
           )}
@@ -244,7 +272,7 @@ export default function ContestPage() {
               <ul className="small" style={{ margin: "8px 0 0", paddingLeft: 18 }}>
                 {data.submissions.map((s) => (
                   <li key={s.id}>
-                    {s.letter} · {t(VERDICT_LABELS[s.verdict])} · {s.passed}/{s.total} · {new Date(s.at).toLocaleTimeString(locale === "hi" ? "hi-IN" : "en-IN", { hour: "numeric", minute: "2-digit" })}
+                    {s.letter} · {t(VERDICT_LABELS[s.verdict])} · {s.passed}/{s.total} · {s.upsolve ? `${t("practice")} · ` : ""} {new Date(s.at).toLocaleTimeString(locale === "hi" ? "hi-IN" : "en-IN", { hour: "numeric", minute: "2-digit" })}
                   </li>
                 ))}
               </ul>

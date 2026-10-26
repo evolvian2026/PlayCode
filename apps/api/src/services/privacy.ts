@@ -146,7 +146,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .where(eq(liveQuizAnswers.userId, userId)),
     studyPlan: (await db.select({ target: studyPlans.target, days: studyPlans.days, createdAt: studyPlans.createdAt }).from(studyPlans).where(eq(studyPlans.userId, userId)))[0] ?? null,
     contestSubmissions: await db
-      .select({ contest: contests.title, questionId: contestSubmissions.questionId, response: contestSubmissions.response, verdict: contestSubmissions.verdict, submittedAt: contestSubmissions.createdAt })
+      .select({ contest: contests.title, questionId: contestSubmissions.questionId, response: contestSubmissions.response, verdict: contestSubmissions.verdict, afterTheContest: contestSubmissions.upsolve, submittedAt: contestSubmissions.createdAt })
       .from(contestSubmissions)
       .innerJoin(contests, eq(contests.id, contestSubmissions.contestId))
       .where(eq(contestSubmissions.userId, userId)),

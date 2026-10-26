@@ -667,6 +667,8 @@ export const contestSubmissions = pgTable(
     verdict: text("verdict").$type<Verdict>().notNull(),
     passed: integer("passed").notNull().default(0),
     total: integer("total").notNull().default(0),
+    /** Made after the contest ended, for practice: judged the same, kept off the scoreboard and ratings. */
+    upsolve: boolean("upsolve").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [index("contest_submissions_contest_idx").on(t.contestId, t.createdAt), index("contest_submissions_user_idx").on(t.userId, t.contestId)],

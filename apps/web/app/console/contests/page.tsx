@@ -19,6 +19,7 @@ interface Row {
   problems: number;
   participants: number;
   submissions: number;
+  upsolvers: number;
 }
 
 const local = (d: Date) => {
@@ -180,7 +181,9 @@ export default function ContestsPage() {
                     <td>{c.problems}</td>
                     <td>
                       {c.participants}
-                      <div className="small muted">{c.submissions} submissions</div>
+                      <div className="small muted">
+                        {c.submissions} submissions{c.upsolvers ? ` · ${c.upsolvers} practised after` : ""}
+                      </div>
                     </td>
                     <td>
                       <span className={`pill ${c.state === "live" || c.state === "frozen" ? "good" : ""}`}>{STATE_LABEL[c.state]}</span>

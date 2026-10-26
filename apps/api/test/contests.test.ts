@@ -106,6 +106,7 @@ describe("coding contests", () => {
     expect(mine.solved).toBe(1);
     expect(mine.problems["code-even-odd"].pending).toBe(1);
     expect(view.problems[1].solved).toBe(true); // a student always sees their own verdicts
+    expect(view.problems[0].solution).toBeNull(); // no model answers while it runs
     const staff = (await t.get(tpo, `/console/contests/${id}`)).body;
     expect(staff.scoreboard.find((r: { name: string }) => r.name === "Contest ana.contest Coder").solved).toBe(2);
     expect(staff.problems[1]).toMatchObject({ letter: "B", solvedBy: 2 });
@@ -114,7 +115,6 @@ describe("coding contests", () => {
   it("unfreezes at the end, closes submissions and checks for copied code", async () => {
     expect((await t.get(tpo, `/console/contests/${id}/similarity`)).status).toBe(409);
     t.clock.now = at(181);
-    expect((await submit(ana, "code-sum-two", solution("code-sum-two"))).status).toBe(400);
     const view = (await t.get(ana, `/student/contests/${id}`)).body;
     expect(view).toMatchObject({ state: "ended", scoreboard: { frozen: false } });
     // The frozen solve now counts: ana has 2 solved, with 50 + 100 = 150 penalty minutes, behind ben's 40.
@@ -126,6 +126,30 @@ describe("coding contests", () => {
     expect(sim.length).toBeGreaterThan(0);
     expect(sim[0]).toMatchObject({ letter: "A", similarityPct: 100 });
     expect((await t.get(tpo, "/console/contests")).body.contests[0]).toMatchObject({ id, state: "ended", participants: 3 });
+  });
+
+  it("stays open for practice afterwards, off the scoreboard, with model solutions", async () => {
+    const boardBefore = (await t.get(ana, `/student/contests/${id}`)).body.scoreboard;
+    const pairsBefore = (await t.get(tpo, `/console/contests/${id}/similarity`)).body.pairs.length;
+    // cai missed B during the contest; dan didn't take part at all.
+    expect((await submit(cai, "code-even-odd", "print('Even')")).body).toMatchObject({ verdict: "wrong_answer", upsolve: true });
+    expect((await submit(cai, "code-even-odd", solution("code-even-odd"))).body).toMatchObject({ verdict: "accepted", upsolve: true });
+    const dan = await student("dan.contest@demo.edu");
+    expect((await submit(dan, "code-sum-two", solution("code-sum-two"))).body).toMatchObject({ verdict: "accepted", upsolve: true });
+
+    const view = (await t.get(cai, `/student/contests/${id}`)).body;
+    expect(view.scoreboard).toEqual({ ...boardBefore, rows: boardBefore.rows.map((r: { me: boolean }) => ({ ...r, me: expect.any(Boolean) })) });
+    expect(view.problems[1]).toMatchObject({ solved: false, tries: 0, upsolved: true });
+    expect(view.problems[1].solution).toMatchObject({ language: "python", source: expect.stringContaining("print") });
+    expect(view.problems[1].solution.explanation.length).toBeGreaterThan(0);
+    expect(view.submissions.slice(0, 2).map((s: { letter: string; upsolve: boolean }) => [s.letter, s.upsolve])).toEqual([["B", true], ["B", true]]);
+    expect((await t.get(cai, "/student/contests")).body.contests.find((c: { id: string }) => c.id === id).solved).toBe(1);
+    expect((await t.get(dan, `/student/contests/${id}`)).body.scoreboard.rows.some((r: { me: boolean }) => r.me)).toBe(false);
+    // Copying after the end isn't an integrity question.
+    expect((await t.get(tpo, `/console/contests/${id}/similarity`)).body.pairs).toHaveLength(pairsBefore);
+    expect((await t.get(tpo, "/console/contests")).body.contests[0]).toMatchObject({ id, participants: 3, upsolvers: 2 });
+    // Students outside the contest's batches still can't.
+    expect((await submit(await t.login("eve.contest@demo.edu", "student-pass-1"), "code-sum-two", "print(1)")).status).toBe(404);
   });
 
   it("publishes results once: places, ratings, certificates for the top three", async () => {
