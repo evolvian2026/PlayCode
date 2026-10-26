@@ -21,6 +21,7 @@ const fakeAi: AiProvider = {
   draftSqlProblems: notUsed,
   reviewSnapshot: notUsed,
   weeklyInsights: notUsed,
+  reviewCode: notUsed,
   async interviewTurn(input) {
     calls.push(input);
     const answers = input.turns.filter((x) => x.role === "candidate").length;

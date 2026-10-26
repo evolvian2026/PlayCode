@@ -10,6 +10,7 @@ import { rateLimit } from "../lib/rate-limit";
 import { studentDetail } from "../services/analytics";
 import { userCertificates } from "../services/certificates";
 import { coachAvailable, coachHint } from "../services/coach";
+import { reviewMyCode } from "../services/code-review";
 import { answerDuel, cancelDuel, createDuel, duelLobby, getDuel, respondToInvite } from "../services/duels";
 import { attemptView, logIntegrity, runInAttempt, saveAnswer, saveSnapshot, startAttempt, studentAssessments, submitOwn } from "../services/assessments";
 import { leagueStandings } from "../services/leagues";
@@ -214,6 +215,10 @@ export async function studentRoutes(app: FastifyInstance) {
   });
 
   app.get("/coach", async (req) => ({ available: await coachAvailable(db, tenantOf(req)) }));
+  app.post("/sessions/:id/questions/:questionId/review", async (req) => {
+    const { id, questionId } = parse(z.object({ id: z.string().uuid(), questionId: z.string().max(100) }), req.params);
+    return reviewMyCode(db, ctxOf(req), id, questionId);
+  });
 
   app.post("/sessions/:id/coach", async (req) => {
     const { id } = parse(z.object({ id: z.string().uuid() }), req.params);

@@ -644,6 +644,16 @@ export const contests = pgTable(
 );
 
 /** Each participant's final place and rating change in a finished contest. */
+/** An AI review of an accepted coding answer: one per response, kept so it is never paid for twice. */
+export const codeReviews = pgTable("code_reviews", {
+  responseId: uuid("response_id").primaryKey().references(() => responses.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  questionId: text("question_id").notNull().references(() => questions.id, { onDelete: "cascade" }),
+  review: jsonb("review").$type<{ summary: string; timeComplexity: string; spaceComplexity: string; betterApproach: string | null; edgeCases: string[]; readability: string[]; improvedCode: string }>().notNull(),
+  createdAt: createdAt(),
+}, (t) => [index("code_reviews_user_idx").on(t.userId, t.createdAt)]);
+
 /** A student's question to their teachers about a question they answered. */
 export const doubts = pgTable(
   "doubts",
@@ -965,7 +975,7 @@ export const erasureRequests = pgTable(
 
 // ---------- AI ----------
 
-export type AiFeature = "coach_hint" | "question_draft" | "snapshot_review" | "mock_interview" | "weekly_insights";
+export type AiFeature = "coach_hint" | "question_draft" | "snapshot_review" | "mock_interview" | "weekly_insights" | "code_review";
 
 /** Token use per call, for cost reporting per institution. */
 export const aiUsage = pgTable(

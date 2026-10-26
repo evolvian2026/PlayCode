@@ -7,6 +7,7 @@ import { LANGUAGE_LABELS } from "@playcode/core";
 import { EvaluationView } from "@/components/CodeAnswer";
 import { draftToResponse, emptyDraft, QuestionInput, type Draft } from "@/components/QuestionInput";
 import { Icon } from "@/components/Icon";
+import { CodeReview } from "@/components/CodeReview";
 import { AskDoubt } from "@/components/Doubts";
 import { ReportQuestion } from "@/components/ReportQuestion";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
@@ -287,6 +288,9 @@ export default function SessionPlayer() {
                 </span>
               ))}
             </div>
+          )}
+          {question && result.correct && question.type === "write_code" && coach.data?.available && session && (
+            <CodeReview key={`review-${question.id}`} sessionId={session.id} questionId={question.id} />
           )}
           {question && <AskDoubt key={`doubt-${question.id}`} questionId={question.id} />}
           {question && <ReportQuestion key={question.id} questionId={question.id} />}

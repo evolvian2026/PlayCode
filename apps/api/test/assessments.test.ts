@@ -195,6 +195,7 @@ describe("proctored assessments", () => {
       draftQuestions: async () => { throw new Error("not used"); },
       draftCodingProblems: async () => { throw new Error("not used"); },
       draftSqlProblems: async () => { throw new Error("not used"); },
+      reviewCode: async () => { throw new Error("not used"); },
       interviewTurn: async () => { throw new Error("not used"); },
       interviewScorecard: async () => { throw new Error("not used"); },
       weeklyInsights: async () => { throw new Error("not used"); },

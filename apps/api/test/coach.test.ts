@@ -27,6 +27,9 @@ const fake: AiProvider = {
   async draftSqlProblems() {
     throw new Error("not used");
   },
+  async reviewCode() {
+    throw new Error("not used");
+  },
   async interviewTurn() {
     throw new Error("not used");
   },

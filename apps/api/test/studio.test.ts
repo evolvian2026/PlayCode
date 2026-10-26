@@ -42,6 +42,9 @@ const fake: AiProvider = {
       usage: { inputTokens: 3000, outputTokens: 2500, cacheReadTokens: 0 },
     };
   },
+  async reviewCode() {
+    throw new Error("not used");
+  },
   async interviewTurn() {
     throw new Error("not used");
   },

@@ -17,6 +17,7 @@ const fakeAi: AiProvider = {
   draftCodingProblems: notUsed,
   draftSqlProblems: notUsed,
   reviewSnapshot: notUsed,
+  reviewCode: notUsed,
   interviewTurn: notUsed,
   interviewScorecard: notUsed,
   async weeklyInsights(facts) {
