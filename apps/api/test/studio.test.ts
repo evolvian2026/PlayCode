@@ -8,6 +8,9 @@ let hod: string;
 const draftCalls: DraftInput[] = [];
 
 const fake: AiProvider = {
+  gdTurn: async () => { throw new Error("not used"); },
+  gdScorecard: async () => { throw new Error("not used"); },
+  writingFeedback: async () => { throw new Error("not used"); },
   async coachHint() {
     throw new Error("not used");
   },

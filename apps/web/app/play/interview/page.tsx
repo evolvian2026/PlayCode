@@ -395,6 +395,13 @@ function InterviewHome() {
         </div>
         <span aria-hidden="true">→</span>
       </Link>
+      <Link href="/play/gd" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{t("Group discussion")}</b>
+          <div className="small muted">{t("Practise the GD round with AI participants and get a scorecard")}</div>
+        </div>
+        <span aria-hidden="true">→</span>
+      </Link>
       {d.interviews.length > 0 && (
         <div className="card stack">
           <h2 style={{ margin: 0 }}>{t("Past interviews")}</h2>

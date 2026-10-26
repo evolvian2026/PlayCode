@@ -170,6 +170,22 @@ export default function MePage() {
         <Icon name="arrow" />
       </Link>
 
+      <Link href="/play/writing" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Written English")}</b>
+          <div className="small muted">{tr("Practise the email and essay tasks from placement tests, with feedback")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/gd" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Group discussion")}</b>
+          <div className="small muted">{tr("Practise the GD round with AI participants and get a scorecard")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
       <Link href="/play/doubts" className="card spread" style={{ color: "inherit" }}>
         <div>
           <b>{tr("My doubts")}</b>

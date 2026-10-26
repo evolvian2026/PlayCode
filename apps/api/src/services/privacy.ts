@@ -24,6 +24,7 @@ import {
   duels,
   erasureRequests,
   integrityEvents,
+  groupDiscussions,
   interviews,
   leagueMembers,
   liveQuizAnswers,
@@ -48,6 +49,7 @@ import {
   talentInvites,
   tenants,
   users,
+  writingAttempts,
   type ConsentPurpose,
 } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -172,6 +174,8 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .innerJoin(tenants, eq(tenants.id, talentInvites.companyId))
       .where(eq(talentInvites.userId, userId)),
     mockInterviews: await db.select({ track: interviews.track, status: interviews.status, turns: interviews.turns, scorecard: interviews.scorecard, startedAt: interviews.startedAt }).from(interviews).where(eq(interviews.userId, userId)),
+    groupDiscussions: await db.select({ topic: groupDiscussions.topicId, status: groupDiscussions.status, turns: groupDiscussions.turns, scorecard: groupDiscussions.scorecard, startedAt: groupDiscussions.startedAt }).from(groupDiscussions).where(eq(groupDiscussions.userId, userId)),
+    writing: await db.select({ task: writingAttempts.taskId, text: writingAttempts.text, words: writingAttempts.words, timeMs: writingAttempts.timeMs, feedback: writingAttempts.feedback, at: writingAttempts.createdAt }).from(writingAttempts).where(eq(writingAttempts.userId, userId)),
     notifications: await db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(notifications.createdAt),
     consents: (await consentState(db, userId)).history,
     erasureRequests: await db.select().from(erasureRequests).where(eq(erasureRequests.userId, userId)),
@@ -265,6 +269,8 @@ export async function resolveErasure(
     await tx.delete(placementApplications).where(eq(placementApplications.userId, user.id));
     await tx.delete(academicRecords).where(eq(academicRecords.userId, user.id));
     await tx.delete(interviews).where(eq(interviews.userId, user.id));
+    await tx.delete(groupDiscussions).where(eq(groupDiscussions.userId, user.id));
+    await tx.delete(writingAttempts).where(eq(writingAttempts.userId, user.id));
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, user.id));
     await tx.delete(studentProfiles).where(eq(studentProfiles.userId, user.id));
     await tx.delete(talentInvites).where(eq(talentInvites.userId, user.id));

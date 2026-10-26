@@ -21,6 +21,9 @@ import { billingRoutes } from "./routes/billing";
 import { consoleRoutes } from "./routes/console";
 import { developerRoutes } from "./routes/developers";
 import { driveRoutes } from "./routes/drives";
+import { gdRoutes } from "./routes/gd";
+import { paperRoutes } from "./routes/papers";
+import { writingRoutes } from "./routes/writing";
 import { interviewRoutes } from "./routes/interviews";
 import { ltiRoutes } from "./routes/lti";
 import { resumeRoutes } from "./routes/resume";
@@ -146,6 +149,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(studentRoutes, { prefix: "/student" });
   await app.register(consoleRoutes, { prefix: "/console" });
   await app.register(assessmentConsoleRoutes, { prefix: "/console" });
+  await app.register(paperRoutes, { prefix: "/console" });
   await app.register(adminRoutes, { prefix: "/admin" });
   await app.register(engageRoutes);
   await app.register(developerRoutes, { prefix: "/console" });
@@ -161,6 +165,8 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(accountRoutes);
   await app.register(placementRoutes);
   await app.register(interviewRoutes);
+  await app.register(gdRoutes);
+  await app.register(writingRoutes);
   await app.register(resumeRoutes);
   await app.register(talentRoutes);
   await app.register(contestRoutes);

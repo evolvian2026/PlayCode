@@ -15,6 +15,9 @@ const notUsed = async () => {
   throw new Error("not used");
 };
 const fakeAi: AiProvider = {
+  gdTurn: notUsed,
+  gdScorecard: notUsed,
+  writingFeedback: notUsed,
   coachHint: notUsed,
   draftQuestions: notUsed,
   draftCodingProblems: notUsed,

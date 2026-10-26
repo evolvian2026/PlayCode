@@ -19,6 +19,8 @@ import { getConnection, PRESET_ISSUERS, redirectUri, saveConnection } from "../s
 import { importStudents } from "../services/students";
 import { DEFAULT_SNAPSHOT_DAYS, RETENTION } from "../services/retention";
 import { renderResumePdf, resumeData } from "../services/resume";
+import { gdForStaff, gdsFor } from "../services/gd";
+import { writingFor, writingForStaff } from "../services/writing";
 import { interviewForStaff, interviewsFor } from "../services/interviews";
 import { assertUnitsInScope, descendants, scopedUnitIds, studentIdsInUnits, tenantUnits } from "../services/scope";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
@@ -143,6 +145,32 @@ export async function consoleRoutes(app: FastifyInstance) {
     const interview = await interviewForStaff(db, tenantOf(req), id);
     if (!(await resolveScope(req)).studentIds.includes(interview.userId)) throw notFound("Interview");
     return interview;
+  });
+
+  // ---------- Group discussions ----------
+  app.get("/gd", { preHandler: anyAnalytics }, async (req) => {
+    const { unitId } = parse(unitQuery, req.query);
+    return gdsFor(db, (await resolveScope(req, unitId)).studentIds);
+  });
+
+  app.get("/gd/:id", { preHandler: anyAnalytics }, async (req) => {
+    const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+    const gd = await gdForStaff(db, tenantOf(req), id);
+    if (!(await resolveScope(req)).studentIds.includes(gd.userId)) throw notFound("Group discussion");
+    return gd;
+  });
+
+  // ---------- Written English ----------
+  app.get("/writing", { preHandler: anyAnalytics }, async (req) => {
+    const { unitId } = parse(unitQuery, req.query);
+    return writingFor(db, (await resolveScope(req, unitId)).studentIds);
+  });
+
+  app.get("/writing/:id", { preHandler: anyAnalytics }, async (req) => {
+    const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+    const attempt = await writingForStaff(db, tenantOf(req), id);
+    if (!(await resolveScope(req)).studentIds.includes(attempt.userId)) throw notFound("Answer");
+    return attempt;
   });
 
   // A student's resume, for the placement cell sending CVs to companies.

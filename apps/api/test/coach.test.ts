@@ -11,6 +11,9 @@ let nextHints: string[] = [];
 const usage = { inputTokens: 900, outputTokens: 60, cacheReadTokens: 400 };
 
 const fake: AiProvider = {
+  gdTurn: async () => { throw new Error("not used"); },
+  gdScorecard: async () => { throw new Error("not used"); },
+  writingFeedback: async () => { throw new Error("not used"); },
   async coachHint(input) {
     calls.push(input);
     return { value: nextHints.shift() ?? `Look closely at the code (hint ${calls.length}).`, usage };

@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -1013,7 +1013,7 @@ export const erasureRequests = pgTable(
 
 // ---------- AI ----------
 
-export type AiFeature = "coach_hint" | "question_draft" | "snapshot_review" | "mock_interview" | "weekly_insights" | "code_review";
+export type AiFeature = "coach_hint" | "question_draft" | "snapshot_review" | "mock_interview" | "weekly_insights" | "code_review" | "group_discussion" | "writing_feedback";
 
 /** Token use per call, for cost reporting per institution. */
 export const aiUsage = pgTable(
@@ -1651,4 +1651,107 @@ export const jobRuns = pgTable(
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (t) => [index("job_runs_job_idx").on(t.job, t.startedAt)],
+);
+
+// ---------- Group discussions ----------
+
+export interface GdTurn {
+  speaker: GdSpeaker;
+  text: string;
+  at: string;
+  /** The student's closing summary, given when the moderator asks for one. */
+  summary?: boolean;
+}
+
+export interface GdScorecard {
+  /** 1-5 for content, communication, listening, leadership and summary (core GD_DIMENSIONS). */
+  scores: Record<string, number>;
+  overall: number;
+  strengths: string[];
+  improvements: string[];
+  summary: string;
+  /** Arguments the student could have made. */
+  missedPoints: string[];
+  participation: GdParticipation;
+}
+
+/** A practice group discussion: the student with three AI participants and a moderator. */
+export const groupDiscussions = pgTable(
+  "group_discussions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    topicId: text("topic_id").notNull(),
+    status: text("status").$type<"active" | "finished" | "abandoned">().notNull().default("active"),
+    /** "summary" once the moderator has asked for a closing summary. */
+    phase: text("phase").$type<"discussion" | "summary">().notNull().default("discussion"),
+    turns: jsonb("turns").$type<GdTurn[]>().notNull(),
+    /** Rounds of discussion so far (each the student speaking or listening, then the others replying). */
+    rounds: integer("rounds").notNull().default(0),
+    scorecard: jsonb("scorecard").$type<GdScorecard>(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [index("group_discussions_user_idx").on(t.userId, t.startedAt), index("group_discussions_tenant_idx").on(t.tenantId, t.startedAt)],
+);
+
+// ---------- Written English ----------
+
+export interface WritingCorrection {
+  original: string;
+  better: string;
+  why: string;
+}
+
+export interface WritingFeedback {
+  /** 1-5 for task, organisation, language and tone (core WRITING_DIMENSIONS). */
+  scores: Record<string, number>;
+  overall: number;
+  /** The required points the answer covered, by index into the task's points. */
+  pointsCovered: number[];
+  strengths: string[];
+  improvements: string[];
+  corrections: WritingCorrection[];
+  /** The student's text with the corrections made and nothing else changed. */
+  improved: string;
+}
+
+/** An email or essay a student wrote against the clock, and the feedback on it. */
+export const writingAttempts = pgTable(
+  "writing_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    taskId: text("task_id").notNull(),
+    text: text("text").notNull(),
+    words: integer("words").notNull(),
+    /** Time taken, from opening the task to sending it. */
+    timeMs: integer("time_ms").notNull(),
+    feedback: jsonb("feedback").$type<WritingFeedback>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("writing_attempts_user_idx").on(t.userId, t.createdAt), index("writing_attempts_tenant_idx").on(t.tenantId, t.createdAt)],
+);
+
+// ---------- Question papers ----------
+
+/** A paper for a class test on paper, built from the question bank, with an answer key. */
+export const questionPapers = pgTable(
+  "question_papers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").notNull(),
+    title: text("title").notNull(),
+    instructions: text("instructions"),
+    durationMinutes: integer("duration_minutes").notNull(),
+    marksPerQuestion: integer("marks_per_question").notNull().default(1),
+    questionIds: jsonb("question_ids").$type<string[]>().notNull(),
+    /** 1, or 2 for sets A and B with the questions and options in a different order. */
+    sets: integer("sets").notNull().default(1),
+    createdAt: createdAt(),
+  },
+  (t) => [index("question_papers_tenant_idx").on(t.tenantId, t.createdAt)],
 );

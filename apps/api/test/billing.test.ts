@@ -17,6 +17,9 @@ let superAdmin: string;
 let admin: string;
 
 const fakeAi: AiProvider = {
+  gdTurn: async () => { throw new Error("not used"); },
+  gdScorecard: async () => { throw new Error("not used"); },
+  writingFeedback: async () => { throw new Error("not used"); },
   coachHint: async () => ({ value: "Look at the loop bound.", usage: { inputTokens: 10, outputTokens: 5, cacheReadTokens: 0 } }),
   draftQuestions: async () => ({ value: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 } }),
   reviewSnapshot: async () => ({ value: { faces: 1, phone: false, otherPerson: false, note: "" }, usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 } }),

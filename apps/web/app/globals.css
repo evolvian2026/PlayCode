@@ -214,6 +214,11 @@ textarea {
   font-family: var(--mono);
   font-size: 0.9rem;
 }
+/* Text boxes for writing in English rather than code. */
+textarea.prose {
+  font-family: var(--font);
+  font-size: 1rem;
+}
 input:focus,
 select:focus,
 textarea:focus,
@@ -749,4 +754,17 @@ html[data-contrast="more"] {
 }
 html[data-contrast="more"] a {
   text-decoration: underline;
+}
+
+/* Text for screen readers only. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
