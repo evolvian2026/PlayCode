@@ -12,6 +12,7 @@ import { listPaths } from "./paths";
 import { descendants, scopedUnitIds, studentIdsInUnits, tenantUnits, type AuthContext } from "./scope";
 import { getTenant, streakRules, tenantToday } from "./tenant";
 import { hasFeature } from "./plan";
+import { forStudents } from "./assignments";
 
 // The weekly report a TPO, HOD or L&D manager gets as a PDF: activity,
 // placement readiness, weakest skills, learning paths and who needs help.
@@ -48,7 +49,7 @@ export async function reportData(db: Db, args: { auth: AuthContext; unitId?: str
     : [];
   const assignmentRows = [];
   for (const a of recent) {
-    const targeted = await studentIdsInUnits(db, tenant.id, descendants(units, a.orgUnitIds).filter((u) => unitSet.has(u)));
+    const targeted = forStudents(a, await studentIdsInUnits(db, tenant.id, descendants(units, a.orgUnitIds).filter((u) => unitSet.has(u))));
     const done = new Set(finished.filter((s) => s.assignmentId === a.id && s.finishedAt).map((s) => s.userId));
     assignmentRows.push({ title: a.title, closeAt: a.closeAt, targeted: targeted.length, completed: targeted.filter((id) => done.has(id)).length });
   }

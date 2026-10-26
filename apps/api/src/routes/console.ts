@@ -12,7 +12,7 @@ import { authenticate, parse, requireAny, requirePermission, tenantOf } from "..
 import { institutionBenchmark } from "../services/benchmarks";
 import { cachedInsights, generateInsights, scopeLabel } from "../services/insights";
 import { engagement, readinessReport, skillsReport, studentDetail, studentList } from "../services/analytics";
-import { createAssignment } from "../services/assignments";
+import { createAssignment, createRemedialAssignment, forStudents, remedialProgress, weakStudents } from "../services/assignments";
 import { effectiveBranding, updateBranding } from "../services/branding";
 import { DEFAULT_PASS_MARK, sessionScore, visibleTo } from "../services/practice";
 import { getConnection, PRESET_ISSUERS, redirectUri, saveConnection } from "../services/sso";
@@ -300,7 +300,7 @@ export async function consoleRoutes(app: FastifyInstance) {
     const all = rows.length ? await db.select().from(sessions).where(inArray(sessions.assignmentId, rows.map((r) => r.id))) : [];
     const out = [];
     for (const a of rows) {
-      const targeted = await studentIdsInUnits(db, tenantId, descendants(units, a.orgUnitIds));
+      const targeted = forStudents(a, await studentIdsInUnits(db, tenantId, descendants(units, a.orgUnitIds)));
       const mine = all.filter((s) => s.assignmentId === a.id);
       const finished = mine.filter((s) => s.finishedAt);
       out.push({
@@ -312,6 +312,7 @@ export async function consoleRoutes(app: FastifyInstance) {
         openAt: a.openAt,
         closeAt: a.closeAt,
         targeted: targeted.length,
+        remedial: Boolean(a.remedial),
         started: mine.length,
         completed: finished.length,
         avgScore: finished.length ? Math.round(finished.reduce((sum, s) => sum + sessionScore(s), 0) / finished.length) : null,
@@ -327,8 +328,9 @@ export async function consoleRoutes(app: FastifyInstance) {
     if (!a) throw notFound("Assignment");
     await assertUnitsInScope(db, req.auth, a.orgUnitIds);
     const units = await tenantUnits(db, tenantId);
-    const targeted = await studentIdsInUnits(db, tenantId, descendants(units, a.orgUnitIds));
+    const targeted = forStudents(a, await studentIdsInUnits(db, tenantId, descendants(units, a.orgUnitIds)));
     const people = targeted.length ? await db.select().from(users).where(inArray(users.id, targeted)) : [];
+    const remedial = await remedialProgress(db, a);
     const attempts = await db.select().from(sessions).where(eq(sessions.assignmentId, a.id));
     const byUser = new Map(attempts.map((s) => [s.userId, s]));
     // Item analysis: which questions the group got wrong most.
@@ -342,15 +344,18 @@ export async function consoleRoutes(app: FastifyInstance) {
     const itemById = new Map(items.rows.map((i) => [i.question_id, i]));
     return {
       assignment: { id: a.id, title: a.title, openAt: a.openAt, closeAt: a.closeAt, questionCount: a.questionIds.length },
+      remedial: remedial && { skills: remedial.skills, below: remedial.below, avgBefore: remedial.avgBefore, avgNow: remedial.avgNow, improved: remedial.improved, reachedTarget: remedial.reachedTarget },
       students: people
         .map((p) => {
           const s = byUser.get(p.id);
+          const m = remedial?.students.find((x) => x.id === p.id);
           return {
             id: p.id,
             name: p.name,
             rollNo: p.rollNo,
             status: !s ? "not_started" : s.finishedAt ? "completed" : "in_progress",
             score: s?.finishedAt ? sessionScore(s) : null,
+            ...(m ? { masteryBefore: m.before, masteryNow: m.now } : {}),
           };
         })
         .sort((x, y) => x.name.localeCompare(y.name)),
@@ -388,6 +393,38 @@ export async function consoleRoutes(app: FastifyInstance) {
     await assertUnitsInScope(db, req.auth, body.unitIds);
     const created = await createAssignment(db, { ...body, tenantId, actorId: req.auth.userId });
     return { assignment: { ...created, passMark: DEFAULT_PASS_MARK } };
+  });
+
+  // Remedial practice: find the students who are weak in some skills, then set work for just them.
+  const remedialQuery = z.object({
+    skillIds: z.array(z.string().max(60)).min(1).max(5),
+    unitIds: z.array(z.string().uuid()).min(1),
+    below: z.number().int().min(10).max(90).default(40),
+    includeUnpractised: z.boolean().default(false),
+  });
+  app.post("/assignments/remedial/preview", { preHandler: requirePermission("assignments.manage") }, async (req) => {
+    const tenantId = tenantOf(req);
+    const body = parse(remedialQuery, req.body);
+    await assertUnitsInScope(db, req.auth, body.unitIds);
+    return { students: await weakStudents(db, { tenantId, ...body }) };
+  });
+  app.post("/assignments/remedial", { preHandler: requirePermission("assignments.manage") }, async (req) => {
+    const tenantId = tenantOf(req);
+    const body = parse(
+      remedialQuery
+        .extend({
+          title: z.string().min(1).max(120),
+          count: z.number().int().min(1).max(50).default(10),
+          openAt: z.coerce.date(),
+          closeAt: z.coerce.date(),
+          studentIds: z.array(z.string().uuid()).max(2000).optional(),
+        })
+        .refine((b) => b.closeAt > b.openAt, { message: "Close time must be after open time" }),
+      req.body,
+    );
+    await assertUnitsInScope(db, req.auth, body.unitIds);
+    const created = await createRemedialAssignment(db, { ...body, tenantId, actorId: req.auth.userId });
+    return { assignment: { id: created.id, title: created.title, students: created.studentIds?.length ?? 0 } };
   });
 
   // ---------- Analytics ----------

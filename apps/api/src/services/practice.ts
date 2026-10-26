@@ -48,6 +48,7 @@ import { getOrCreateProfile, profileSummary, streakColumns, streakState } from "
 import { studentUnitIdsWithAncestors } from "./scope";
 import { pickReviewQuestions } from "./review";
 import { getTenant, streakRules, tenantToday } from "./tenant";
+import { isAssignedTo } from "./assignments";
 
 export const SKILL_SESSION_LENGTH = 8;
 export const DAILY_LENGTH = 5;
@@ -172,7 +173,7 @@ export async function startSession(db: Db, ctx: StudentCtx, input: StartInput) {
         .where(and(eq(assignments.id, input.assignmentId), eq(assignments.tenantId, ctx.tenantId)));
       if (!assignment) throw notFound("Assignment");
       const myUnits = new Set(await studentUnitIdsWithAncestors(db, ctx.tenantId, ctx.userId));
-      if (!assignment.orgUnitIds.some((id) => myUnits.has(id))) throw forbidden("This assignment is not for your batch");
+      if (!isAssignedTo(assignment, myUnits, ctx.userId)) throw forbidden("This assignment is not for you");
       if (ctx.now < assignment.openAt) throw badRequest("This assignment has not opened yet");
       if (ctx.now > assignment.closeAt) throw badRequest("This assignment has closed");
       const [existing] = await db

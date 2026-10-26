@@ -15,6 +15,7 @@ interface AssignmentRow {
   openAt: string;
   closeAt: string;
   targeted: number;
+  remedial: boolean;
   started: number;
   completed: number;
   avgScore: number | null;
@@ -25,13 +26,25 @@ function toLocalInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function NewAssignment({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
+interface WeakStudent {
+  id: string;
+  name: string;
+  rollNo: string | null;
+  mastery: number;
+  attempts: number;
+}
+
+function NewAssignment({ onCreated, onCancel, remedialSkill }: { onCreated: () => void; onCancel: () => void; remedialSkill: string | null }) {
   const units = useUnits();
   const skills = useApi<{ skills: { id: string; name: string; topicName: string }[] }>("/console/skills");
   const packs = useApi<{ packs: { id: string; title: string; questionIds: string[]; kind: string }[] }>("/console/packs");
-  const [source, setSource] = useState<"skills" | "pack">("skills");
+  const [source, setSource] = useState<"skills" | "pack" | "remedial">(remedialSkill ? "remedial" : "skills");
   const [title, setTitle] = useState("");
-  const [skillIds, setSkillIds] = useState<string[]>([]);
+  const [skillIds, setSkillIds] = useState<string[]>(remedialSkill ? [remedialSkill] : []);
+  const [below, setBelow] = useState(40);
+  const [includeUnpractised, setIncludeUnpractised] = useState(false);
+  const [weak, setWeak] = useState<WeakStudent[] | null>(null);
+  const [chosen, setChosen] = useState<string[]>([]);
   const [packId, setPackId] = useState("");
   const [count, setCount] = useState(10);
   const [unitIds, setUnitIds] = useState<string[]>([]);
@@ -47,21 +60,31 @@ function NewAssignment({ onCreated, onCancel }: { onCreated: () => void; onCance
     setBusy(true);
     setError(null);
     try {
-      await api("/console/assignments", {
-        body: {
-          title,
-          ...(source === "pack" ? { packId } : { skillIds, count }),
-          unitIds,
-          openAt: new Date(openAt).toISOString(),
-          closeAt: new Date(closeAt).toISOString(),
-        },
-      });
+      const window = { unitIds, openAt: new Date(openAt).toISOString(), closeAt: new Date(closeAt).toISOString() };
+      if (source === "remedial") await api("/console/assignments/remedial", { body: { title, skillIds, count, below, includeUnpractised, studentIds: chosen, ...window } });
+      else await api("/console/assignments", { body: { title, ...(source === "pack" ? { packId } : { skillIds, count }), ...window } });
       onCreated();
     } catch (err) {
       setError(errorMessage(err));
       setBusy(false);
     }
   }
+
+  async function findStudents() {
+    setError(null);
+    try {
+      const found = (await api<{ students: WeakStudent[] }>("/console/assignments/remedial/preview", { body: { skillIds, unitIds, below, includeUnpractised } })).students;
+      setWeak(found);
+      setChosen(found.map((s) => s.id));
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  }
+  // A changed filter means the list must be found again.
+  const resetWeak = () => {
+    setWeak(null);
+    setChosen([]);
+  };
 
   const topics = new Map<string, { id: string; name: string }[]>();
   for (const s of skills.data?.skills ?? []) (topics.get(s.topicName) ?? topics.set(s.topicName, []).get(s.topicName)!).push(s);
@@ -80,8 +103,23 @@ function NewAssignment({ onCreated, onCancel }: { onCreated: () => void; onCance
         <button type="button" className={`btn small ${source === "pack" ? "primary" : ""}`} onClick={() => setSource("pack")}>
           Use a mission pack
         </button>
+        <button
+          type="button"
+          className={`btn small ${source === "remedial" ? "primary" : ""}`}
+          onClick={() => {
+            setSource("remedial");
+            resetWeak();
+          }}
+        >
+          Catch-up for struggling students
+        </button>
       </div>
-      {source === "skills" ? (
+      {source === "remedial" && (
+        <p className="muted small" style={{ margin: 0 }}>
+          Finds the students in the chosen batches whose mastery of the skills is below a level you set, and assigns practice to just them. The report then shows how far each has come.
+        </p>
+      )}
+      {source !== "pack" ? (
         <div className="stack">
           {[...topics.entries()].map(([topic, list]) => (
             <div key={topic}>
@@ -90,7 +128,16 @@ function NewAssignment({ onCreated, onCancel }: { onCreated: () => void; onCance
               </div>
               <div className="row wrap" style={{ gap: 6 }}>
                 {list.map((s) => (
-                  <button type="button" key={s.id} className={`btn small ${skillIds.includes(s.id) ? "primary" : ""}`} onClick={() => setSkillIds(toggle(skillIds, s.id))}>
+                  <button
+                    type="button"
+                    key={s.id}
+                    className={`btn small ${skillIds.includes(s.id) ? "primary" : ""}`}
+                    aria-pressed={skillIds.includes(s.id)}
+                    onClick={() => {
+                      setSkillIds(toggle(skillIds, s.id));
+                      resetWeak();
+                    }}
+                  >
                     {s.name}
                   </button>
                 ))}
@@ -119,7 +166,16 @@ function NewAssignment({ onCreated, onCancel }: { onCreated: () => void; onCance
         <label>Assign to</label>
         <div className="row wrap" style={{ gap: 6 }}>
           {units.map((u) => (
-            <button type="button" key={u.id} className={`btn small ${unitIds.includes(u.id) ? "primary" : ""}`} onClick={() => setUnitIds(toggle(unitIds, u.id))}>
+            <button
+              type="button"
+              key={u.id}
+              className={`btn small ${unitIds.includes(u.id) ? "primary" : ""}`}
+              aria-pressed={unitIds.includes(u.id)}
+              onClick={() => {
+                setUnitIds(toggle(unitIds, u.id));
+                resetWeak();
+              }}
+            >
               {u.name} <span className="muted small">({u.kind})</span>
             </button>
           ))}
@@ -128,6 +184,56 @@ function NewAssignment({ onCreated, onCancel }: { onCreated: () => void; onCance
           Assigning to a department or batch includes every section under it.
         </p>
       </div>
+      {source === "remedial" && (
+        <div className="stack">
+          <div className="row wrap" style={{ alignItems: "flex-end" }}>
+            <div style={{ maxWidth: 220 }}>
+              <label htmlFor="below">Mastery below (%)</label>
+              <input
+                id="below"
+                type="number"
+                min={10}
+                max={90}
+                value={below}
+                onChange={(e) => {
+                  setBelow(Number(e.target.value));
+                  resetWeak();
+                }}
+              />
+            </div>
+            <label className="row small" style={{ gap: 6, margin: 0 }}>
+              <input
+                type="checkbox"
+                checked={includeUnpractised}
+                style={{ width: "auto" }}
+                onChange={(e) => {
+                  setIncludeUnpractised(e.target.checked);
+                  resetWeak();
+                }}
+              />
+              Include students who haven&apos;t tried these skills
+            </label>
+            <button type="button" className="btn" disabled={!skillIds.length || !unitIds.length} onClick={findStudents}>
+              Find students
+            </button>
+          </div>
+          {weak && (
+            <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0, gap: 4 }}>
+              <legend className="small" style={{ fontWeight: 600, marginBottom: 4 }}>
+                {weak.length === 0 ? "No students are below that level." : `${chosen.length} of ${weak.length} students chosen`}
+              </legend>
+              {weak.map((s) => (
+                <label key={s.id} className="row small" style={{ gap: 8, margin: 0 }}>
+                  <input type="checkbox" style={{ width: "auto" }} checked={chosen.includes(s.id)} onChange={() => setChosen(toggle(chosen, s.id))} />
+                  <span>
+                    {s.name} <span className="muted">{s.rollNo}</span> · {s.mastery}%{s.attempts === 0 ? " (not tried)" : ""}
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          )}
+        </div>
+      )}
       <div className="row wrap">
         <div style={{ flex: 1, minWidth: 200 }}>
           <label htmlFor="open">Opens</label>
@@ -140,7 +246,7 @@ function NewAssignment({ onCreated, onCancel }: { onCreated: () => void; onCance
       </div>
       {error && <ErrorBox message={error} />}
       <div className="row">
-        <button className="btn primary" disabled={busy || !title || !unitIds.length || (source === "skills" ? !skillIds.length : !packId)}>
+        <button className="btn primary" disabled={busy || !title || !unitIds.length || (source === "pack" ? !packId : !skillIds.length) || (source === "remedial" && !chosen.length)}>
           {busy ? "Creating..." : "Create assignment"}
         </button>
         <button type="button" className="btn ghost" onClick={onCancel}>
@@ -169,6 +275,7 @@ function AssignmentsInner() {
       </div>
       {creating && (
         <NewAssignment
+          remedialSkill={params.get("remedial")}
           onCancel={() => setCreating(false)}
           onCreated={() => {
             setCreating(false);
@@ -198,7 +305,9 @@ function AssignmentsInner() {
                     <Link href={`/console/assignments/${a.id}`} style={{ fontWeight: 600 }}>
                       {a.title}
                     </Link>
-                    <div className="muted small">{a.questionCount} questions</div>
+                    <div className="muted small">
+                      {a.questionCount} questions{a.remedial ? " · catch-up" : ""}
+                    </div>
                   </td>
                   <td className="small">{a.units.map((u) => u.name).join(", ")}</td>
                   <td className="small muted">

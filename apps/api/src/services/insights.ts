@@ -8,6 +8,7 @@ import { recordAiUsage } from "./coach";
 import { aiAllowed } from "./plan";
 import { descendants, studentIdsInUnits, tenantUnits } from "./scope";
 import { getTenant, streakRules, tenantToday } from "./tenant";
+import { forStudents } from "./assignments";
 
 // Weekly insights: a short AI-written briefing for staff from the same
 // aggregates the overview shows (activity, readiness bands, weakest skills,
@@ -53,7 +54,7 @@ export async function insightFacts(db: Db, scope: InsightScope, now: Date): Prom
   ).filter((a) => descendants(units, a.orgUnitIds).some((u) => inScope.has(u)));
   const assignmentFacts = [];
   for (const a of recent.slice(0, 8)) {
-    const targeted = new Set(await studentIdsInUnits(db, scope.tenantId, descendants(units, a.orgUnitIds)));
+    const targeted = new Set(forStudents(a, await studentIdsInUnits(db, scope.tenantId, descendants(units, a.orgUnitIds))));
     const mine = ids.filter((id) => targeted.has(id));
     const done = mine.length
       ? (await db.select({ userId: sessions.userId }).from(sessions).where(and(eq(sessions.assignmentId, a.id), isNotNull(sessions.finishedAt), inArray(sessions.userId, mine)))).length

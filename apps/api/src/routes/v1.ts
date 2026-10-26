@@ -186,7 +186,7 @@ export async function v1Routes(app: FastifyInstance) {
 
     api.get("/v1/assignments", { preHandler: requireScope("assignments:read") }, async (req) => {
       const rows = await db.select().from(assignments).where(eq(assignments.tenantId, req.api.tenantId)).orderBy(desc(assignments.createdAt)).limit(200);
-      return { data: rows.map((a) => ({ id: a.id, title: a.title, pack_id: a.packId, question_count: a.questionIds.length, unit_ids: a.orgUnitIds, open_at: a.openAt, close_at: a.closeAt })) };
+      return { data: rows.map((a) => ({ id: a.id, title: a.title, pack_id: a.packId, question_count: a.questionIds.length, unit_ids: a.orgUnitIds, student_ids: a.studentIds, open_at: a.openAt, close_at: a.closeAt })) };
     });
 
     api.post("/v1/assignments", { preHandler: requireScope("assignments:write") }, async (req) => {

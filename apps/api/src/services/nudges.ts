@@ -7,6 +7,7 @@ import { readinessFor } from "./analytics";
 import { appLink, enqueue, type NewNotification } from "./notifications";
 import { quickVisibleTo } from "./practice";
 import { descendants, studentIdsInUnits, tenantUnits } from "./scope";
+import { forStudents } from "./assignments";
 
 /** Local hour in a time zone, 0-23. */
 function localHour(now: Date, timeZone: string): number {
@@ -85,7 +86,7 @@ export async function runNudges(db: Db, now: Date, opts: { tenantId?: string; ig
       .from(assignments)
       .where(and(eq(assignments.tenantId, tenant.id), lte(assignments.openAt, now), gt(assignments.closeAt, now), lte(assignments.closeAt, new Date(now.getTime() + 86_400_000))));
     for (const a of due) {
-      const targeted = await studentIdsInUnits(db, tenant.id, descendants(units, a.orgUnitIds));
+      const targeted = forStudents(a, await studentIdsInUnits(db, tenant.id, descendants(units, a.orgUnitIds)));
       const done = new Set(
         (await db.select({ userId: sessions.userId }).from(sessions).where(and(eq(sessions.assignmentId, a.id), isNotNull(sessions.finishedAt)))).map((s) => s.userId),
       );

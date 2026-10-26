@@ -19,6 +19,7 @@ import { studentUnitIdsWithAncestors } from "../services/scope";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
 import { reportQuestion } from "../services/quality";
 import { reviewDue } from "../services/review";
+import { isAssignedTo } from "../services/assignments";
 
 const responseSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("option"), optionId: z.string().max(20) }),
@@ -51,7 +52,7 @@ async function studentAssignments(ctx: StudentCtx) {
       .from(assignments)
       .where(and(eq(assignments.tenantId, ctx.tenantId), lte(assignments.openAt, ctx.now), gte(assignments.closeAt, recent)))
       .orderBy(assignments.closeAt)
-  ).filter((a) => a.orgUnitIds.some((id) => unitSet.has(id)));
+  ).filter((a) => isAssignedTo(a, unitSet, ctx.userId));
   const mine = rows.length
     ? await db
         .select()

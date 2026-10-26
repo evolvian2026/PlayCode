@@ -184,6 +184,10 @@ export const assignments = pgTable(
     packId: text("pack_id").references(() => packs.id),
     questionIds: jsonb("question_ids").$type<string[]>().notNull(),
     orgUnitIds: jsonb("org_unit_ids").$type<string[]>().notNull(),
+    /** Only these students of the units (a remedial assignment); null means everyone in them. */
+    studentIds: jsonb("student_ids").$type<string[]>(),
+    /** A remedial assignment's skills, its mastery threshold, and each student's mastery of those skills when it was set. */
+    remedial: jsonb("remedial").$type<{ skillIds: string[]; below: number; baseline: Record<string, number> }>(),
     openAt: timestamp("open_at", { withTimezone: true }).notNull(),
     closeAt: timestamp("close_at", { withTimezone: true }).notNull(),
     createdBy: uuid("created_by").notNull().references(() => users.id),

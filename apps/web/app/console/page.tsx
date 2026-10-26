@@ -126,6 +126,12 @@ export default function Overview() {
                     </span>
                     <span className="muted">
                       {s.avgMastery}% · {s.attemptedPct}% tried
+                      {me.permissions.includes("assignments.manage") && (
+                        <>
+                          {" "}
+                          · <Link href={`/console/assignments?new=1&remedial=${encodeURIComponent(s.skillId)}`}>Catch-up work</Link>
+                        </>
+                      )}
                     </span>
                   </div>
                   <Bar value={s.avgMastery} tone={masteryTone(s.avgMastery)} />
