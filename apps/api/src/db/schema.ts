@@ -1369,14 +1369,16 @@ export interface InterviewTurn {
 }
 
 export interface InterviewScorecard {
-  /** 1-5 per dimension. */
-  scores: { problemSolving: number; fundamentals: number; communication: number; code: number };
+  /** 1-5 per dimension: problemSolving, fundamentals, communication and code for technical rounds; structure, evidence, communication and selfAwareness for the HR round. */
+  scores: Record<string, number>;
   overall: number;
   strengths: string[];
   improvements: string[];
   summary: string;
-  /** Skill ids to practise next. */
+  /** Skill ids to practise next (technical rounds). */
   practise: string[];
+  /** HR round: questions to prepare a better answer for. */
+  prepare?: string[];
   /** Spoken interviews: pace and filler words across the spoken answers. */
   delivery?: Delivery | null;
 }
@@ -1387,7 +1389,7 @@ export const interviews = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    track: text("track").$type<"service" | "product">().notNull(),
+    track: text("track").$type<"service" | "product" | "hr">().notNull(),
     /** Voice: the interviewer is read aloud and answers are spoken (transcribed in the browser). */
     mode: text("mode").$type<"text" | "voice">().notNull().default("text"),
     /** Skill ids the interview leans on (the student's weakest relevant skills). */

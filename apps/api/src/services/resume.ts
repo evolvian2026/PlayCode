@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 import { EXECUTION_TYPES, masteryFromRating, QUESTION_TYPES, READINESS_PROFILES } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
@@ -74,7 +74,8 @@ export async function resumeData(db: Db, userId: string, now: Date) {
       .innerJoin(questions, eq(questions.id, responses.questionId))
       .where(and(eq(responses.userId, userId), eq(responses.correct, true)))
       .groupBy(questions.type),
-    db.select().from(interviews).where(and(eq(interviews.userId, userId), eq(interviews.status, "finished"))).orderBy(desc(interviews.finishedAt)).limit(1),
+    // The resume shows the latest technical round; the HR round is practice for the student alone.
+    db.select().from(interviews).where(and(eq(interviews.userId, userId), eq(interviews.status, "finished"), ne(interviews.track, "hr"))).orderBy(desc(interviews.finishedAt)).limit(1),
   ]);
   const branding = await effectiveBranding(db, tenant!);
   const [activeDays] = await db

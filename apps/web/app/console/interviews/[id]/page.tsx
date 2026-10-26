@@ -2,19 +2,21 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { interviewDimensions, type InterviewTrack } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
 
 interface Detail {
   userId: string;
   student: { name: string; rollNo: string | null };
-  track: "service" | "product";
+  track: InterviewTrack;
   mode: "text" | "voice";
   status: string;
   focusSkills: { id: string; name: string }[];
   turns: { role: "interviewer" | "candidate"; text: string; voice?: { wpm: number; fillers: number; edited: boolean } }[];
   scorecard: {
-    scores: { problemSolving: number; fundamentals: number; communication: number; code: number };
+    scores: Record<string, number>;
+    prepare?: string[];
     overall: number;
     strengths: string[];
     improvements: string[];
@@ -41,10 +43,11 @@ export default function ConsoleInterview() {
           <Link href={`/console/students/${data.userId}`} style={{ color: "inherit" }}>
             {data.student.name}
           </Link>{" "}
-          <span className="muted" style={{ fontWeight: 500 }}>· {data.track === "product" ? "product" : "service"} company interview{data.mode === "voice" ? ", spoken" : ""}</span>
+          <span className="muted" style={{ fontWeight: 500 }}>· {data.track === "hr" ? "HR interview" : `${data.track} company interview`}{data.mode === "voice" ? ", spoken" : ""}</span>
         </h1>
         <div className="small muted">
-          {new Date(data.startedAt).toLocaleString("en-IN")} · focus: {data.focusSkills.map((s) => s.name).join(", ")}
+          {new Date(data.startedAt).toLocaleString("en-IN")}
+          {data.focusSkills.length > 0 && ` · focus: ${data.focusSkills.map((s) => s.name).join(", ")}`}
         </div>
       </div>
       {c && (
@@ -52,10 +55,13 @@ export default function ConsoleInterview() {
           <div className="row wrap">
             <span className="pill accent">Overall {c.overall}/5</span>
             <span className="small">
-              Problem solving {c.scores.problemSolving} · Fundamentals {c.scores.fundamentals} · Communication {c.scores.communication} · Code {c.scores.code}
+              {interviewDimensions(data.track)
+                .map(([key, label]) => `${label} ${c.scores[key] ?? "-"}`)
+                .join(" · ")}
             </span>
           </div>
           <p style={{ margin: 0 }}>{c.summary}</p>
+          {c.prepare && c.prepare.length > 0 && <div className="small">Questions to prepare: {c.prepare.join(" · ")}</div>}
           <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
             <div>
               <b className="small">Strengths</b>

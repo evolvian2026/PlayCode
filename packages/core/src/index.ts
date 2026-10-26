@@ -23,3 +23,4 @@ export * from "./contest";
 export * from "./study-plan";
 export * from "./live-quiz";
 export * from "./mock-test";
+export * from "./interview";

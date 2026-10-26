@@ -1,16 +1,18 @@
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
-import { deliverySummary, masteryFromRating, READINESS_PROFILES, spokenAnswer } from "@playcode/core";
+import { deliverySummary, interviewDimensions, masteryFromRating, READINESS_PROFILES, spokenAnswer, type InterviewTrack } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { interviews, skillRatings, skills, users, type InterviewTurn } from "../db/schema";
-import { aiProvider, AiUnavailableError, type InterviewInput } from "../lib/ai";
+import { aiProvider, AiUnavailableError, type HrScorecardOut, type InterviewInput, type TechnicalScorecardOut } from "../lib/ai";
 import { badRequest, conflict, HttpError, notFound } from "../lib/errors";
 import { recordAiUsage } from "./coach";
 import { aiAllowed } from "./plan";
 
 // AI mock interviews: a short text interview with Claude as the interviewer,
-// pitched at service or product companies and leaning on the student's
-// weakest relevant skills, ending in a scorecard the student and their
-// teachers can see. The server keeps the transcript and enforces the limits.
+// either a technical round pitched at service or product companies (leaning
+// on the student's weakest relevant skills) or an HR round scored on how well
+// answers tell a real story (situation, task, action, result). It ends in a
+// scorecard the student and their teachers can see. The server keeps the
+// transcript and enforces the limits.
 
 /** Answers per interview, and interviews a student may start per week. */
 export const MAX_ANSWERS = 8;
@@ -18,7 +20,7 @@ export const WEEKLY_LIMIT = 3;
 const MIN_ANSWERS_TO_SCORE = 2;
 const DAY_MS = 86_400_000;
 
-type Track = "service" | "product";
+type Track = InterviewTrack;
 type Mode = "text" | "voice";
 type Ctx = { tenantId: string; userId: string; now: Date };
 type Row = typeof interviews.$inferSelect;
@@ -36,6 +38,8 @@ export async function interviewAvailability(db: DbOrTx, ctx: Ctx): Promise<{ ok:
 
 /** Skills in the topics this kind of company weighs most, the student's weakest first. */
 async function relevantSkills(db: DbOrTx, userId: string, track: Track) {
+  // The HR round isn't about skills.
+  if (track === "hr") return [];
   const profile = READINESS_PROFILES.find((p) => p.id === track)!;
   const all = await db.select({ id: skills.id, name: skills.name, topic: skills.topic, topicName: skills.topicName }).from(skills);
   const ratings = new Map((await db.select().from(skillRatings).where(eq(skillRatings.userId, userId))).map((r) => [r.skillId, r]));
@@ -152,16 +156,18 @@ async function score(db: Db, ctx: Ctx, row: Row) {
     aiError(err);
   }
   await recordAiUsage(db, { tenantId: ctx.tenantId, userId: ctx.userId, feature: "mock_interview", usage: res.usage, now: ctx.now });
-  const clamp = (n: number) => Math.min(5, Math.max(1, Math.round(n)));
+  const clamp = (n: number | undefined) => Math.min(5, Math.max(1, Math.round(n ?? 1)));
   const valid = new Set(choices.map((c) => c.id));
   const card = res.value;
+  const scores = card.scores as Record<string, number>;
   return {
-    scores: { problemSolving: clamp(card.scores.problemSolving), fundamentals: clamp(card.scores.fundamentals), communication: clamp(card.scores.communication), code: clamp(card.scores.code) },
+    scores: Object.fromEntries(interviewDimensions(row.track).map(([key]) => [key, clamp(scores[key])])),
     overall: clamp(card.overall),
     strengths: card.strengths.slice(0, 4),
     improvements: card.improvements.slice(0, 4),
     summary: card.summary,
-    practise: [...new Set(card.practise.filter((id) => valid.has(id)))].slice(0, 3),
+    practise: row.track === "hr" ? [] : [...new Set((card as TechnicalScorecardOut).practise.filter((id) => valid.has(id)))].slice(0, 3),
+    ...(row.track === "hr" ? { prepare: ((card as HrScorecardOut).prepare ?? []).slice(0, 3) } : {}),
     delivery,
   };
 }
@@ -201,7 +207,7 @@ export async function finishEarly(db: Db, ctx: Ctx, id: string) {
 
 /** Scored interviews of the given students, newest first, for teachers. */
 export async function interviewsFor(db: Db, studentIds: string[]) {
-  if (studentIds.length === 0) return { interviews: [], averages: null };
+  if (studentIds.length === 0) return { interviews: [], averages: null, hrAverages: null };
   const rows = await db
     .select({ id: interviews.id, userId: interviews.userId, name: users.name, rollNo: users.rollNo, track: interviews.track, mode: interviews.mode, scorecard: interviews.scorecard, finishedAt: interviews.finishedAt })
     .from(interviews)
@@ -209,12 +215,21 @@ export async function interviewsFor(db: Db, studentIds: string[]) {
     .where(and(inArray(interviews.userId, studentIds), eq(interviews.status, "finished")))
     .orderBy(desc(interviews.finishedAt))
     .limit(200);
-  const avg = (pick: (s: NonNullable<Row["scorecard"]>) => number) => Math.round((rows.reduce((a, r) => a + pick(r.scorecard!), 0) / Math.max(1, rows.length)) * 10) / 10;
+  // Technical rounds and the HR round are scored on different dimensions, so they're averaged apart.
+  const averagesOf = (kind: "technical" | "hr") => {
+    const group = rows.filter((r) => (r.track === "hr") === (kind === "hr"));
+    if (!group.length) return null;
+    const avg = (pick: (s: NonNullable<Row["scorecard"]>) => number) => Math.round((group.reduce((a, r) => a + pick(r.scorecard!), 0) / group.length) * 10) / 10;
+    return {
+      count: group.length,
+      overall: avg((s) => s.overall),
+      ...Object.fromEntries(interviewDimensions(kind === "hr" ? "hr" : "service").map(([key]) => [key, avg((s) => s.scores[key] ?? 0)])),
+    };
+  };
   return {
     interviews: rows.map((r) => ({ id: r.id, userId: r.userId, name: r.name, rollNo: r.rollNo, track: r.track, mode: r.mode, overall: r.scorecard!.overall, scores: r.scorecard!.scores, finishedAt: r.finishedAt })),
-    averages: rows.length
-      ? { overall: avg((s) => s.overall), problemSolving: avg((s) => s.scores.problemSolving), fundamentals: avg((s) => s.scores.fundamentals), communication: avg((s) => s.scores.communication), code: avg((s) => s.scores.code) }
-      : null,
+    averages: averagesOf("technical"),
+    hrAverages: averagesOf("hr"),
   };
 }
 

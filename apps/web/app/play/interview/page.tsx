@@ -2,13 +2,14 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
+import { INTERVIEW_TRACK_LABELS, interviewDimensions, type InterviewTrack } from "@playcode/core";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { useLocale, useT } from "@/lib/i18n";
 import { speak, speechInputSupported, speechOutputSupported, stopSpeaking, useDictation } from "@/lib/speech";
 import { startAndOpen } from "@/lib/start";
 
-type Track = "service" | "product";
+type Track = InterviewTrack;
 type Mode = "text" | "voice";
 
 interface Delivery {
@@ -20,12 +21,13 @@ interface Delivery {
 }
 
 interface Scorecard {
-  scores: { problemSolving: number; fundamentals: number; communication: number; code: number };
+  scores: Record<string, number>;
   overall: number;
   strengths: string[];
   improvements: string[];
   summary: string;
   practise: { id: string; name: string }[];
+  prepare?: string[];
   delivery?: Delivery | null;
 }
 
@@ -48,14 +50,7 @@ interface Mine {
   interviews: { id: string; track: Track; mode: Mode; status: Interview["status"]; overall: number | null; answers: number; startedAt: string }[];
 }
 
-const SCORE_LABELS: [keyof Scorecard["scores"], string][] = [
-  ["problemSolving", "Problem solving"],
-  ["fundamentals", "Fundamentals"],
-  ["communication", "Communication"],
-  ["code", "Code"],
-];
-
-function ScorecardView({ card }: { card: Scorecard }) {
+function ScorecardView({ card, track }: { card: Scorecard; track: Track }) {
   const t = useT();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -66,15 +61,18 @@ function ScorecardView({ card }: { card: Scorecard }) {
         <span className={`pill ${card.overall >= 4 ? "good" : card.overall === 3 ? "warn" : "bad"}`}>{t("Overall {n}/5", { n: card.overall })}</span>
       </div>
       <p style={{ margin: 0 }}>{card.summary}</p>
-      {SCORE_LABELS.map(([key, label]) => (
-        <div key={key}>
-          <div className="spread small">
-            <span>{t(label)}</span>
-            <b>{card.scores[key]}/5</b>
+      {interviewDimensions(track).map(([key, label]) => {
+        const n = card.scores[key] ?? 0;
+        return (
+          <div key={key}>
+            <div className="spread small">
+              <span>{t(label)}</span>
+              <b>{n}/5</b>
+            </div>
+            <Bar value={n * 20} tone={n >= 4 ? "good" : n === 3 ? "warn" : "bad"} label={t(label)} />
           </div>
-          <Bar value={card.scores[key] * 20} tone={card.scores[key] >= 4 ? "good" : card.scores[key] === 3 ? "warn" : "bad"} />
-        </div>
-      ))}
+        );
+      })}
       <div>
         <b className="small">{t("What went well")}</b>
         <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
@@ -106,6 +104,19 @@ function ScorecardView({ card }: { card: Scorecard }) {
               <li key={s}>{t(s)}</li>
             ))}
           </ul>
+        </div>
+      )}
+      {card.prepare && card.prepare.length > 0 && (
+        <div>
+          <b className="small">{t("Prepare a better story for")}</b>
+          <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+            {card.prepare.map((q) => (
+              <li key={q}>{q}</li>
+            ))}
+          </ul>
+          <div className="small muted" style={{ marginTop: 4 }}>
+            {t("Tell each one as situation, task, action, result: the context, what you had to do, what you did yourself, and how it turned out.")}
+          </div>
         </div>
       )}
       {card.practise.length > 0 && (
@@ -195,7 +206,7 @@ function Conversation({ initial, onDone }: { initial: Interview; onDone: () => v
     <div className="stack">
       <div className="spread">
         <div>
-          <h1 style={{ margin: 0 }}>{t(iv.track === "product" ? "Product company interview" : "Service company interview")}</h1>
+          <h1 style={{ margin: 0 }}>{t(iv.track === "hr" ? "HR interview" : iv.track === "product" ? "Product company interview" : "Service company interview")}</h1>
           {iv.focusSkills.length > 0 && <div className="small muted">{t("Focus: {skills}", { skills: iv.focusSkills.map((s) => s.name).join(", ") })}</div>}
           {voice && iv.status === "active" && speechOutputSupported() && (
             <label className="row small" style={{ gap: 6, marginTop: 4 }}>
@@ -273,7 +284,7 @@ function Conversation({ initial, onDone }: { initial: Interview; onDone: () => v
           </div>
         </form>
       ) : iv.scorecard ? (
-        <ScorecardView card={iv.scorecard} />
+        <ScorecardView card={iv.scorecard} track={iv.track} />
       ) : (
         <div className="card muted">{t("This interview ended before there was enough to score.")}</div>
       )}
@@ -292,7 +303,7 @@ function InterviewHome() {
   const router = useRouter();
   const params = useSearchParams();
   const openId = params.get("id");
-  const [track, setTrack] = useState<Track>(params.get("track") === "product" ? "product" : "service");
+  const [track, setTrack] = useState<Track>(params.get("track") === "product" ? "product" : params.get("track") === "hr" ? "hr" : "service");
   const [mode, setMode] = useState<Mode>("text");
   const [voiceOk, setVoiceOk] = useState(false);
   useEffect(() => setVoiceOk(speechInputSupported()), []);
@@ -334,7 +345,13 @@ function InterviewHome() {
     <div className="stack">
       <h1 style={{ margin: 0 }}>{t("Mock interview")}</h1>
       <div className="card stack">
-        <p style={{ margin: 0 }}>{t("A short technical interview with an AI interviewer, about 15 minutes. It asks about the skills you are weakest in, follows up like a real panel, and ends with a scorecard.")}</p>
+        <p style={{ margin: 0 }}>
+          {t(
+            track === "hr"
+              ? "A short HR round with an AI interviewer, about 15 minutes: introducing yourself, teamwork, a failure, your goals. It asks for real examples, follows up like a real panel, and ends with a scorecard on how well your answers tell a story."
+              : "A short technical interview with an AI interviewer, about 15 minutes. It asks about the skills you are weakest in, follows up like a real panel, and ends with a scorecard.",
+          )}
+        </p>
         {d.active ? (
           <button className="btn primary" onClick={() => router.push(`/play/interview?id=${d.active}`)}>
             {t("Continue your interview")}
@@ -343,10 +360,10 @@ function InterviewHome() {
           <div className="small muted">{d.reason}</div>
         ) : (
           <>
-            <div className="row wrap">
-              {(["service", "product"] as const).map((k) => (
-                <button key={k} className={`btn small ${track === k ? "primary" : ""}`} onClick={() => setTrack(k)}>
-                  {t(k === "service" ? "Service company" : "Product company")}
+            <div className="row wrap" role="group" aria-label={t("Kind of interview")}>
+              {(["service", "product", "hr"] as const).map((k) => (
+                <button key={k} className={`btn small ${track === k ? "primary" : ""}`} aria-pressed={track === k} onClick={() => setTrack(k)}>
+                  {t(INTERVIEW_TRACK_LABELS[k])}
                 </button>
               ))}
             </div>
@@ -376,7 +393,7 @@ function InterviewHome() {
           {d.interviews.map((iv) => (
             <button key={iv.id} className="spread" style={{ all: "unset", cursor: "pointer", display: "flex", justifyContent: "space-between" }} onClick={() => router.push(`/play/interview?id=${iv.id}`)}>
               <span>
-                {t(iv.track === "product" ? "Product company" : "Service company")}
+                {t(INTERVIEW_TRACK_LABELS[iv.track])}
                 {iv.mode === "voice" ? ` · ${t("spoken")}` : ""}{" "}
                 <span className="small muted">· {new Date(iv.startedAt).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" })}</span>
               </span>

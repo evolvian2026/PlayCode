@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { HR_DIMENSIONS, INTERVIEW_TRACK_LABELS, interviewDimensions, TECHNICAL_DIMENSIONS, type InterviewTrack } from "@playcode/core";
 import { ErrorBox, Loading, Stat } from "@/components/ui";
 import { useApi } from "@/lib/api";
 
@@ -10,16 +11,35 @@ interface Row {
   userId: string;
   name: string;
   rollNo: string | null;
-  track: "service" | "product";
+  track: InterviewTrack;
   mode: "text" | "voice";
   overall: number;
-  scores: { problemSolving: number; fundamentals: number; communication: number; code: number };
+  scores: Record<string, number>;
   finishedAt: string;
 }
 
 interface Data {
   interviews: Row[];
-  averages: { overall: number; problemSolving: number; fundamentals: number; communication: number; code: number } | null;
+  averages: Averages | null;
+  hrAverages: Averages | null;
+}
+
+type Averages = { count: number; overall: number } & Record<string, number>;
+
+function AverageStats({ title, avg, dims }: { title: string; avg: Averages; dims: readonly (readonly [string, string])[] }) {
+  return (
+    <section className="stack" aria-label={title} style={{ gap: 8 }}>
+      <h2 style={{ margin: 0, fontSize: "1rem" }}>
+        {title} <span className="muted small">({avg.count})</span>
+      </h2>
+      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
+        <Stat label="Average overall" value={`${avg.overall}/5`} />
+        {dims.map(([key, label]) => (
+          <Stat key={key} label={label} value={avg[key] ?? "-"} />
+        ))}
+      </div>
+    </section>
+  );
 }
 
 const tone = (n: number) => (n >= 4 ? "good" : n === 3 ? "warn" : "bad");
@@ -49,18 +69,12 @@ export default function ConsoleInterviews() {
       {error && <ErrorBox message={error.message} onRetry={reload} />}
       {loading && !data ? (
         <Loading />
-      ) : !data?.averages ? (
+      ) : !data?.averages && !data?.hrAverages ? (
         <div className="card muted">No scored interviews yet. Students start them from Placements or their profile.</div>
       ) : (
         <>
-          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
-            <Stat label="Interviews" value={data.interviews.length} />
-            <Stat label="Average overall" value={`${data.averages.overall}/5`} />
-            <Stat label="Problem solving" value={data.averages.problemSolving} />
-            <Stat label="Fundamentals" value={data.averages.fundamentals} />
-            <Stat label="Communication" value={data.averages.communication} />
-            <Stat label="Code" value={data.averages.code} />
-          </div>
+          {data.averages && <AverageStats title="Technical rounds" avg={data.averages} dims={TECHNICAL_DIMENSIONS} />}
+          {data.hrAverages && <AverageStats title="HR rounds" avg={data.hrAverages} dims={HR_DIMENSIONS} />}
           <div className="card" style={{ padding: 0 }}>
             <div className="table-wrap">
               <table>
@@ -69,10 +83,7 @@ export default function ConsoleInterviews() {
                     <th>Student</th>
                     <th>Kind</th>
                     <th>Overall</th>
-                    <th>Problem solving</th>
-                    <th>Fundamentals</th>
-                    <th>Communication</th>
-                    <th>Code</th>
+                    <th>Scores</th>
                     <th>Date</th>
                   </tr>
                 </thead>
@@ -83,14 +94,18 @@ export default function ConsoleInterviews() {
                         <Link href={`/console/interviews/${r.id}`}>{r.name}</Link>
                         <div className="small muted">{r.rollNo}</div>
                       </td>
-                      <td className="small">{r.track === "product" ? "Product" : "Service"}{r.mode === "voice" ? " · spoken" : ""}</td>
+                      <td className="small">
+                        {INTERVIEW_TRACK_LABELS[r.track]}
+                        {r.mode === "voice" ? " · spoken" : ""}
+                      </td>
                       <td>
                         <span className={`pill ${tone(r.overall)}`}>{r.overall}/5</span>
                       </td>
-                      <td>{r.scores.problemSolving}</td>
-                      <td>{r.scores.fundamentals}</td>
-                      <td>{r.scores.communication}</td>
-                      <td>{r.scores.code}</td>
+                      <td className="small">
+                        {interviewDimensions(r.track)
+                          .map(([key, label]) => `${label} ${r.scores[key] ?? "-"}`)
+                          .join(" · ")}
+                      </td>
                       <td className="small">{new Date(r.finishedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</td>
                     </tr>
                   ))}

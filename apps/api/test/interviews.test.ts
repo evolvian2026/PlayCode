@@ -29,6 +29,19 @@ const fakeAi: AiProvider = {
   },
   async interviewScorecard(input) {
     calls.push(input);
+    if (input.track === "hr") {
+      return {
+        value: {
+          scores: { structure: 2, evidence: 3, communication: 4, selfAwareness: 7 },
+          overall: 3,
+          strengths: ["You named a real project."],
+          improvements: ["Say what you did yourself and how it ended."],
+          summary: "Good examples; finish each story with the result.",
+          prepare: ["Tell me about a time you failed.", "Why should we hire you?", "Where do you see yourself in five years?", "A fourth"],
+        },
+        usage,
+      };
+    }
     return {
       value: {
         scores: { problemSolving: 4, fundamentals: 3, communication: 5, code: 3 },
@@ -165,5 +178,28 @@ describe("mock interviews", () => {
     expect(r.body.turns[1].voice).toBeUndefined();
     const faculty = await t.login("faculty@demo.edu");
     expect((await t.get(faculty, "/console/interviews")).body.interviews.find((x: { id: string }) => x.id === started.id).mode).toBe("voice");
+    await t.post(riya, `/student/interviews/${text.id}/finish`);
+  });
+
+  it("runs an HR round scored on how well answers tell a story", async () => {
+    const hr = (await t.post(riya, "/student/interviews", { track: "hr" })).body;
+    expect(hr).toMatchObject({ track: "hr", status: "active", focusSkills: [] });
+    expect(calls.at(-1)).toMatchObject({ track: "hr", focusSkills: [] });
+    await t.post(riya, `/student/interviews/${hr.id}/answer`, { text: "I'm Riya, a CSE student who likes building small web apps." });
+    await t.post(riya, `/student/interviews/${hr.id}/answer`, { text: "In my second year our team project slipped, so I split the work and we shipped a week late." });
+    const done = (await t.post(riya, `/student/interviews/${hr.id}/finish`)).body;
+    // HR dimensions, clamped to 1-5; no skills to practise, questions to prepare instead (at most three).
+    expect(done.scorecard).toMatchObject({ overall: 3, scores: { structure: 2, evidence: 3, communication: 4, selfAwareness: 5 }, practise: [] });
+    expect(done.scorecard.prepare).toEqual(["Tell me about a time you failed.", "Why should we hire you?", "Where do you see yourself in five years?"]);
+    expect(Object.keys(done.scorecard.scores)).not.toContain("code");
+
+    // Teachers see HR rounds averaged apart from technical ones.
+    const list = (await t.get(await t.login("faculty@demo.edu"), "/console/interviews")).body;
+    expect(list.hrAverages).toMatchObject({ count: 1, overall: 3, structure: 2, selfAwareness: 5 });
+    expect(list.averages.structure).toBeUndefined();
+    expect(list.averages.count).toBeGreaterThan(0);
+    // The resume keeps showing the latest technical round.
+    const { resume } = (await t.get(riya, "/student/resume")).body;
+    expect(resume.mockInterview).toMatchObject({ track: expect.stringMatching(/^(service|product)$/) });
   });
 });

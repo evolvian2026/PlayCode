@@ -15,7 +15,7 @@ export async function interviewRoutes(app: FastifyInstance) {
   app.get("/student/interviews", async (req) => listMine(db, ctx(req)));
 
   app.post("/student/interviews", async (req) => {
-    const { track, mode } = parse(z.object({ track: z.enum(["service", "product"]), mode: z.enum(["text", "voice"]).default("text") }), req.body);
+    const { track, mode } = parse(z.object({ track: z.enum(["service", "product", "hr"]), mode: z.enum(["text", "voice"]).default("text") }), req.body);
     return startInterview(db, ctx(req), track, mode);
   });
 
