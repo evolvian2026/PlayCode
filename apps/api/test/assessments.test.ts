@@ -197,6 +197,7 @@ describe("proctored assessments", () => {
       draftSqlProblems: async () => { throw new Error("not used"); },
       interviewTurn: async () => { throw new Error("not used"); },
       interviewScorecard: async () => { throw new Error("not used"); },
+      weeklyInsights: async () => { throw new Error("not used"); },
       reviewSnapshot: async ({ image }) => {
         seen.push(image);
         return { value: reviews.shift()!, usage: { inputTokens: 1600, outputTokens: 80, cacheReadTokens: 300 } };

@@ -33,6 +33,9 @@ const fake: AiProvider = {
   async interviewScorecard() {
     throw new Error("not used");
   },
+  async weeklyInsights() {
+    throw new Error("not used");
+  },
 };
 
 beforeAll(async () => {

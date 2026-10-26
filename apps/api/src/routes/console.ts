@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { QUESTION_TYPES } from "@playcode/core";
+import { hasInstitutionScope, QUESTION_TYPES } from "@playcode/core";
+import { rateLimit } from "../lib/rate-limit";
 import { z } from "zod";
 import { db } from "../db/client";
 import { assignments, memberships, orgUnits, packs, questions, sessions, skills, tenants, users } from "../db/schema";
@@ -9,6 +10,7 @@ import { audit } from "../lib/audit";
 import { forbidden, notFound } from "../lib/errors";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
 import { institutionBenchmark } from "../services/benchmarks";
+import { cachedInsights, generateInsights, scopeLabel } from "../services/insights";
 import { engagement, readinessReport, skillsReport, studentDetail, studentList } from "../services/analytics";
 import { createAssignment } from "../services/assignments";
 import { effectiveBranding, updateBranding } from "../services/branding";
@@ -395,6 +397,30 @@ export async function consoleRoutes(app: FastifyInstance) {
     const tenant = await getTenant(db, scope.tenantId);
     const now = app.now();
     return engagement(db, { studentIds: scope.studentIds, timeZone: tenant.timeZone, now, today: tenantToday(tenant, now), rules: streakRules(tenant) });
+  });
+
+  /** The scope for a weekly briefing: a chosen unit, or everything the person can see. */
+  const insightScope = async (req: FastifyRequest, unitId?: string) => {
+    const scope = await resolveScope(req, unitId);
+    const wide = hasInstitutionScope(req.auth.roles);
+    return {
+      tenantId: scope.tenantId,
+      key: unitId ?? (wide ? "all" : `user:${req.auth.userId}`),
+      label: await scopeLabel(db, scope.tenantId, unitId, wide),
+      unitIds: scope.unitIds,
+      studentIds: scope.studentIds,
+    };
+  };
+
+  app.get("/insights", { preHandler: anyAnalytics }, async (req) => {
+    const { unitId } = parse(unitQuery, req.query);
+    return cachedInsights(db, await insightScope(req, unitId), app.now());
+  });
+
+  app.post("/insights", { preHandler: anyAnalytics }, async (req) => {
+    const { unitId } = parse(unitQuery, req.body ?? {});
+    await rateLimit(`insights:${req.auth.userId}`, 10, 3_600_000, app.now(), "Too many requests for insights");
+    return generateInsights(db, await insightScope(req, unitId), req.auth.userId, app.now());
   });
 
   app.get("/analytics/skills", { preHandler: anyAnalytics }, async (req) => {

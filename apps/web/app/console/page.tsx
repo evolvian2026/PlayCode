@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ActivityChart } from "@/components/ActivityChart";
 import { Benchmarks } from "@/components/Benchmarks";
+import { InsightsCard } from "@/components/Insights";
 import { useMe } from "@/components/Auth";
 import { UnitPicker } from "@/components/UnitPicker";
 import { Bar, ErrorBox, Loading, masteryTone, Stat } from "@/components/ui";
@@ -73,6 +74,8 @@ export default function Overview() {
             <Stat label="Answers per active student" value={eng.data.answersPerActiveStudent} sub={`${eng.data.answersLast7Days} answers this week`} />
             <Stat label="At risk" value={readiness.data.atRisk.length} sub="service readiness below 30" />
           </div>
+
+          <InsightsCard key={unitId} unitId={unitId} />
 
           {!unitId && me.permissions.includes("analytics.institution") && <Benchmarks />}
 

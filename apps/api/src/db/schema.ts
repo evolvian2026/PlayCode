@@ -498,6 +498,28 @@ export const competitions = pgTable(
   (t) => [index("competitions_tenant_idx").on(t.tenantId)],
 );
 
+// ---------- Weekly insights ----------
+
+export interface InsightReport {
+  headline: string;
+  points: { text: string; tone: "good" | "watch" | "act" }[];
+  actions: string[];
+}
+
+/** An AI-written weekly briefing for staff, generated at most once a day per scope (whole institution, a unit, or one person's units). */
+export const insightReports = pgTable(
+  "insight_reports",
+  {
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    scopeKey: text("scope_key").notNull(),
+    day: text("day").notNull(),
+    report: jsonb("report").$type<InsightReport>().notNull(),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.scopeKey, t.day] })],
+);
+
 // ---------- Study plans ----------
 
 /** A student's day-by-day plan to a target (a placement drive or a date). One per student; rebuilding replaces it. */
@@ -772,7 +794,7 @@ export const erasureRequests = pgTable(
 
 // ---------- AI ----------
 
-export type AiFeature = "coach_hint" | "question_draft" | "snapshot_review" | "mock_interview";
+export type AiFeature = "coach_hint" | "question_draft" | "snapshot_review" | "mock_interview" | "weekly_insights";
 
 /** Token use per call, for cost reporting per institution. */
 export const aiUsage = pgTable(

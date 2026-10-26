@@ -24,6 +24,7 @@ const fakeAi: AiProvider = {
   draftSqlProblems: async () => ({ value: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 } }),
   interviewTurn: async () => { throw new Error("not used"); },
   interviewScorecard: async () => { throw new Error("not used"); },
+  weeklyInsights: async () => { throw new Error("not used"); },
 };
 
 function pdfText(pdf: Buffer): string {

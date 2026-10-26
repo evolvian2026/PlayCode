@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { assessmentAttempts, assessments, attemptSnapshots, authSessions, loginCodes, ltiDeepLinks, ltiNonces, notifications, pushSubscriptions, rateLimits, samlRequests, talentInvites, tenants } from "../db/schema";
+import { assessmentAttempts, assessments, attemptSnapshots, authSessions, loginCodes, ltiDeepLinks, ltiNonces, notifications, pushSubscriptions, insightReports, rateLimits, samlRequests, talentInvites, tenants } from "../db/schema";
 import { deleteObject } from "../lib/storage";
 import { pruneJobRuns } from "./jobs";
 
@@ -22,6 +22,8 @@ export const RETENTION = {
   jobRunsDays: 90,
   /** Talent-pool invitations, answered or not. */
   talentInvitesDays: 730,
+  /** Weekly AI briefings for staff. */
+  insightReportsDays: 365,
 } as const;
 
 export async function runRetention(db: Db, now: Date) {
@@ -69,6 +71,7 @@ export async function runRetention(db: Db, now: Date) {
     ltiNonces: await count(db.delete(ltiNonces).where(lt(ltiNonces.expiresAt, now)).returning({ nonce: ltiNonces.nonce })),
     ltiDeepLinks: await count(db.delete(ltiDeepLinks).where(lt(ltiDeepLinks.createdAt, ago(1))).returning({ id: ltiDeepLinks.id })),
     talentInvites: await count(db.delete(talentInvites).where(lt(talentInvites.createdAt, ago(RETENTION.talentInvitesDays))).returning({ id: talentInvites.id })),
+    insightReports: await count(db.delete(insightReports).where(lt(insightReports.createdAt, ago(RETENTION.insightReportsDays))).returning({ day: insightReports.day })),
     jobRuns: await pruneJobRuns(db, now),
   };
   return result;

@@ -48,6 +48,9 @@ const fake: AiProvider = {
   async interviewScorecard() {
     throw new Error("not used");
   },
+  async weeklyInsights() {
+    throw new Error("not used");
+  },
   async draftSqlProblems() {
     const schema = "CREATE TABLE students (id INTEGER, name TEXT, cgpa REAL);\nINSERT INTO students VALUES (1, 'Asha', 8.9), (2, 'Ravi', 6.4), (3, 'Meera', 9.2);";
     return {
