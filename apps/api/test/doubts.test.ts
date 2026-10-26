@@ -1,12 +1,13 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "../src/db/client";
-import { notifications, users } from "../src/db/schema";
+import { memberships, notifications, questions, responses, users } from "../src/db/schema";
+import { studentIdsInUnits } from "../src/services/scope";
 import { rightAnswer, setup, wrongAnswer, type TestApp } from "./helpers";
 
 let t: TestApp;
 let riya: string;
-let aarav: string;
+let classmate: string;
 let faculty: string;
 let questionId: string;
 
@@ -21,7 +22,6 @@ async function answerFirstDaily(token: string, correct: boolean) {
 beforeAll(async () => {
   t = await setup();
   riya = await t.login("student@demo.edu");
-  aarav = await t.login("aarav.sharma1@demo.edu");
   faculty = await t.login("faculty@demo.edu");
 });
 
@@ -34,8 +34,17 @@ describe("doubts", () => {
   let id: string;
 
   it("lets a student ask about a question they've answered", async () => {
-    expect((await t.post(riya, "/student/questions/py-basics-ops-1/doubts", { text: "Why is this the answer?" })).status).toBe(403);
+    // The seeded practice history shifts whenever the question bank changes, so find a question Riya really hasn't answered.
+    const riyaId = (await db.select().from(users).where(eq(users.email, "student@demo.edu")))[0]!.id;
+    const answered = new Set((await db.select({ id: responses.questionId }).from(responses).where(eq(responses.userId, riyaId))).map((r) => r.id));
+    const unseen = (await db.select({ id: questions.id }).from(questions)).find((q) => !answered.has(q.id))!.id;
+    expect((await t.post(riya, `/student/questions/${unseen}/doubts`, { text: "Why is this the answer?" })).status).toBe(403);
     questionId = await answerFirstDaily(riya, false);
+    // Today's daily depends on the tenant id, which changes with every seed, so pick a sectionmate who hasn't seen it yet.
+    const [mine] = await db.select().from(memberships).where(eq(memberships.userId, riyaId));
+    const seen = new Set((await db.select({ id: responses.userId }).from(responses).where(eq(responses.questionId, questionId))).map((r) => r.id));
+    const mateId = (await studentIdsInUnits(db, mine!.tenantId!, [mine!.orgUnitId!])).find((id) => !seen.has(id))!;
+    classmate = await t.login((await db.select().from(users).where(eq(users.id, mateId)))[0]!.email);
     expect((await t.post(riya, `/student/questions/${questionId}/doubts`, { text: "Hm" })).status).toBe(400); // too short
     const res = await t.post(riya, `/student/questions/${questionId}/doubts`, { text: "I don't see why my answer is wrong. Can you explain the second step?" });
     expect(res.status).toBe(200);
@@ -66,16 +75,16 @@ describe("doubts", () => {
   });
 
   it("shows shared answers, without names, only after a classmate answers the question too", async () => {
-    expect((await t.get(aarav, `/student/questions/${questionId}/doubts`)).status).toBe(403);
-    expect(await answerFirstDaily(aarav, true)).toBe(questionId);
-    const view = (await t.get(aarav, `/student/questions/${questionId}/doubts`)).body;
+    expect((await t.get(classmate, `/student/questions/${questionId}/doubts`)).status).toBe(403);
+    expect(await answerFirstDaily(classmate, true)).toBe(questionId);
+    const view = (await t.get(classmate, `/student/questions/${questionId}/doubts`)).body;
     expect(view.mine).toEqual([]);
     expect(view.shared).toEqual([{ id, text: expect.stringContaining("second step"), answer: expect.stringContaining("Trace the loop"), answeredAt: expect.any(String) }]);
     expect(JSON.stringify(view)).not.toContain("Riya");
   });
 
   it("lets a teacher close a doubt that isn't one", async () => {
-    const asked = (await t.post(aarav, `/student/questions/${questionId}/doubts`, { text: "Is there a contest this week?" })).body;
+    const asked = (await t.post(classmate, `/student/questions/${questionId}/doubts`, { text: "Is there a contest this week?" })).body;
     expect((await t.post(faculty, `/console/doubts/${asked.id}/close`)).body.status).toBe("closed");
     expect((await t.post(faculty, `/console/doubts/${asked.id}/answer`, { answer: "Yes, Friday." })).status).toBe(409);
     expect((await t.get(faculty, "/console/doubts?status=closed")).body.doubts.map((d: { id: string }) => d.id)).toEqual([asked.id]);

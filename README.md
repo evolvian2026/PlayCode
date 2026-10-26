@@ -191,9 +191,11 @@ pnpm test             # core unit tests, API integration tests, content verifica
 pnpm verify:content   # run every question's code and check the stated answer
 ```
 
-API tests need a PostgreSQL database they can wipe; they default to
-`postgres://playcode:playcode@localhost:5432/playcode_test` (override with `TEST_DATABASE_URL`).
-With Docker, create it once: `docker compose exec postgres createdb -U playcode playcode_test`.
+API tests run in parallel, each worker on its own throwaway database. They connect with
+`postgres://playcode:playcode@localhost:5432/playcode_test` (override with `TEST_DATABASE_URL`);
+the database name is only a prefix, and a run creates `playcode_test_r<pid>_1` to `_4` and drops
+them when it ends, so the user needs `CREATEDB` (the Docker and CI user has it). `TEST_WORKERS`
+sets the number of workers (default 4). Databases left by a run that crashed are dropped the next time.
 
 ## Operations
 
