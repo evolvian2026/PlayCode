@@ -21,3 +21,4 @@ export * from "./speech";
 export * from "./benchmarks";
 export * from "./contest";
 export * from "./study-plan";
+export * from "./live-quiz";

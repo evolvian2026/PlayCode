@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -499,6 +499,55 @@ export const competitions = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("competitions_tenant_idx").on(t.tenantId)],
+);
+
+// ---------- Live classroom quizzes ----------
+
+/** A quiz a teacher runs live in class: one question at a time, students answer on their phones. */
+export const liveQuizzes = pgTable(
+  "live_quizzes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    hostId: uuid("host_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    /** Six digits students type to join; unique among quizzes that haven't ended. */
+    code: text("code").notNull(),
+    questionIds: jsonb("question_ids").$type<string[]>().notNull(),
+    secondsPerQuestion: integer("seconds_per_question").notNull(),
+    status: text("status").$type<LiveStatus>().notNull().default("lobby"),
+    currentIndex: integer("current_index").notNull().default(-1),
+    questionStartedAt: timestamp("question_started_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+  },
+  (t) => [index("live_quizzes_code_idx").on(t.code), index("live_quizzes_tenant_idx").on(t.tenantId, t.createdAt)],
+);
+
+export const liveQuizPlayers = pgTable(
+  "live_quiz_players",
+  {
+    quizId: uuid("quiz_id").notNull().references(() => liveQuizzes.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    score: integer("score").notNull().default(0),
+    lastScoredAt: timestamp("last_scored_at", { withTimezone: true }),
+    joinedAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.quizId, t.userId] })],
+);
+
+export const liveQuizAnswers = pgTable(
+  "live_quiz_answers",
+  {
+    quizId: uuid("quiz_id").notNull().references(() => liveQuizzes.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    questionIndex: integer("question_index").notNull(),
+    response: jsonb("response").$type<StudentResponse>().notNull(),
+    correct: boolean("correct").notNull(),
+    points: integer("points").notNull(),
+    answeredAt: timestamp("answered_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.quizId, t.userId, t.questionIndex] })],
 );
 
 // ---------- Weekly insights ----------

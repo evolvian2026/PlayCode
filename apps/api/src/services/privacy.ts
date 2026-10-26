@@ -20,6 +20,9 @@ import {
   integrityEvents,
   interviews,
   leagueMembers,
+  liveQuizAnswers,
+  liveQuizPlayers,
+  liveQuizzes,
   loginCodes,
   ltiAccounts,
   ltiScores,
@@ -136,6 +139,11 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .from(placementApplications)
       .innerJoin(placementDrives, eq(placementDrives.id, placementApplications.driveId))
       .where(eq(placementApplications.userId, userId)),
+    liveQuizAnswers: await db
+      .select({ quiz: liveQuizzes.title, question: liveQuizAnswers.questionIndex, response: liveQuizAnswers.response, correct: liveQuizAnswers.correct, points: liveQuizAnswers.points, at: liveQuizAnswers.answeredAt })
+      .from(liveQuizAnswers)
+      .innerJoin(liveQuizzes, eq(liveQuizzes.id, liveQuizAnswers.quizId))
+      .where(eq(liveQuizAnswers.userId, userId)),
     studyPlan: (await db.select({ target: studyPlans.target, days: studyPlans.days, createdAt: studyPlans.createdAt }).from(studyPlans).where(eq(studyPlans.userId, userId)))[0] ?? null,
     contestSubmissions: await db
       .select({ contest: contests.title, questionId: contestSubmissions.questionId, response: contestSubmissions.response, verdict: contestSubmissions.verdict, submittedAt: contestSubmissions.createdAt })
@@ -247,6 +255,8 @@ export async function resolveErasure(
     // Contest code goes; the student drops off past scoreboards.
     await tx.delete(contestSubmissions).where(eq(contestSubmissions.userId, user.id));
     await tx.delete(studyPlans).where(eq(studyPlans.userId, user.id));
+    await tx.delete(liveQuizAnswers).where(eq(liveQuizAnswers.userId, user.id));
+    await tx.delete(liveQuizPlayers).where(eq(liveQuizPlayers.userId, user.id));
     await tx.delete(playerProfiles).where(eq(playerProfiles.userId, user.id));
     await tx.delete(memberships).where(eq(memberships.userId, user.id));
     // Duels stay so opponents keep their history; the player now shows as "Deleted user".

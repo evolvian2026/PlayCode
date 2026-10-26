@@ -219,6 +219,13 @@ export default function PlayHome() {
 
       <PlanCard />
 
+      <Link href="/play/live" className="card tight spread" style={{ color: "inherit" }}>
+        <span>
+          <b>{t("Join a live quiz")}</b> <span className="small muted">{t("with the code on your teacher's screen")}</span>
+        </span>
+        <Icon name="bolt" />
+      </Link>
+
       <ContestCard />
 
       <PlacementCard drives={placements.data?.drives ?? []} />
