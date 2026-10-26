@@ -27,5 +27,6 @@ export const SKILLS: SeedSkill[] = [
   { id: "complexity.bigo", topic: "complexity", topicName: "Complexity", name: "Big-O" },
   { id: "pseudocode.basics", topic: "pseudocode", topicName: "Pseudocode", name: "Pseudocode rounds" },
   { id: "coding.basics", topic: "coding", topicName: "Coding", name: "Coding problems" },
+  { id: "coding.dsa", topic: "coding", topicName: "Coding", name: "Arrays, strings and hashing" },
   { id: "sql.basics", topic: "sql", topicName: "SQL", name: "SQL queries" },
 ];
