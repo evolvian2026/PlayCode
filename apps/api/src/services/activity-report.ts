@@ -16,6 +16,7 @@ import {
   writingAttempts,
 } from "../db/schema";
 import { forbidden } from "../lib/errors";
+import { mentoringStats } from "./mentoring";
 import { pdfSafe } from "./papers";
 import { descendants, scopedUnitIds, studentIdsInUnits, tenantUnits, type AuthContext } from "./scope";
 import { getTenant } from "./tenant";
@@ -136,6 +137,7 @@ export async function activityReport(db: Db, auth: AuthContext, period: ReportPe
     },
     classTests,
     practice: { answers, mockTests: mocks, mockInterviews, groupDiscussions: gds, writing },
+    mentoring: await mentoringStats(db, tenantId, students, period.from, period.to),
     placements: {
       companies,
       registered: new Set(apps.map((a) => a.userId)).size,
@@ -176,6 +178,9 @@ export function activityCsv(r: ActivityReport): string {
     ["AI mock interviews", r.practice.mockInterviews.count, r.practice.mockInterviews.students],
     ["Group discussions", r.practice.groupDiscussions.count, r.practice.groupDiscussions.students],
     ["Written English", r.practice.writing.count, r.practice.writing.students],
+    [],
+    ["Mentoring", "Mentors", "Mentees", "Mentees per mentor", "Meetings", "Students met"],
+    ["", r.mentoring.mentors, `${r.mentoring.mentees} (${r.mentoring.coveragePct}%)`, r.mentoring.ratio ?? "", r.mentoring.meetings, r.mentoring.studentsMet],
     [],
     ["Placement drives"],
     ["Date", "Company", "Role", "CTC (Rs)", "Registered", "Offers"],
@@ -272,6 +277,15 @@ export function activityPdf(r: ActivityReport): Promise<Buffer> {
       ["Written English answers", p.writing.count, p.writing.students],
     ],
   );
+
+  heading("Mentoring");
+  const m = r.mentoring;
+  facts([
+    ["Mentors", String(m.mentors)],
+    ["Students with a mentor", `${m.mentees} of ${r.students} (${m.coveragePct}%)`],
+    ["Mentees per mentor", m.ratio === null ? "-" : `1:${m.ratio}`],
+    ["Mentoring meetings held", `${m.meetings}, with ${m.studentsMet} students`],
+  ]);
 
   heading("Placement drives");
   if (!r.placements.companies.length) doc.font("Helvetica").fontSize(10).fillColor(muted).text("No drives with registrations in this period.");

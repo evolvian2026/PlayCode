@@ -19,6 +19,7 @@ interface Report {
   };
   classTests: { paperId: string; title: string; date: string; students: number; averagePct: number }[];
   practice: Record<"answers" | "mockTests" | "mockInterviews" | "groupDiscussions" | "writing", { count: number; students: number }>;
+  mentoring: { mentors: number; mentees: number; coveragePct: number; ratio: number | null; meetings: number; studentsMet: number };
   placements: { companies: { company: string; roleTitle: string; date: string; ctcRupees: number; registered: number; offers: number }[]; registered: number; placed: number; offers: number; highest: number | null; median: number | null };
 }
 
@@ -166,6 +167,29 @@ export default function ActivityReport() {
                   </div>
                 ))
               )}
+            </div>
+            <div className="card stack">
+              <h2 style={{ margin: 0 }}>Mentoring</h2>
+              <div className="spread small">
+                <span>Mentors</span>
+                <span>{data.mentoring.mentors}</span>
+              </div>
+              <div className="spread small">
+                <span>Students with a mentor</span>
+                <span>
+                  {data.mentoring.mentees} <span className="muted">({data.mentoring.coveragePct}%)</span>
+                </span>
+              </div>
+              <div className="spread small">
+                <span>Mentees per mentor</span>
+                <span>{data.mentoring.ratio === null ? "-" : `1:${data.mentoring.ratio}`}</span>
+              </div>
+              <div className="spread small">
+                <span>Meetings held</span>
+                <span>
+                  {data.mentoring.meetings} <span className="muted">with {data.mentoring.studentsMet} students</span>
+                </span>
+              </div>
             </div>
             <div className="card stack">
               <h2 style={{ margin: 0 }}>Practice on PlayCode</h2>

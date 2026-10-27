@@ -1,8 +1,9 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
 import { requireFeature } from "../services/plan";
+import { experienceCounts, experienceOptions, pendingCount, readExperiences, reviewExperience, reviewQueue, submitExperience } from "../services/experiences";
 import {
   createDrive,
   driveCsv,
@@ -101,6 +102,27 @@ export async function placementRoutes(app: FastifyInstance) {
   });
 
   // Students: drives open to them and their own results. Data from a drive stays visible after a plan change.
+  // ---------- Interview experiences ----------
+  const play = requirePermission("practice.play");
+  const studentCtx = (req: FastifyRequest) => ({ tenantId: tenantOf(req), userId: req.auth.userId, now: app.now() });
+  const experienceBody = z.object({
+    result: z.enum(["selected", "not_selected", "awaiting"]),
+    difficulty: z.number().int().min(1).max(5),
+    rounds: z.array(z.object({ name: z.string().max(80), description: z.string().trim().max(4000) })).min(1).max(8),
+    tips: z.string().max(3000).default(""),
+    anonymous: z.boolean().default(false),
+  });
+  app.get("/student/experiences", { preHandler: play }, async (req) => readExperiences(db, tenantOf(req), parse(z.object({ company: z.string().max(120).optional() }), req.query).company));
+  app.get("/student/experiences/counts", { preHandler: play }, async (req) => experienceCounts(db, tenantOf(req)));
+  app.get("/student/experiences/mine", { preHandler: play }, async (req) => experienceOptions(db, studentCtx(req)));
+  app.put("/student/placements/:id/experience", { preHandler: play }, async (req) => submitExperience(db, studentCtx(req), parse(idParam, req.params).id, parse(experienceBody, req.body)));
+  app.get("/console/experiences", { preHandler: manage }, async (req) => reviewQueue(db, tenantOf(req), parse(z.object({ status: z.enum(["pending", "published", "rejected"]).default("pending") }), req.query).status));
+  app.get("/console/experiences/count", { preHandler: manage }, async (req) => pendingCount(db, tenantOf(req)));
+  app.post("/console/experiences/:id/review", { preHandler: manage }, async (req) => {
+    const decision = parse(z.object({ publish: z.boolean(), note: z.string().max(1000).nullable().default(null) }), req.body);
+    return reviewExperience(db, { tenantId: tenantOf(req), userId: req.auth.userId }, parse(idParam, req.params).id, decision, app.now());
+  });
+
   app.get("/student/placements", { preHandler: requirePermission("practice.play") }, async (req) => studentPlacements(db, { tenantId: tenantOf(req), userId: req.auth.userId, now: app.now() }));
 
   app.post("/student/placements/:id/register", { preHandler: [requirePermission("practice.play"), requireFeature("placements")] }, async (req) => {

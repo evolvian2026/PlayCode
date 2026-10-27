@@ -56,7 +56,7 @@ function Rounds({ drive }: { drive: Drive }) {
   );
 }
 
-function DriveCard({ drive, onChange }: { drive: Drive; onChange: (p: Placements) => void }) {
+function DriveCard({ drive, experiences, onChange }: { drive: Drive; experiences: number; onChange: (p: Placements) => void }) {
   const t = useT();
   const locale = useLocale();
   const router = useRouter();
@@ -142,6 +142,11 @@ function DriveCard({ drive, onChange }: { drive: Drive; onChange: (p: Placements
             {t("Practise the mission")}
           </button>
         )}
+        {experiences > 0 && (
+          <Link className="btn small" href={`/play/experiences?company=${encodeURIComponent(drive.company)}`}>
+            {t("Interview experiences ({n})", { n: experiences })}
+          </Link>
+        )}
         {(app?.status === "registered" || app?.status === "shortlisted") && (
           <Link className="btn small" href={`/play/interview?track=${drive.companyType === "product" ? "product" : "service"}`}>
             {t("Mock interview")}
@@ -160,6 +165,7 @@ function DriveCard({ drive, onChange }: { drive: Drive; onChange: (p: Placements
 export default function StudentPlacements() {
   const t = useT();
   const { data, error, loading, reload, setData } = useApi<Placements>("/student/placements");
+  const counts = useApi<{ counts: Record<string, number> }>("/student/experiences/counts").data?.counts ?? {};
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
   const open = data.drives.filter((d) => !d.application);
@@ -184,11 +190,18 @@ export default function StudentPlacements() {
         )}
         <div className="muted">{t("Something wrong? Tell your placement cell.")}</div>
       </div>
+      <Link href="/play/experiences" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{t("Interview experiences")}</b>
+          <div className="small muted">{t("Read what seniors faced in each round, or share your own")}</div>
+        </div>
+        <span aria-hidden="true">→</span>
+      </Link>
       {mine.length > 0 && (
         <>
           <h2 style={{ margin: "8px 0 0" }}>{t("My applications")}</h2>
           {mine.map((d) => (
-            <DriveCard key={d.id} drive={d} onChange={setData} />
+            <DriveCard key={d.id} drive={d} experiences={counts[d.company.toLowerCase()] ?? 0} onChange={setData} />
           ))}
         </>
       )}
@@ -196,7 +209,7 @@ export default function StudentPlacements() {
       {open.length === 0 ? (
         <div className="card muted">{t("No drives open right now. Keep practising: your readiness score is what companies' tests measure.")}</div>
       ) : (
-        open.map((d) => <DriveCard key={d.id} drive={d} onChange={setData} />)
+        open.map((d) => <DriveCard key={d.id} drive={d} experiences={counts[d.company.toLowerCase()] ?? 0} onChange={setData} />)
       )}
     </div>
   );

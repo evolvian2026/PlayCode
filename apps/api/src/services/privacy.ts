@@ -24,6 +24,7 @@ import {
   duels,
   erasureRequests,
   integrityEvents,
+  interviewExperiences,
   groupDiscussions,
   interviews,
   leagueMembers,
@@ -34,6 +35,8 @@ import {
   ltiAccounts,
   ltiScores,
   memberships,
+  mentorAssignments,
+  mentoringMeetings,
   mistakes,
   notifications,
   paperResults,
@@ -190,6 +193,16 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .from(trainingAttendance)
       .innerJoin(trainingSessions, eq(trainingSessions.id, trainingAttendance.sessionId))
       .where(eq(trainingAttendance.userId, userId)),
+    interviewExperiences: await db
+      .select({ company: placementDrives.company, result: interviewExperiences.result, difficulty: interviewExperiences.difficulty, rounds: interviewExperiences.rounds, tips: interviewExperiences.tips, anonymous: interviewExperiences.anonymous, status: interviewExperiences.status, createdAt: interviewExperiences.createdAt })
+      .from(interviewExperiences)
+      .innerJoin(placementDrives, eq(placementDrives.id, interviewExperiences.driveId))
+      .where(eq(interviewExperiences.userId, userId)),
+    // Mentors' notes are about the student, so they're theirs to see on request.
+    mentoring: await db
+      .select({ meetingDate: mentoringMeetings.meetingDate, mode: mentoringMeetings.mode, notes: mentoringMeetings.notes, actionPoints: mentoringMeetings.actionPoints, followUpOn: mentoringMeetings.followUpOn })
+      .from(mentoringMeetings)
+      .where(eq(mentoringMeetings.studentId, userId)),
     writing: await db.select({ task: writingAttempts.taskId, text: writingAttempts.text, words: writingAttempts.words, timeMs: writingAttempts.timeMs, feedback: writingAttempts.feedback, at: writingAttempts.createdAt }).from(writingAttempts).where(eq(writingAttempts.userId, userId)),
     notifications: await db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(notifications.createdAt),
     consents: (await consentState(db, userId)).history,
@@ -287,6 +300,9 @@ export async function resolveErasure(
     await tx.delete(groupDiscussions).where(eq(groupDiscussions.userId, user.id));
     await tx.delete(writingAttempts).where(eq(writingAttempts.userId, user.id));
     await tx.delete(paperResults).where(eq(paperResults.userId, user.id));
+    await tx.delete(interviewExperiences).where(eq(interviewExperiences.userId, user.id));
+    await tx.delete(mentoringMeetings).where(eq(mentoringMeetings.studentId, user.id));
+    await tx.delete(mentorAssignments).where(or(eq(mentorAssignments.studentId, user.id), eq(mentorAssignments.mentorId, user.id)));
     await tx.delete(trainingAttendance).where(eq(trainingAttendance.userId, user.id));
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, user.id));
     await tx.delete(studentProfiles).where(eq(studentProfiles.userId, user.id));

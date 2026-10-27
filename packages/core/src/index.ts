@@ -29,3 +29,4 @@ export * from "./gd";
 export * from "./writing";
 export * from "./training";
 export * from "./calendar";
+export * from "./mentoring";

@@ -1820,3 +1820,73 @@ export const trainingAttendance = pgTable(
   },
   (t) => [primaryKey({ columns: [t.sessionId, t.userId] }), index("training_attendance_user_idx").on(t.userId)],
 );
+
+// ---------- Interview experiences ----------
+
+export interface ExperienceRound {
+  /** One of the drive's rounds, e.g. "Technical interview". */
+  name: string;
+  /** What happened and what was asked. */
+  description: string;
+}
+
+/** A student's write-up of a placement drive they took part in, published once the placement cell approves it. */
+export const interviewExperiences = pgTable(
+  "interview_experiences",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    driveId: uuid("drive_id").notNull().references(() => placementDrives.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    result: text("result").$type<"selected" | "not_selected" | "awaiting">().notNull(),
+    /** 1 (easy) to 5 (very hard). */
+    difficulty: integer("difficulty").notNull(),
+    rounds: jsonb("rounds").$type<ExperienceRound[]>().notNull(),
+    tips: text("tips").notNull().default(""),
+    anonymous: boolean("anonymous").notNull().default(false),
+    status: text("status").$type<"pending" | "published" | "rejected">().notNull().default("pending"),
+    /** Why it was sent back, for the author. */
+    reviewNote: text("review_note"),
+    reviewedBy: uuid("reviewed_by"),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("interview_experiences_drive_user_idx").on(t.driveId, t.userId), index("interview_experiences_tenant_idx").on(t.tenantId, t.status)],
+);
+
+// ---------- Mentoring ----------
+
+/** Each student's faculty mentor (one at a time). */
+export const mentorAssignments = pgTable(
+  "mentor_assignments",
+  {
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    studentId: uuid("student_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    mentorId: uuid("mentor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    assignedBy: uuid("assigned_by").notNull(),
+    assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.studentId] }), index("mentor_assignments_mentor_idx").on(t.mentorId)],
+);
+
+/** A mentoring meeting: notes for staff, and action points the student sees. */
+export const mentoringMeetings = pgTable(
+  "mentoring_meetings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    mentorId: uuid("mentor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    studentId: uuid("student_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    /** Day of the meeting, "2026-10-27". */
+    meetingDate: text("meeting_date").notNull(),
+    mode: text("mode").$type<"in_person" | "call" | "online">().notNull(),
+    /** For staff only. */
+    notes: text("notes").notNull().default(""),
+    /** Shown to the student. */
+    actionPoints: text("action_points").notNull().default(""),
+    followUpOn: text("follow_up_on"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("mentoring_meetings_student_idx").on(t.studentId, t.meetingDate), index("mentoring_meetings_tenant_idx").on(t.tenantId, t.meetingDate)],
+);
