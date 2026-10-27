@@ -103,7 +103,8 @@ export async function consentState(db: DbOrTx, userId: string) {
 export async function exportUserData(db: Db, userId: string, now: Date) {
   const [user] = await db.select().from(users).where(eq(users.id, userId));
   if (!user) throw notFound("User");
-  const { passwordHash: _omit, ...account } = user;
+  // Credentials stay out of the export.
+  const { passwordHash: _omit, calendarTokenHash: _feed, ...account } = user;
   const attempts = await db
     .select({ attempt: assessmentAttempts, title: assessments.title })
     .from(assessmentAttempts)
@@ -306,7 +307,7 @@ export async function resolveErasure(
     await tx.update(duels).set({ status: "cancelled" }).where(and(or(eq(duels.challengerId, user.id), eq(duels.opponentId, user.id)), inArray(duels.status, ["waiting", "active"])));
     await tx
       .update(users)
-      .set({ name: "Deleted user", email: `erased-${user.id}@erased.invalid`, rollNo: null, phone: null, notifyPrefs: {}, displayPrefs: {}, passwordHash: "!", status: "erased", scimExternalId: null, lastActiveAt: null, totpSecretEnc: null, totpPendingEnc: null, recoveryCodes: [] })
+      .set({ name: "Deleted user", email: `erased-${user.id}@erased.invalid`, rollNo: null, phone: null, notifyPrefs: {}, displayPrefs: {}, calendarTokenHash: null, calendarTokenCreatedAt: null, passwordHash: "!", status: "erased", scimExternalId: null, lastActiveAt: null, totpSecretEnc: null, totpPendingEnc: null, recoveryCodes: [] })
       .where(eq(users.id, user.id));
     // Audit entries stay (they record who did what) but lose the email address.
     await tx.execute(sql`update ${auditLogs} set data = data - 'email' where data->>'email' = ${user.email}`);

@@ -19,6 +19,7 @@ import { readinessFor } from "./analytics";
 import { appLink, enqueue } from "./notifications";
 import { descendants, studentIdsInUnits, studentUnitIdsWithAncestors, tenantUnits } from "./scope";
 import { getTenant, tenantToday } from "./tenant";
+import { attendanceFor } from "./training";
 import { emitAndDeliver } from "./webhooks";
 
 // Campus placements. The placement cell records each company's drive with its
@@ -146,11 +147,15 @@ export interface NewDrive {
 }
 
 /** Students the drive's rules let in (ignoring whether they registered). */
-async function eligibleStudents(db: DbOrTx, drive: DriveRow): Promise<string[]> {
+async function eligibleStudents(db: DbOrTx, drive: DriveRow, now: Date): Promise<string[]> {
   const units = await tenantUnits(db, drive.tenantId);
   const pool = await studentIdsInUnits(db, drive.tenantId, drive.criteria.unitIds.length ? descendants(units, drive.criteria.unitIds) : units.map((u) => u.id));
-  const [records, placed] = await Promise.all([recordsFor(db, pool), placedIds(db, drive.tenantId, pool)]);
-  return pool.filter((id) => checkEligibility(drive.criteria, records.get(id) ?? null, { inUnits: true, placed: placed.has(id) }).eligible);
+  const [records, placed, attendance] = await Promise.all([
+    recordsFor(db, pool),
+    placedIds(db, drive.tenantId, pool),
+    drive.criteria.minAttendancePct != null ? attendanceFor(db, drive.tenantId, pool, now) : new Map<string, { pct: number | null }>(),
+  ]);
+  return pool.filter((id) => checkEligibility(drive.criteria, records.get(id) ?? null, { inUnits: true, placed: placed.has(id), attendancePct: attendance.get(id)?.pct ?? null }).eligible);
 }
 
 export async function createDrive(db: Db, args: NewDrive & { tenantId: string; actorId: string; now: Date }) {
@@ -166,7 +171,7 @@ export async function createDrive(db: Db, args: NewDrive & { tenantId: string; a
   const [drive] = await db.insert(placementDrives).values({ ...fields, tenantId, createdBy: actorId }).returning();
   await audit(db, { tenantId, actorId, action: "placements.drive_create", target: drive!.id, data: { company: args.company } });
   // Tell every eligible student, in the app and on WhatsApp where set up.
-  const eligible = await eligibleStudents(db, drive!);
+  const eligible = await eligibleStudents(db, drive!, now);
   const deadline = args.registerBy.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: (await getTenant(db, tenantId)).timeZone });
   await enqueue(
     db,
@@ -224,7 +229,7 @@ export async function listDrives(db: DbOrTx, tenantId: string) {
 /** Readiness profile that fits the company: product companies test DSA harder. */
 const profileFor = (type: CompanyType) => (type === "product" ? "product" : "service");
 
-export async function driveDetail(db: Db, tenantId: string, id: string) {
+export async function driveDetail(db: Db, tenantId: string, id: string, now: Date) {
   const drive = await loadDrive(db, tenantId, id);
   const apps = await db.select().from(placementApplications).where(eq(placementApplications.driveId, id));
   const ids = apps.map((a) => a.userId);
@@ -232,7 +237,7 @@ export async function driveDetail(db: Db, tenantId: string, id: string) {
     ids.length ? db.select({ id: users.id, name: users.name, email: users.email, rollNo: users.rollNo }).from(users).where(inArray(users.id, ids)) : [],
     recordsFor(db, ids),
     tenantUnits(db, tenantId),
-    eligibleStudents(db, drive),
+    eligibleStudents(db, drive, now),
   ]);
   const unitName = new Map(units.map((u) => [u.id, u.name]));
   const profile = profileFor(drive.companyType);
@@ -349,11 +354,12 @@ export async function updateApplications(db: Db, args: { tenantId: string; actor
 // ---------- Students ----------
 
 export async function studentPlacements(db: Db, ctx: { tenantId: string; userId: string; now: Date }) {
-  const [record, mine, units, placed] = await Promise.all([
+  const [record, mine, units, placed, attendance] = await Promise.all([
     recordsFor(db, [ctx.userId]).then((m) => m.get(ctx.userId) ?? null),
     db.select().from(placementApplications).where(and(eq(placementApplications.tenantId, ctx.tenantId), eq(placementApplications.userId, ctx.userId))),
     studentUnitIdsWithAncestors(db, ctx.tenantId, ctx.userId),
     placedIds(db, ctx.tenantId, [ctx.userId]),
+    attendanceFor(db, ctx.tenantId, [ctx.userId], ctx.now).then((m) => m.get(ctx.userId)!),
   ]);
   const myUnits = new Set(units);
   const drives = await db.select().from(placementDrives).where(eq(placementDrives.tenantId, ctx.tenantId)).orderBy(placementDrives.driveDate);
@@ -366,7 +372,7 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
     if (!open && !(app && active(app.status))) continue;
     const inUnits = d.criteria.unitIds.length === 0 || d.criteria.unitIds.some((u) => myUnits.has(u));
     // Their own offer doesn't count against a drive they're already in.
-    const eligibility = checkEligibility(d.criteria, record, { inUnits, placed: placed.has(ctx.userId) && app?.status !== "offered" });
+    const eligibility = checkEligibility(d.criteria, record, { inUnits, placed: placed.has(ctx.userId) && app?.status !== "offered", attendancePct: attendance.pct });
     out.push({
       id: d.id,
       company: d.company,
@@ -385,7 +391,7 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
       application: app && active(app.status) ? { status: app.status, roundsCleared: app.roundsCleared, offerCtcRupees: app.offerCtcRupees } : null,
     });
   }
-  return { record, drives: out };
+  return { record, attendance, drives: out };
 }
 
 export async function register(db: Db, ctx: { tenantId: string; userId: string; driveId: string; now: Date }) {

@@ -18,6 +18,8 @@ export interface PlacementCriteria {
   min10th?: number | null;
   min12th?: number | null;
   graduationYears?: number[] | null;
+  /** Minimum attendance in placement training sessions, in percent. */
+  minAttendancePct?: number | null;
   /** Students who already hold an offer may register too (dream-company drives). */
   allowPlaced?: boolean;
 }
@@ -37,7 +39,12 @@ export interface Eligibility {
   reasons: string[];
 }
 
-export function checkEligibility(criteria: PlacementCriteria, record: AcademicRecord | null, ctx: { inUnits: boolean; placed: boolean }): Eligibility {
+/**
+ * `attendancePct` is the student's training attendance, or null when no
+ * session has been held for them yet; a student can't fall short of training
+ * that never happened.
+ */
+export function checkEligibility(criteria: PlacementCriteria, record: AcademicRecord | null, ctx: { inUnits: boolean; placed: boolean; attendancePct?: number | null }): Eligibility {
   const reasons: string[] = [];
   const r: AcademicRecord = record ?? { cgpa: null, backlogs: null, tenthPct: null, twelfthPct: null, graduationYear: null };
   if (!ctx.inUnits) reasons.push("Your branch or batch is not invited");
@@ -60,6 +67,9 @@ export function checkEligibility(criteria: PlacementCriteria, record: AcademicRe
   if (criteria.min12th != null) {
     if (r.twelfthPct === null) reasons.push("Your class 12 or diploma marks are not on record");
     else if (r.twelfthPct < criteria.min12th) reasons.push(`Needs ${criteria.min12th}% or more in class 12 or diploma`);
+  }
+  if (criteria.minAttendancePct != null && ctx.attendancePct != null && ctx.attendancePct < criteria.minAttendancePct) {
+    reasons.push(`Needs ${criteria.minAttendancePct}% attendance in placement training (yours is ${ctx.attendancePct}%)`);
   }
   if (ctx.placed && !criteria.allowPlaced) reasons.push("You already hold an offer, and this drive is for students without one");
   return { eligible: reasons.length === 0, reasons };

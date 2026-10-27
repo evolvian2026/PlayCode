@@ -87,6 +87,9 @@ export const users = pgTable(
     locale: text("locale").$type<"en" | "hi">().notNull().default("en"),
     /** Text size, font, motion and contrast (packages/core display.ts). */
     displayPrefs: jsonb("display_prefs").$type<DisplayPrefs>().notNull().default({}),
+    /** SHA-256 of the private calendar feed token; the token itself is shown once. */
+    calendarTokenHash: text("calendar_token_hash").unique(),
+    calendarTokenCreatedAt: timestamp("calendar_token_created_at", { withTimezone: true }),
     status: text("status").$type<"active" | "disabled" | "erased">().notNull().default("active"),
     /** Two-factor sign-in (TOTP): the active secret, a secret being set up, and the last time step used (no replays). */
     totpSecretEnc: text("totp_secret_enc"),

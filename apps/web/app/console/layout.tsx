@@ -32,6 +32,7 @@ const NAV: NavItem[] = [
   { href: "/console/engage", label: "Engagement", icon: "megaphone", perm: null },
   { href: "/console/batches", label: "Batches", icon: "layers", perm: null },
   { href: "/console/reports", label: "Reports", icon: "chart", perm: ["analytics.institution", "analytics.department", "analytics.own_units"] },
+  { href: "/console/activity", label: "Accreditation report", icon: "award", perm: ["analytics.institution", "analytics.department", "analytics.own_units"], noCompany: true },
   { href: "/console/content", label: "Question bank", icon: "book", perm: "content.view" },
   { href: "/console/studio", label: "Content studio", icon: "spark", perm: ["content.private.manage", "content.global.manage"], feature: "content_studio" },
   { href: "/console/integrations", label: "Integrations", icon: "layers", perm: "api.manage", feature: "api" },

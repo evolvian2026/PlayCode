@@ -24,3 +24,16 @@ export const ATTENDANCE_TARGET_PCT = 75;
 export function attendancePct(attended: number, held: number): number | null {
   return held > 0 ? Math.round((attended / held) * 100) : null;
 }
+
+/** Indian academic years run from June to May; "2026-27" is 1 June 2026 to 31 May 2027. */
+export function academicYearOf(date: string): string {
+  const [y, m] = date.split("-").map(Number) as [number, number];
+  const start = m >= 6 ? y : y - 1;
+  return `${start}-${String((start + 1) % 100).padStart(2, "0")}`;
+}
+
+export function academicYearRange(label: string): { from: string; to: string } | null {
+  const m = /^(\d{4})-(\d{2})$/.exec(label);
+  if (!m || (Number(m[1]) + 1) % 100 !== Number(m[2])) return null;
+  return { from: `${m[1]}-06-01`, to: `${Number(m[1]) + 1}-05-31` };
+}

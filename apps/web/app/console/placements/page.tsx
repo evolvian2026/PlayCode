@@ -42,6 +42,7 @@ function NewDrive({ onCreated }: { onCreated: (notified: number) => void }) {
     maxBacklogs: "0",
     min10th: "",
     min12th: "",
+    minAttendance: "",
     years: "",
     allowPlaced: false,
     packId: "",
@@ -75,6 +76,7 @@ function NewDrive({ onCreated }: { onCreated: (notified: number) => void }) {
             maxBacklogs: num(f.maxBacklogs),
             min10th: num(f.min10th),
             min12th: num(f.min12th),
+            minAttendancePct: num(f.minAttendance),
             graduationYears: f.years.trim() ? f.years.split(/[,\s]+/).filter(Boolean).map(Number) : null,
             allowPlaced: f.allowPlaced,
           },
@@ -164,6 +166,10 @@ function NewDrive({ onCreated }: { onCreated: (notified: number) => void }) {
         <div style={{ width: 110 }}>
           <label htmlFor="d-12">Min class 12 %</label>
           <input id="d-12" type="number" min={0} max={100} value={f.min12th} onChange={(e) => set({ min12th: e.target.value })} placeholder="any" />
+        </div>
+        <div style={{ width: 150 }}>
+          <label htmlFor="d-att">Min training attendance %</label>
+          <input id="d-att" type="number" min={0} max={100} value={f.minAttendance} onChange={(e) => set({ minAttendance: e.target.value })} placeholder="any" />
         </div>
         <div style={{ width: 150 }}>
           <label htmlFor="d-years">Graduating in</label>

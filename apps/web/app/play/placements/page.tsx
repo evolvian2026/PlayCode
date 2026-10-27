@@ -29,6 +29,7 @@ interface Drive {
 
 interface Placements {
   record: { cgpa: number | null; backlogs: number | null; tenthPct: number | null; twelfthPct: number | null; graduationYear: number | null } | null;
+  attendance: { sessions: number; attended: number; pct: number | null };
   drives: Drive[];
 }
 
@@ -175,6 +176,11 @@ export default function StudentPlacements() {
           </span>
         ) : (
           <span className="muted">{t("Your academic record is not on file yet. The placement cell adds it.")}</span>
+        )}
+        {data.attendance.pct !== null && (
+          <div>
+            {t("Training attendance")}: {data.attendance.pct}% ({t("{attended} of {held} sessions", { attended: data.attendance.attended, held: data.attendance.sessions })})
+          </div>
         )}
         <div className="muted">{t("Something wrong? Tell your placement cell.")}</div>
       </div>

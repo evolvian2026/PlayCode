@@ -351,6 +351,13 @@
       "when": 1793073456279,
       "tag": "0049_class_tests_training",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793079831836,
+      "tag": "0050_calendar_feed",
+      "breakpoints": true
     }
   ]
 }

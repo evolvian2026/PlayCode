@@ -38,7 +38,7 @@ export function checkInOpen(s: Session, now: Date) {
 }
 
 /** Students a session is for: those in its units and the units below them, or everyone. */
-async function invitedIds(db: DbOrTx, s: Session) {
+export async function invitedIds(db: DbOrTx, s: Session) {
   const units = await tenantUnits(db, s.tenantId);
   return studentIdsInUnits(db, s.tenantId, s.unitIds.length ? descendants(units, s.unitIds) : units.map((u) => u.id));
 }
@@ -207,6 +207,28 @@ export async function cancelSession(db: Db, auth: AuthContext, id: string, now: 
   return summary(updated!, now);
 }
 
+/** Each student's attendance over sessions held so far (not cancelled, already started). */
+export async function attendanceFor(db: DbOrTx, tenantId: string, studentIds: string[], now: Date) {
+  const out = new Map<string, { sessions: number; attended: number; pct: number | null }>();
+  if (!studentIds.length) return out;
+  const held = await db
+    .select()
+    .from(trainingSessions)
+    .where(and(eq(trainingSessions.tenantId, tenantId), eq(trainingSessions.status, "scheduled"), lte(trainingSessions.startsAt, now)));
+  const invited = new Map<string, Set<string>>();
+  for (const s of held) invited.set(s.id, new Set(await invitedIds(db, s)));
+  const present = held.length
+    ? await db.select({ sessionId: trainingAttendance.sessionId, userId: trainingAttendance.userId }).from(trainingAttendance).where(and(inArray(trainingAttendance.sessionId, held.map((s) => s.id)), inArray(trainingAttendance.userId, studentIds)))
+    : [];
+  const attended = new Set(present.map((p) => `${p.sessionId}:${p.userId}`));
+  for (const id of studentIds) {
+    const mine = held.filter((s) => invited.get(s.id)!.has(id));
+    const came = mine.filter((s) => attended.has(`${s.id}:${id}`)).length;
+    out.set(id, { sessions: mine.length, attended: came, pct: attendancePct(came, mine.length) });
+  }
+  return out;
+}
+
 /** Each student's attendance over sessions held so far, lowest first. */
 export async function attendanceReport(db: Db, auth: AuthContext, now: Date, unitId?: string) {
   const tenantId = auth.tenantId!;
@@ -214,20 +236,12 @@ export async function attendanceReport(db: Db, auth: AuthContext, now: Date, uni
   if (unitId && !scope.units.has(unitId)) throw forbidden("That batch or section is outside your scope");
   const units = await tenantUnits(db, tenantId);
   const studentIds = await studentIdsInUnits(db, tenantId, unitId ? descendants(units, [unitId]) : [...scope.units]);
-  const held = await db
-    .select()
-    .from(trainingSessions)
-    .where(and(eq(trainingSessions.tenantId, tenantId), eq(trainingSessions.status, "scheduled"), lte(trainingSessions.startsAt, now)));
-  const invited = new Map<string, Set<string>>();
-  for (const s of held) invited.set(s.id, new Set(await invitedIds(db, s)));
-  const present = held.length ? await db.select().from(trainingAttendance).where(inArray(trainingAttendance.sessionId, held.map((s) => s.id))) : [];
-  const attended = new Set(present.map((p) => `${p.sessionId}:${p.userId}`));
+  const [stats, held] = await Promise.all([
+    attendanceFor(db, tenantId, studentIds, now),
+    db.select({ id: trainingSessions.id }).from(trainingSessions).where(and(eq(trainingSessions.tenantId, tenantId), eq(trainingSessions.status, "scheduled"), lte(trainingSessions.startsAt, now))),
+  ]);
   const people = studentIds.length ? await db.select({ id: users.id, name: users.name, rollNo: users.rollNo }).from(users).where(inArray(users.id, studentIds)) : [];
-  const rows = people.map((p) => {
-    const mine = held.filter((s) => invited.get(s.id)!.has(p.id));
-    const came = mine.filter((s) => attended.has(`${s.id}:${p.id}`)).length;
-    return { ...p, sessions: mine.length, attended: came, pct: attendancePct(came, mine.length) };
-  });
+  const rows = people.map((p) => ({ ...p, ...stats.get(p.id)! }));
   return { sessionsHeld: held.length, students: rows.sort((a, b) => (a.pct ?? 101) - (b.pct ?? 101) || a.name.localeCompare(b.name)) };
 }
 

@@ -28,3 +28,4 @@ export * from "./display";
 export * from "./gd";
 export * from "./writing";
 export * from "./training";
+export * from "./calendar";

@@ -49,6 +49,7 @@ export async function placementRoutes(app: FastifyInstance) {
           min10th: percent,
           min12th: percent,
           graduationYears: z.array(z.number().int().min(2000).max(2100)).max(5).nullable().optional(),
+          minAttendancePct: percent,
           allowPlaced: z.boolean().optional(),
         }),
         rounds: z.array(z.string().trim().min(1).max(80)).min(1).max(8),
@@ -76,10 +77,10 @@ export async function placementRoutes(app: FastifyInstance) {
     return importRecords(db, { tenantId: tenantOf(req), actorId: req.auth.userId, rows, now: app.now() });
   });
 
-  app.get("/console/placements/:id", { preHandler: manage }, async (req) => driveDetail(db, tenantOf(req), parse(idParam, req.params).id));
+  app.get("/console/placements/:id", { preHandler: manage }, async (req) => driveDetail(db, tenantOf(req), parse(idParam, req.params).id, app.now()));
 
   app.get("/console/placements/:id/export", { preHandler: [...manage, requirePermission("reports.export")] }, async (req, reply) => {
-    const detail = await driveDetail(db, tenantOf(req), parse(idParam, req.params).id);
+    const detail = await driveDetail(db, tenantOf(req), parse(idParam, req.params).id, app.now());
     const name = detail.drive.company.replace(/[^\w-]+/g, "-").toLowerCase();
     reply.header("content-type", "text/csv; charset=utf-8").header("content-disposition", `attachment; filename="${name}-registrations.csv"`);
     return driveCsv(detail, await publicLinks(db, detail.applicants.map((a) => a.userId)));

@@ -10,6 +10,13 @@ describe("placements", () => {
     expect(checkEligibility({ unitIds: [], maxBacklogs: 1 }, { ...record, backlogs: 2 }, { inUnits: true, placed: false }).reasons).toEqual(["Allows at most 1 active backlog"]);
   });
 
+  it("checks training attendance, but not before any training has been held", () => {
+    const c = { unitIds: [], minAttendancePct: 75 };
+    expect(checkEligibility(c, null, { inUnits: true, placed: false, attendancePct: 80 }).eligible).toBe(true);
+    expect(checkEligibility(c, null, { inUnits: true, placed: false, attendancePct: 50 }).reasons).toEqual(["Needs 75% attendance in placement training (yours is 50%)"]);
+    expect(checkEligibility(c, null, { inUnits: true, placed: false, attendancePct: null }).eligible).toBe(true);
+  });
+
   it("bands practice and formats salaries", () => {
     expect([0, 4, 5, 19, 20, 60].map(engagementBand)).toEqual(["rare", "rare", "occasional", "occasional", "regular", "regular"]);
     expect(formatLpa(336_000)).toBe("₹3.36 LPA");

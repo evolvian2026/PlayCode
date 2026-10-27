@@ -22,6 +22,7 @@ import { consoleRoutes } from "./routes/console";
 import { developerRoutes } from "./routes/developers";
 import { driveRoutes } from "./routes/drives";
 import { classTestRoutes } from "./routes/class-tests";
+import { calendarFeedRoutes, calendarStudentRoutes } from "./routes/calendar";
 import { gdRoutes } from "./routes/gd";
 import { trainingConsoleRoutes, trainingStudentRoutes } from "./routes/training";
 import { paperRoutes } from "./routes/papers";
@@ -170,6 +171,8 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(interviewRoutes);
   await app.register(gdRoutes);
   await app.register(classTestRoutes);
+  await app.register(calendarStudentRoutes);
+  await app.register(calendarFeedRoutes);
   await app.register(trainingStudentRoutes);
   await app.register(writingRoutes);
   await app.register(resumeRoutes);

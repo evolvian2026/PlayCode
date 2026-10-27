@@ -1,13 +1,13 @@
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { hasInstitutionScope, QUESTION_TYPES } from "@playcode/core";
+import { academicYearOf, academicYearRange, hasInstitutionScope, localDate, QUESTION_TYPES } from "@playcode/core";
 import { rateLimit } from "../lib/rate-limit";
 import { z } from "zod";
 import { db } from "../db/client";
 import { assignments, memberships, orgUnits, packs, questions, sessions, skills, tenants, users } from "../db/schema";
 import { aiProvider } from "../lib/ai";
 import { audit } from "../lib/audit";
-import { forbidden, notFound } from "../lib/errors";
+import { badRequest, forbidden, notFound } from "../lib/errors";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
 import { institutionBenchmark } from "../services/benchmarks";
 import { cachedInsights, generateInsights, scopeLabel } from "../services/insights";
@@ -19,6 +19,7 @@ import { getConnection, PRESET_ISSUERS, redirectUri, saveConnection } from "../s
 import { importStudents } from "../services/students";
 import { DEFAULT_SNAPSHOT_DAYS, RETENTION } from "../services/retention";
 import { renderResumePdf, resumeData } from "../services/resume";
+import { activityCsv, activityPdf, activityReport } from "../services/activity-report";
 import { gdForStaff, gdsFor } from "../services/gd";
 import { writingFor, writingForStaff } from "../services/writing";
 import { interviewForStaff, interviewsFor } from "../services/interviews";
@@ -145,6 +146,28 @@ export async function consoleRoutes(app: FastifyInstance) {
     const interview = await interviewForStaff(db, tenantOf(req), id);
     if (!(await resolveScope(req)).studentIds.includes(interview.userId)) throw notFound("Interview");
     return interview;
+  });
+
+  // ---------- Training and placement activity (for accreditation) ----------
+  app.get("/activity-report", { preHandler: anyAnalytics }, async (req, reply) => {
+    const q = parse(
+      z.object({
+        year: z.string().optional(),
+        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        unitId: z.string().uuid().optional(),
+        format: z.enum(["json", "csv", "pdf"]).default("json"),
+      }),
+      req.query,
+    );
+    const tenant = await getTenant(db, tenantOf(req));
+    const range = q.from && q.to ? { from: q.from, to: q.to } : academicYearRange(q.year ?? academicYearOf(localDate(app.now(), tenant.timeZone)));
+    if (!range || range.from > range.to) throw badRequest("Choose an academic year like 2026-27, or a from and to date");
+    const report = await activityReport(db, { ...req.auth, tenantId: tenantOf(req) }, { ...range, unitId: q.unitId }, app.now());
+    const name = `training-placement-activity-${range.from}-to-${range.to}`;
+    if (q.format === "csv") return reply.header("content-type", "text/csv; charset=utf-8").header("content-disposition", `attachment; filename="${name}.csv"`).send(activityCsv(report));
+    if (q.format === "pdf") return reply.header("content-type", "application/pdf").header("content-disposition", `inline; filename="${name}.pdf"`).send(await activityPdf(report));
+    return report;
   });
 
   // ---------- Group discussions ----------

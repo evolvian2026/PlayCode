@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GD_PERSONAS, GD_TOPICS, gdParticipation, WRITING_TASKS, wordLimitStatus } from "../src";
+import { academicYearOf, academicYearRange, attendancePct, GD_PERSONAS, GD_TOPICS, gdParticipation, WRITING_TASKS, wordLimitStatus } from "../src";
 
 describe("group discussion participation", () => {
   it("counts the student's contributions and share of words, leaving out the moderator and the summary", () => {
@@ -35,5 +35,19 @@ describe("writing tasks", () => {
   it("gives every email the points to cover, and ids are unique", () => {
     expect(WRITING_TASKS.filter((t) => t.kind === "email").every((t) => t.points.length === 3)).toBe(true);
     expect(new Set(WRITING_TASKS.map((t) => t.id)).size).toBe(WRITING_TASKS.length);
+  });
+});
+
+describe("training", () => {
+  it("works out attendance and academic years", () => {
+    expect(attendancePct(3, 4)).toBe(75);
+    expect(attendancePct(0, 0)).toBeNull();
+    expect(academicYearOf("2026-10-27")).toBe("2026-27");
+    expect(academicYearOf("2027-05-31")).toBe("2026-27");
+    expect(academicYearOf("2027-06-01")).toBe("2027-28");
+    expect(academicYearOf("2099-07-01")).toBe("2099-00");
+    expect(academicYearRange("2026-27")).toEqual({ from: "2026-06-01", to: "2027-05-31" });
+    expect(academicYearRange("2026-28")).toBeNull();
+    expect(academicYearRange("nonsense")).toBeNull();
   });
 });

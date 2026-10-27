@@ -170,6 +170,14 @@ export default function MePage() {
         <Icon name="arrow" />
       </Link>
 
+      <Link href="/play/calendar" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Calendar")}</b>
+          <div className="small muted">{tr("Everything dated in one place, and a link for your phone's calendar")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
       <Link href="/play/training" className="card spread" style={{ color: "inherit" }}>
         <div>
           <b>{tr("Training sessions")}</b>
