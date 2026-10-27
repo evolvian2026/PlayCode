@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -796,7 +796,7 @@ export const contestSubmissions = pgTable(
 
 // ---------- Notifications ----------
 
-export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest" | "squad" | "doubt" | "interview_slot";
+export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest" | "squad" | "doubt" | "interview_slot" | "class_test" | "training";
 
 export const notifications = pgTable(
   "notifications",
@@ -1754,4 +1754,66 @@ export const questionPapers = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("question_papers_tenant_idx").on(t.tenantId, t.createdAt)],
+);
+
+/** A student's marks on a paper test: the answers a teacher entered, marked against the set's key. */
+export const paperResults = pgTable(
+  "paper_results",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    paperId: uuid("paper_id").notNull().references(() => questionPapers.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    set: text("set").$type<"A" | "B">().notNull(),
+    /** As typed, one character per question in the set's order: an option letter, y or n for written answers, - for blank. */
+    answers: text("answers").notNull(),
+    /** By question id. */
+    outcomes: jsonb("outcomes").$type<Record<string, "right" | "wrong" | "blank">>().notNull(),
+    score: integer("score").notNull(),
+    enteredBy: uuid("entered_by").notNull(),
+    enteredAt: timestamp("entered_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex("paper_results_paper_user_idx").on(t.paperId, t.userId), index("paper_results_user_idx").on(t.userId)],
+);
+
+// ---------- Training sessions ----------
+
+/** A placement training session (an aptitude class, a soft-skills workshop) for chosen batches, with attendance. */
+export const trainingSessions = pgTable(
+  "training_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").notNull(),
+    title: text("title").notNull(),
+    kind: text("kind").$type<TrainingKind>().notNull(),
+    trainer: text("trainer").notNull(),
+    location: text("location").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    /** Batches or sections it is for; empty means the whole institution. */
+    unitIds: jsonb("unit_ids").$type<string[]>().notNull(),
+    status: text("status").$type<"scheduled" | "cancelled">().notNull().default("scheduled"),
+    /** Secret behind the rotating check-in code shown in the room. */
+    codeSecret: text("code_secret").notNull(),
+    /** Check-in is open from when staff open it until they close it (or the session's end plus a grace period). */
+    checkInOpenedAt: timestamp("check_in_opened_at", { withTimezone: true }),
+    checkInClosedAt: timestamp("check_in_closed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("training_sessions_tenant_idx").on(t.tenantId, t.startsAt)],
+);
+
+/** A student present at a training session: checked in with the room's code, or marked by staff. */
+export const trainingAttendance = pgTable(
+  "training_attendance",
+  {
+    sessionId: uuid("session_id").notNull().references(() => trainingSessions.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    method: text("method").$type<"code" | "staff">().notNull(),
+    late: boolean("late").notNull().default(false),
+    markedBy: uuid("marked_by"),
+    markedAt: timestamp("marked_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.userId] }), index("training_attendance_user_idx").on(t.userId)],
 );

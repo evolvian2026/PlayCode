@@ -121,6 +121,29 @@ function SquadCard() {
   );
 }
 
+/** A training session taking attendance now, or the next one within a day. */
+function TrainingCard() {
+  const t = useT();
+  const locale = useLocale();
+  const { data } = useApi<{ openNow: { id: string; title: string; location: string }[]; upcoming: { id: string; title: string; location: string; startsAt: string; status: string }[] }>("/student/training");
+  const open = data?.openNow[0];
+  const next = data?.upcoming.find((s) => s.status === "scheduled" && new Date(s.startsAt).getTime() - Date.now() < 86_400_000);
+  if (!open && !next) return null;
+  return (
+    <Link href="/play/training" className="card spread" style={{ color: "inherit", borderColor: open ? "var(--accent)" : undefined }}>
+      <div>
+        <b>{open ? t("Check in to {title}", { title: open.title }) : t("Training: {title}", { title: next!.title })}</b>
+        <div className="small muted">
+          {open
+            ? t("Type the code shown in {place}.", { place: open.location })
+            : `${new Date(next!.startsAt).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "short", hour: "numeric", minute: "2-digit" })} · ${next!.location}`}
+        </div>
+      </div>
+      <Icon name="arrow" />
+    </Link>
+  );
+}
+
 /** Answers given offline that haven't been checked yet. */
 function OfflineCard() {
   const t = useT();
@@ -254,6 +277,7 @@ export default function PlayHome() {
         </div>
       )}
 
+      <TrainingCard />
       <PlanCard />
 
       <Link href="/play/live" className="card tight spread" style={{ color: "inherit" }}>

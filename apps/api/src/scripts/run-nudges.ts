@@ -4,6 +4,7 @@ import { finalizeContests } from "../services/contests";
 import { finalizeExpiredMocks } from "../services/mocks";
 import { squadReminders } from "../services/squads";
 import { slotReminders } from "../services/interview-slots";
+import { trainingReminders } from "../services/training";
 import { recordJob } from "../services/jobs";
 import { processOutbox } from "../services/notifications";
 import { runNudges } from "../services/nudges";
@@ -25,6 +26,7 @@ try {
       mocksFinalized: (await finalizeExpiredMocks(db, now)).finalized,
       squadReminders: await squadReminders(db, now),
       interviewReminders: await slotReminders(db, now),
+      trainingReminders: await trainingReminders(db, now),
       delivered: await processOutbox(db, now, 5000),
       snapshotsReviewed: await reviewPendingSnapshots(db, now),
       reports: await sendDueReports(db, now),

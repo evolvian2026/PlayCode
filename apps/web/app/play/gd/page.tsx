@@ -6,6 +6,7 @@ import { GD_DIMENSIONS, GD_TOPIC_KINDS, type GdParticipation, type GdPersona, ty
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { useLocale, useT } from "@/lib/i18n";
+import { speakInTurn, speechInputSupported, speechOutputSupported, stopSpeaking, useDictation } from "@/lib/speech";
 
 interface Scorecard {
   scores: Record<string, number>;
@@ -38,6 +39,9 @@ interface Mine {
   personas: GdPersona[];
   discussions: { id: string; topic: GdTopic; status: Gd["status"]; overall: number | null; startedAt: string }[];
 }
+
+// A different pitch for each participant, so they can be told apart when read aloud.
+const PITCH: Partial<Record<GdSpeaker, number>> = { moderator: 0.9, ananya: 1.15, rohit: 0.8, meera: 1.3 };
 
 const TIPS = [
   "Open with a definition, a fact or a question to frame the topic.",
@@ -106,12 +110,38 @@ function Room({ initial, onDone }: { initial: Gd; onDone: () => void }) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => end.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [gd.turns.length, busy]);
 
+  // Voice: dictate points into the box, and hear the others speak.
+  const [voice, setVoice] = useState({ input: false, output: false });
+  useEffect(() => setVoice({ input: speechInputSupported(), output: speechOutputSupported() }), []);
+  const [readAloud, setReadAloud] = useState(false);
+  const dictation = useDictation();
+  const heard = useRef(gd.turns.length);
+  useEffect(() => {
+    const fresh = gd.turns.slice(heard.current).filter((x) => x.speaker !== "student");
+    heard.current = gd.turns.length;
+    if (readAloud && fresh.length) speakInTurn(fresh.map((x) => ({ text: `${x.name}. ${x.text}`, pitch: PITCH[x.speaker] })));
+  }, [gd.turns, readAloud]);
+  useEffect(() => () => stopSpeaking(), []);
+  useEffect(() => {
+    if (dictation.listening || dictation.text) setText(dictation.text);
+  }, [dictation.text, dictation.listening]);
+
+  function toggleMic() {
+    if (dictation.listening) return dictation.stop();
+    stopSpeaking();
+    dictation.start(text);
+  }
+
   async function act(kind: NonNullable<typeof busy>, body: object = {}) {
+    if (dictation.listening) dictation.stop();
     setBusy(kind);
     setError(null);
     try {
       setGd(await api<Gd>(`/student/gd/${gd.id}/${kind}`, { body }));
-      if (kind === "speak") setText("");
+      if (kind === "speak") {
+        setText("");
+        dictation.reset();
+      }
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -149,6 +179,20 @@ function Room({ initial, onDone }: { initial: Gd; onDone: () => void }) {
           </button>
         )}
       </div>
+      {gd.status === "active" && voice.output && (
+        <label className="row small" style={{ gap: 6 }}>
+          <input
+            type="checkbox"
+            checked={readAloud}
+            onChange={(e) => {
+              setReadAloud(e.target.checked);
+              if (!e.target.checked) stopSpeaking();
+            }}
+            style={{ width: "auto" }}
+          />
+          {t("Read the others aloud")}
+        </label>
+      )}
       <details className="card tight small">
         <summary>{t("Who's in the room")}</summary>
         <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
@@ -183,12 +227,13 @@ function Room({ initial, onDone }: { initial: Gd; onDone: () => void }) {
             onChange={(e) => setText(e.target.value)}
             maxLength={1500}
             placeholder={t(summary ? "Sum up the main views fairly, in a few sentences, without new arguments." : "Make your point, or respond to someone by name.")}
-            disabled={busy !== null}
+            disabled={busy !== null || dictation.listening}
           />
+          {dictation.error && <ErrorBox message={t(dictation.error)} />}
           {error && <ErrorBox message={error} />}
           <div className="spread wrap" style={{ gap: 8 }}>
             <span className="small muted" aria-live="polite" style={{ whiteSpace: "nowrap" }}>
-              {summary ? t("The moderator asked for a summary") : t("{n} turns left", { n: gd.contributionsLeft })}
+              {dictation.listening ? t("Listening...") : summary ? t("The moderator asked for a summary") : t("{n} turns left", { n: gd.contributionsLeft })}
             </span>
             <div className="row wrap">
               {summary ? (
@@ -204,6 +249,11 @@ function Room({ initial, onDone }: { initial: Gd; onDone: () => void }) {
                     {t("Let others speak")}
                   </button>
                 </>
+              )}
+              {voice.input && (
+                <button type="button" className={`btn ${dictation.listening ? "danger" : ""}`} disabled={busy !== null} aria-pressed={dictation.listening} onClick={toggleMic}>
+                  {t(dictation.listening ? "Stop mic" : "Use mic")}
+                </button>
               )}
               <button className="btn primary" disabled={busy !== null || text.trim().length < 2}>
                 {t(summary ? "Give summary" : "Speak")}

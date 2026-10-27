@@ -27,6 +27,7 @@ const PATHS: Record<string, string> = {
   shield: "M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z",
   list: "M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01",
   briefcase: "M4 8h16v11H4zm5 0V5h6v3M4 13h16",
+  calendar: "M3 5h18v16H3zM3 10h18M8 3v4M16 3v4",
   chat: "M4 5h16v11H9l-5 4z",
   megaphone: "M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1zm13-3a5 5 0 0 1 0 8",
 };

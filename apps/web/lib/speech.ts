@@ -130,16 +130,24 @@ export function useDictation(lang = "en-IN") {
 
 /** Read text aloud in an Indian English voice where the device has one. */
 export function speak(text: string, lang = "en-IN") {
+  speakInTurn([{ text }], lang);
+}
+
+/** Read several lines one after another, each with its own pitch so different speakers sound apart. */
+export function speakInTurn(lines: { text: string; pitch?: number }[], lang = "en-IN") {
   if (!speechOutputSupported()) return;
   const synth = window.speechSynthesis;
   synth.cancel();
-  // Code in backticks is read as words.
-  const u = new SpeechSynthesisUtterance(text.replace(/`+/g, ""));
-  u.lang = lang;
   const voice = synth.getVoices().find((v) => v.lang === lang) ?? synth.getVoices().find((v) => v.lang.startsWith("en"));
-  if (voice) u.voice = voice;
-  u.rate = 1;
-  synth.speak(u);
+  for (const line of lines) {
+    // Code in backticks is read as words.
+    const u = new SpeechSynthesisUtterance(line.text.replace(/`+/g, ""));
+    u.lang = lang;
+    if (voice) u.voice = voice;
+    u.rate = 1;
+    u.pitch = line.pitch ?? 1;
+    synth.speak(u);
+  }
 }
 
 export function stopSpeaking() {

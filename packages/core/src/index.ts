@@ -27,3 +27,4 @@ export * from "./interview";
 export * from "./display";
 export * from "./gd";
 export * from "./writing";
+export * from "./training";

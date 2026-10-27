@@ -22,6 +22,8 @@ const LABEL: Record<string, string> = {
   squad: "Squad",
   doubt: "Doubts",
   interview_slot: "Mock interview",
+  class_test: "Class test",
+  training: "Training",
 };
 
 export default function InboxPage() {

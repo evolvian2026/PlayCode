@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState, type FormEvent } from "react";
+import { MarksSheet, PaperReport } from "@/components/PaperResults";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, fetchObjectUrl, useApi } from "@/lib/api";
 
@@ -40,6 +41,7 @@ function PaperView({ id, onBack }: { id: string; onBack: () => void }) {
   const { data, error, loading, reload } = useApi<Detail>(`/console/papers/${id}`);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [tab, setTab] = useState<"paper" | "marks" | "results">("paper");
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? "Could not load"} onRetry={reload} />;
   const sets = data.sets > 1 ? (["A", "B"] as const) : (["A"] as const);
@@ -57,7 +59,7 @@ function PaperView({ id, onBack }: { id: string; onBack: () => void }) {
   }
 
   async function remove() {
-    if (!window.confirm("Delete this paper? Printed copies are unaffected, but you won't be able to download its answer key again.")) return;
+    if (!window.confirm("Delete this paper? Its answer key and any marks entered for it go too. Printed copies are unaffected.")) return;
     await api(`/console/papers/${id}`, { method: "DELETE" });
     onBack();
   }
@@ -73,38 +75,57 @@ function PaperView({ id, onBack }: { id: string; onBack: () => void }) {
           {data.questions} questions · {data.marks} marks · {data.durationMinutes} minutes{data.sets > 1 ? " · sets A and B" : ""}
         </div>
       </div>
-      <div className="card stack">
-        <h2 style={{ margin: 0 }}>Download</h2>
-        {sets.map((set) => (
-          <div key={set} className="row wrap">
-            {data.sets > 1 && <b style={{ minWidth: 48 }}>Set {set}</b>}
-            <button className="btn primary small" disabled={busy !== null} onClick={() => get(set, "paper")}>
-              {busy === `${set}paper` ? "Preparing..." : "Question paper (PDF)"}
-            </button>
-            <button className="btn small" disabled={busy !== null} onClick={() => get(set, "key")}>
-              {busy === `${set}key` ? "Preparing..." : "Answer key (PDF)"}
-            </button>
-          </div>
+      <div className="row" role="group" aria-label="Show">
+        {(
+          [
+            ["paper", "Paper and key"],
+            ["marks", "Enter marks"],
+            ["results", "Results"],
+          ] as const
+        ).map(([key, label]) => (
+          <button key={key} className={`btn small ${tab === key ? "primary" : ""}`} aria-pressed={tab === key} onClick={() => setTab(key)}>
+            {label}
+          </button>
         ))}
-        {data.sets > 1 && <div className="small muted">Set B has the same questions with the questions, options and lines in a different order. Each set has its own key.</div>}
-        {msg && <ErrorBox message={msg} />}
       </div>
-      <div className="card stack">
-        <h2 style={{ margin: 0 }}>Questions</h2>
-        <ol style={{ margin: 0, paddingLeft: 22 }} className="stack">
-          {data.items.map((q) => (
-            <li key={q.id}>
-              {q.stem.length > 160 ? `${q.stem.slice(0, 159)}…` : q.stem}
-              <div className="small muted">
-                {q.type} · {q.skillId} · {["", "easy", "medium", "hard"][q.difficulty]}
+      {tab === "marks" && <MarksSheet paperId={data.id} />}
+      {tab === "results" && <PaperReport paperId={data.id} />}
+      {tab === "paper" && (
+        <>
+          <div className="card stack">
+            <h2 style={{ margin: 0 }}>Download</h2>
+            {sets.map((set) => (
+              <div key={set} className="row wrap">
+                {data.sets > 1 && <b style={{ minWidth: 48 }}>Set {set}</b>}
+                <button className="btn primary small" disabled={busy !== null} onClick={() => get(set, "paper")}>
+                  {busy === `${set}paper` ? "Preparing..." : "Question paper (PDF)"}
+                </button>
+                <button className="btn small" disabled={busy !== null} onClick={() => get(set, "key")}>
+                  {busy === `${set}key` ? "Preparing..." : "Answer key (PDF)"}
+                </button>
               </div>
-            </li>
-          ))}
-        </ol>
-      </div>
-      <button className="btn danger small" style={{ alignSelf: "flex-start" }} onClick={remove}>
-        Delete paper
-      </button>
+            ))}
+            {data.sets > 1 && <div className="small muted">Set B has the same questions with the questions, options and lines in a different order. Each set has its own key.</div>}
+            {msg && <ErrorBox message={msg} />}
+          </div>
+          <div className="card stack">
+            <h2 style={{ margin: 0 }}>Questions</h2>
+            <ol style={{ margin: 0, paddingLeft: 22 }} className="stack">
+              {data.items.map((q) => (
+                <li key={q.id}>
+                  {q.stem.length > 160 ? `${q.stem.slice(0, 159)}…` : q.stem}
+                  <div className="small muted">
+                    {q.type} · {q.skillId} · {["", "easy", "medium", "hard"][q.difficulty]}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+          <button className="btn danger small" style={{ alignSelf: "flex-start" }} onClick={remove}>
+            Delete paper
+          </button>
+        </>
+      )}
     </div>
   );
 }

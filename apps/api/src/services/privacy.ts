@@ -36,6 +36,8 @@ import {
   memberships,
   mistakes,
   notifications,
+  paperResults,
+  questionPapers,
   orgUnits,
   placementApplications,
   placementDrives,
@@ -48,6 +50,8 @@ import {
   studyPlans,
   talentInvites,
   tenants,
+  trainingAttendance,
+  trainingSessions,
   users,
   writingAttempts,
   type ConsentPurpose,
@@ -175,6 +179,16 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .where(eq(talentInvites.userId, userId)),
     mockInterviews: await db.select({ track: interviews.track, status: interviews.status, turns: interviews.turns, scorecard: interviews.scorecard, startedAt: interviews.startedAt }).from(interviews).where(eq(interviews.userId, userId)),
     groupDiscussions: await db.select({ topic: groupDiscussions.topicId, status: groupDiscussions.status, turns: groupDiscussions.turns, scorecard: groupDiscussions.scorecard, startedAt: groupDiscussions.startedAt }).from(groupDiscussions).where(eq(groupDiscussions.userId, userId)),
+    classTests: await db
+      .select({ paper: questionPapers.title, set: paperResults.set, answers: paperResults.answers, score: paperResults.score, enteredAt: paperResults.enteredAt })
+      .from(paperResults)
+      .innerJoin(questionPapers, eq(questionPapers.id, paperResults.paperId))
+      .where(eq(paperResults.userId, userId)),
+    trainingAttendance: await db
+      .select({ session: trainingSessions.title, startsAt: trainingSessions.startsAt, method: trainingAttendance.method, late: trainingAttendance.late, markedAt: trainingAttendance.markedAt })
+      .from(trainingAttendance)
+      .innerJoin(trainingSessions, eq(trainingSessions.id, trainingAttendance.sessionId))
+      .where(eq(trainingAttendance.userId, userId)),
     writing: await db.select({ task: writingAttempts.taskId, text: writingAttempts.text, words: writingAttempts.words, timeMs: writingAttempts.timeMs, feedback: writingAttempts.feedback, at: writingAttempts.createdAt }).from(writingAttempts).where(eq(writingAttempts.userId, userId)),
     notifications: await db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(notifications.createdAt),
     consents: (await consentState(db, userId)).history,
@@ -271,6 +285,8 @@ export async function resolveErasure(
     await tx.delete(interviews).where(eq(interviews.userId, user.id));
     await tx.delete(groupDiscussions).where(eq(groupDiscussions.userId, user.id));
     await tx.delete(writingAttempts).where(eq(writingAttempts.userId, user.id));
+    await tx.delete(paperResults).where(eq(paperResults.userId, user.id));
+    await tx.delete(trainingAttendance).where(eq(trainingAttendance.userId, user.id));
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, user.id));
     await tx.delete(studentProfiles).where(eq(studentProfiles.userId, user.id));
     await tx.delete(talentInvites).where(eq(talentInvites.userId, user.id));

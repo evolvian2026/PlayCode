@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
+import type { Role } from "@playcode/core";
 import { z } from "zod";
 import { db } from "../db/client";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
+import { paperReport, resultsSheet, saveResults } from "../services/paper-results";
 import { createPaper, deletePaper, getPaper, listPapers, MAX_PAPER_QUESTIONS, paperPdf, paperSkills } from "../services/papers";
 
 const idParam = z.object({ id: z.string().uuid() });
@@ -35,6 +37,27 @@ export async function paperRoutes(app: FastifyInstance) {
   app.delete("/papers/:id", async (req) => {
     await deletePaper(db, auth(req), parse(idParam, req.params).id);
     return { ok: true };
+  });
+
+  // ---------- Results ----------
+  const scope = (req: Parameters<typeof tenantOf>[0] & { auth: { userId: string; roles: Role[] } }) => ({ ...req.auth, tenantId: tenantOf(req) });
+
+  app.get("/papers/:id/results", async (req) => {
+    const { unitId } = parse(z.object({ unitId: z.string().uuid({ message: "Choose a batch or section" }) }), req.query);
+    return resultsSheet(db, scope(req), parse(idParam, req.params).id, unitId);
+  });
+
+  app.post("/papers/:id/results", async (req) => {
+    const { entries } = parse(
+      z.object({ entries: z.array(z.object({ userId: z.string().uuid(), set: z.enum(["A", "B"]), answers: z.string().max(400) })).min(1).max(300) }),
+      req.body,
+    );
+    return saveResults(db, scope(req), parse(idParam, req.params).id, entries, app.now());
+  });
+
+  app.get("/papers/:id/report", async (req) => {
+    const { unitId } = parse(z.object({ unitId: z.string().uuid().optional() }), req.query);
+    return paperReport(db, scope(req), parse(idParam, req.params).id, unitId);
   });
 
   app.get("/papers/:id/pdf", async (req, reply) => {
