@@ -93,6 +93,8 @@ describe("AI coach", () => {
     const sb = (await t.post(b, "/student/sessions", { kind: "daily" })).body;
     const qid = sa.question.id;
     expect(sb.question.id).toBe(qid);
+    // The daily pick depends on the tenant id, so it can be the question the first test already cached a hint for.
+    await db.delete(coachHintCache);
 
     const before = calls.length;
     await t.post(a, `/student/sessions/${sa.id}/coach`, { questionId: qid });
