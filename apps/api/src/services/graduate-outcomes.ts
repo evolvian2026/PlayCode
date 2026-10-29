@@ -154,6 +154,8 @@ interface Graduate {
   name: string;
   rollNo: string | null;
   department: string;
+  /** The department's unit, if the student is in one. */
+  departmentId: string | null;
   status: GraduateStatus;
   /** Best offer (campus or verified off-campus), annual CTC in rupees. */
   ctcRupees: number | null;
@@ -195,7 +197,7 @@ export async function batchReport(db: Db, auth: AuthContext, year: number) {
     return cur;
   };
   const dept = new Map<string, string>();
-  for (const m of member) if (m.unitId) dept.set(m.userId, name.get(rootOf(m.unitId)) ?? "Other");
+  for (const m of member) if (m.unitId) dept.set(m.userId, rootOf(m.unitId));
 
   const verified = reports.filter((r) => r.status === "verified");
   const graduates: Graduate[] = people.map((p) => {
@@ -214,7 +216,8 @@ export async function batchReport(db: Db, auth: AuthContext, year: number) {
       id: p.id,
       name: p.name,
       rollNo: p.rollNo,
-      department: dept.get(p.id) ?? "Other",
+      department: name.get(dept.get(p.id) ?? "") ?? "Other",
+      departmentId: dept.get(p.id) ?? null,
       status,
       ctcRupees: status === "placed" && best?.ctc ? best.ctc : null,
       where: status === "placed" ? best!.where : status === "higher_studies" ? `${study!.organisation}${study!.detail ? `, ${study!.detail}` : ""}` : status === "startup" ? startup!.organisation : "",
@@ -240,7 +243,10 @@ export async function batchReport(db: Db, auth: AuthContext, year: number) {
       highestCtc: salaries.length ? Math.max(...salaries) : null,
     };
   };
-  const departments = [...new Set(graduates.map((g) => g.department))].map((d) => ({ department: d, ...summarise(graduates.filter((g) => g.department === d)) }));
+  const departments = [...new Set(graduates.map((g) => g.department))].map((d) => {
+    const list = graduates.filter((g) => g.department === d);
+    return { department: d, departmentId: list[0]!.departmentId, ...summarise(list) };
+  });
   const examCounts = new Map<string, number>();
   for (const g of graduates) for (const e of new Set(g.exams)) examCounts.set(e, (examCounts.get(e) ?? 0) + 1);
 

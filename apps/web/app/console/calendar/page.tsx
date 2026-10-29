@@ -6,7 +6,7 @@ import { STAFF_CALENDAR_KINDS, type StaffCalendarEvent } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
 
-const TONE: Record<StaffCalendarEvent["kind"], string> = { drive: "good", drive_deadline: "bad", interview_day: "accent", training: "accent", circular_due: "warn", document_due: "warn", offers_due: "bad" };
+const TONE: Record<StaffCalendarEvent["kind"], string> = { drive: "good", drive_deadline: "bad", interview_day: "accent", training: "accent", circular_due: "warn", document_due: "warn", offers_due: "bad", follow_up: "warn" };
 const DAY = 86_400_000;
 
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

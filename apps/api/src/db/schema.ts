@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -52,6 +52,8 @@ export interface TenantSettings {
   guardianReports?: boolean;
   /** Offer tiers, the most offers a student may hold, and the time to accept one. */
   placementPolicy?: Partial<PlacementPolicy>;
+  /** What the placement brochure says about the institution, and whom recruiters should contact. */
+  brochure?: { about?: string; contactName?: string; contactRole?: string; contactEmail?: string; contactPhone?: string };
 }
 
 export interface TenantBranding {
@@ -2171,4 +2173,75 @@ export const driveRoundTests = pgTable(
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.driveId, t.round] })],
+);
+
+// ---------- Company relations ----------
+
+/** A company the placement cell is in touch with (or wants to be). */
+export const recruiters = pgTable(
+  "recruiters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    sector: text("sector").notNull().default(""),
+    website: text("website"),
+    stage: text("stage").$type<CompanyStage>().notNull().default("prospect"),
+    notes: text("notes").notNull().default(""),
+    ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex("recruiters_tenant_name_idx").on(t.tenantId, sql`lower(${t.name})`)],
+);
+
+export const recruiterContacts = pgTable(
+  "recruiter_contacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recruiterId: uuid("recruiter_id").notNull().references(() => recruiters.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    designation: text("designation").notNull().default(""),
+    email: text("email"),
+    phone: text("phone"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("recruiter_contacts_idx").on(t.recruiterId)],
+);
+
+/** A call, email or meeting with a company, and when to follow it up. */
+export const recruiterInteractions = pgTable(
+  "recruiter_interactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recruiterId: uuid("recruiter_id").notNull().references(() => recruiters.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<InteractionKind>().notNull(),
+    /** Day it happened, "2026-10-29". */
+    on: text("on").notNull(),
+    note: text("note").notNull(),
+    followUpOn: text("follow_up_on"),
+    followUpDone: boolean("follow_up_done").notNull().default(false),
+    byId: uuid("by_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("recruiter_interactions_idx").on(t.recruiterId, t.on), index("recruiter_followups_idx").on(t.tenantId, t.followUpDone, t.followUpOn)],
+);
+
+// ---------- Season targets ----------
+
+/** The share of a graduating batch the placement cell aims to place, per department (or the whole institution). */
+export const placementTargets = pgTable(
+  "placement_targets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    graduationYear: integer("graduation_year").notNull(),
+    /** A department; null for the institution as a whole. */
+    unitId: uuid("unit_id").references(() => orgUnits.id, { onDelete: "cascade" }),
+    targetPct: integer("target_pct").notNull(),
+    updatedBy: uuid("updated_by"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex("placement_targets_idx").on(t.tenantId, t.graduationYear, sql`coalesce(${t.unitId}, '00000000-0000-0000-0000-000000000000'::uuid)`)],
 );

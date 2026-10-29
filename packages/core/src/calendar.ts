@@ -84,7 +84,7 @@ export function toIcs(events: CalendarEvent[], opts: { name: string; now: Date }
 }
 
 /** What the placement cell and faculty see on the console calendar. */
-export type StaffCalendarKind = "drive" | "drive_deadline" | "interview_day" | "training" | "circular_due" | "document_due" | "offers_due";
+export type StaffCalendarKind = "drive" | "drive_deadline" | "interview_day" | "training" | "circular_due" | "document_due" | "offers_due" | "follow_up";
 
 export const STAFF_CALENDAR_KINDS: Record<StaffCalendarKind, string> = {
   drive: "Placement drive",
@@ -94,6 +94,7 @@ export const STAFF_CALENDAR_KINDS: Record<StaffCalendarKind, string> = {
   circular_due: "Circular due",
   document_due: "Documents due",
   offers_due: "Offer answers due",
+  follow_up: "Company follow-up",
 };
 
 export interface StaffCalendarEvent extends Omit<CalendarEvent, "kind"> {

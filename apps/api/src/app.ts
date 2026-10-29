@@ -30,6 +30,7 @@ import { guardianConsoleRoutes, guardianPublicRoutes, guardianStudentRoutes } fr
 import { circularConsoleRoutes, circularStudentRoutes } from "./routes/circulars";
 import { documentConsoleRoutes, documentStudentRoutes } from "./routes/documents";
 import { staffCalendarRoutes } from "./routes/staff-calendar";
+import { recruiterRoutes } from "./routes/recruiters";
 import { helpdeskRoutes } from "./routes/helpdesk";
 import { paperRoutes } from "./routes/papers";
 import { writingRoutes } from "./routes/writing";
@@ -165,6 +166,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(circularConsoleRoutes, { prefix: "/console" });
   await app.register(documentConsoleRoutes, { prefix: "/console" });
   await app.register(staffCalendarRoutes, { prefix: "/console" });
+  await app.register(recruiterRoutes, { prefix: "/console" });
   await app.register(adminRoutes, { prefix: "/admin" });
   await app.register(engageRoutes);
   await app.register(developerRoutes, { prefix: "/console" });

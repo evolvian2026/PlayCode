@@ -3,6 +3,7 @@ import { can, localDate, type StaffCalendarEvent } from "@playcode/core";
 import type { Db } from "../db/client";
 import { circulars, documentRequests, driveSchedules, driveSlots, placementApplications, placementDrives, trainingSessions } from "../db/schema";
 import { visible } from "./circulars";
+import { openFollowUps } from "./recruiters";
 import { appLink } from "./notifications";
 import type { AuthContext } from "./scope";
 import { getTenant } from "./tenant";
@@ -63,6 +64,7 @@ export async function staffCalendar(db: Db, auth: AuthContext, from: Date, to: D
     const perDay = new Map<string, number>();
     for (const w of waiting) perDay.set(localDate(w.decideBy!, tz), (perDay.get(localDate(w.decideBy!, tz)) ?? 0) + 1);
     for (const [day, n] of perDay) events.push({ ...base, uid: `offers-${day}`, kind: "offers_due", title: `${n} offer${n === 1 ? "" : "s"} due for an answer`, start: day, allDay: true, url: appLink("/console/placements") });
+    for (const f of await openFollowUps(db, tenant.id, fromDay, toDay)) events.push({ ...base, uid: `follow-up-${f.id}`, kind: "follow_up", title: `Follow up: ${f.name}`, start: f.on!, allDay: true, detail: f.note || null, url: appLink(`/console/recruiters?id=${f.recruiterId}`) });
   }
 
   // Training sessions this person can see (listSessions covers four months back).

@@ -1,7 +1,8 @@
-import { checkEligibility, seededRandom, type AcademicRecord, type PlacementCriteria } from "@playcode/core";
+import { checkEligibility, localDate, seededRandom, type AcademicRecord, type CompanyStage, type InteractionKind, type PlacementCriteria } from "@playcode/core";
+import { eq, sql } from "drizzle-orm";
 import { createDrive } from "../services/placements";
 import { db } from "./client";
-import { academicRecords, interviews, placementApplications, placementDrives, type ApplicationStatus, type InterviewTurn } from "./schema";
+import { academicRecords, interviews, placementApplications, placementDrives, placementTargets, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
 
 const DAY_MS = 86_400_000;
 
@@ -195,4 +196,42 @@ export async function seedInterview(args: { tenantId: string; userId: string; no
     startedAt: at,
     finishedAt: new Date(at.getTime() + 9 * 60_000),
   });
+}
+
+/**
+ * The placement cell's company list: the companies that came this season,
+ * two being talked to (one follow-up due today, one overdue), and a season
+ * target for the batch.
+ */
+export async function seedRecruiters(args: { tenantId: string; tpoId: string; departments: { cse: string; ece: string }; now: Date }) {
+  const { tenantId, tpoId, now } = args;
+  const day = (offset: number) => localDate(new Date(now.getTime() + offset * DAY_MS), "Asia/Kolkata");
+  const companies: { name: string; sector: string; stage: CompanyStage; website: string | null; contact?: [string, string, string, string]; log: [InteractionKind, number, string, number | null][] }[] = [
+    { name: "TCS", sector: "IT services", stage: "visited", website: "https://www.tcs.com", contact: ["Meera Iyer", "Campus relations, Chennai", "meera.iyer@tcs.example", "+91 98400 11223"], log: [["visit", -63, "NQT on campus, 3 rounds. Asked for the 2028 batch list by June.", null]] },
+    { name: "Infosys", sector: "IT services", stage: "visited", website: "https://www.infosys.com", log: [["visit", -42, "Online assessment and interviews in one day.", null]] },
+    { name: "Zoho", sector: "Product", stage: "visited", website: "https://www.zoho.com", contact: ["Karthik R", "Talent acquisition", "karthik.r@zoho.example", ""], log: [["visit", -21, "Programming round was tough; only CSE eligible. Open to ECE next year if CGPA is 7.5+.", null]] },
+    { name: "Accenture", sector: "IT services", stage: "confirmed", website: "https://www.accenture.com", log: [["email", -6, "Drive confirmed, registration open on PlayCode.", null]] },
+    { name: "Wipro", sector: "IT services", stage: "in_talks", website: "https://www.wipro.com", contact: ["Sanjay Gupta", "University relations", "sanjay.gupta@wipro.example", "+91 99000 44556"], log: [["call", -8, "Interested in an Elite NTH drive in December. Wants last year's numbers and the brochure.", 0]] },
+    { name: "Freshworks", sector: "Product (SaaS)", stage: "confirmed", website: "https://www.freshworks.com", log: [["meeting", -9, "Drive confirmed for CSE; they will share the test link a day before.", null]] },
+    { name: "Juspay", sector: "Product (fintech)", stage: "prospect", website: "https://juspay.in", log: [["email", -12, "Sent the brochure to their campus team.", -2]] },
+    { name: "Deloitte", sector: "Consulting", stage: "not_interested", website: null, log: [["call", -30, "Hiring only from tier-1 colleges this year. Try again in July.", null]] },
+  ];
+  for (const c of companies) {
+    const [r] = await db.insert(recruiters).values({ tenantId, name: c.name, sector: c.sector, stage: c.stage, website: c.website, ownerId: tpoId, createdAt: now, updatedAt: now }).returning();
+    if (c.contact) await db.insert(recruiterContacts).values({ recruiterId: r!.id, name: c.contact[0], designation: c.contact[1], email: c.contact[2] || null, phone: c.contact[3] || null, createdAt: now });
+    for (const [kind, on, note, follow] of c.log) await db.insert(recruiterInteractions).values({ recruiterId: r!.id, tenantId, kind, on: day(on), note, followUpOn: follow === null ? null : day(follow), byId: tpoId, createdAt: now });
+  }
+  const brochure = {
+    about: "Demo Institute of Technology was founded in 1998 and is affiliated to the state technical university. Our 2027 batch studies Computer Science and Electronics, and every student trains for placements from the second year: coding, aptitude, communication and mock interviews, with their progress tracked on PlayCode.",
+    contactName: "Rajesh Sharma",
+    contactRole: "Training and Placement Officer",
+    contactEmail: "placements@demo.edu",
+    contactPhone: "+91 80 4000 1234",
+  };
+  await db.update(tenants).set({ settings: sql`${tenants.settings} || ${JSON.stringify({ brochure })}::jsonb` }).where(eq(tenants.id, tenantId));
+  await db.insert(placementTargets).values([
+    { tenantId, graduationYear: 2027, unitId: null, targetPct: 80, updatedBy: tpoId, updatedAt: now },
+    { tenantId, graduationYear: 2027, unitId: args.departments.cse, targetPct: 85, updatedBy: tpoId, updatedAt: now },
+    { tenantId, graduationYear: 2027, unitId: args.departments.ece, targetPct: 70, updatedBy: tpoId, updatedAt: now },
+  ]);
 }
