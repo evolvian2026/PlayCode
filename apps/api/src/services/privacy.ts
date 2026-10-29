@@ -17,6 +17,8 @@ import {
   interviewSlots,
   squads,
   contests,
+  circularAcks,
+  circulars,
   consents,
   driveCandidates,
   drives,
@@ -207,6 +209,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .from(mentoringMeetings)
       .where(eq(mentoringMeetings.studentId, userId)),
     trainingFeedback: await db.select({ session: trainingSessions.title, content: trainingFeedback.content, delivery: trainingFeedback.delivery, relevance: trainingFeedback.relevance, comment: trainingFeedback.comment, at: trainingFeedback.createdAt }).from(trainingFeedback).innerJoin(trainingSessions, eq(trainingSessions.id, trainingFeedback.sessionId)).where(eq(trainingFeedback.userId, userId)),
+    circularsAcknowledged: await db.select({ title: circulars.title, at: circularAcks.at }).from(circularAcks).innerJoin(circulars, eq(circulars.id, circularAcks.circularId)).where(eq(circularAcks.userId, userId)),
     outcomes: await db.select({ kind: studentOutcomes.kind, organisation: studentOutcomes.organisation, detail: studentOutcomes.detail, ctcRupees: studentOutcomes.ctcRupees, outcomeDate: studentOutcomes.outcomeDate, status: studentOutcomes.status, reviewNote: studentOutcomes.reviewNote, createdAt: studentOutcomes.createdAt }).from(studentOutcomes).where(eq(studentOutcomes.userId, userId)),
     guardian: (await db.select({ name: guardians.name, relation: guardians.relation, email: guardians.email, confirmedAt: guardians.confirmedAt, stoppedAt: guardians.stoppedAt, lastReportMonth: guardians.lastReportMonth }).from(guardians).where(eq(guardians.userId, userId)))[0] ?? null,
     writing: await db.select({ task: writingAttempts.taskId, text: writingAttempts.text, words: writingAttempts.words, timeMs: writingAttempts.timeMs, feedback: writingAttempts.feedback, at: writingAttempts.createdAt }).from(writingAttempts).where(eq(writingAttempts.userId, userId)),
@@ -311,6 +314,7 @@ export async function resolveErasure(
     await tx.delete(trainingFeedback).where(eq(trainingFeedback.userId, user.id));
     await tx.delete(studentOutcomes).where(eq(studentOutcomes.userId, user.id));
     await tx.delete(guardians).where(eq(guardians.userId, user.id));
+    await tx.delete(circularAcks).where(eq(circularAcks.userId, user.id));
     await tx.delete(mentorAssignments).where(or(eq(mentorAssignments.studentId, user.id), eq(mentorAssignments.mentorId, user.id)));
     await tx.delete(trainingAttendance).where(eq(trainingAttendance.userId, user.id));
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, user.id));

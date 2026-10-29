@@ -40,11 +40,53 @@ export interface Eligibility {
 }
 
 /**
+ * The placement policy many colleges run: offers fall into tiers by CTC, and a
+ * student who holds an offer may only sit for drives in a higher tier
+ * ("dream" and "super dream" companies), up to a maximum number of offers.
+ * Offers are accepted or declined within a few days.
+ */
+export type OfferTier = "regular" | "dream" | "super_dream";
+
+export const OFFER_TIERS: Record<OfferTier, string> = { regular: "Regular", dream: "Dream", super_dream: "Super dream" };
+const TIER_RANK: Record<OfferTier, number> = { regular: 0, dream: 1, super_dream: 2 };
+
+export interface PlacementPolicy {
+  /** Tiers and the upgrade rule apply; without it, a drive either takes students with offers or doesn't. */
+  tiers: boolean;
+  /** Annual CTC in rupees from which an offer is Dream, and Super dream. */
+  dreamFromRupees: number;
+  superDreamFromRupees: number;
+  /** Offers a student may hold before they can't register any more. */
+  maxOffers: number;
+  /** Days a student has to accept or decline an offer; undecided offers are then taken as accepted. */
+  decisionDays: number;
+}
+
+export const DEFAULT_PLACEMENT_POLICY: PlacementPolicy = { tiers: false, dreamFromRupees: 600_000, superDreamFromRupees: 1_000_000, maxOffers: 2, decisionDays: 3 };
+
+export function offerTier(ctcRupees: number, policy: PlacementPolicy): OfferTier {
+  if (ctcRupees >= policy.superDreamFromRupees) return "super_dream";
+  if (ctcRupees >= policy.dreamFromRupees) return "dream";
+  return "regular";
+}
+
+export function higherTier(a: OfferTier, b: OfferTier): boolean {
+  return TIER_RANK[a] > TIER_RANK[b];
+}
+
+/**
  * `attendancePct` is the student's training attendance, or null when no
  * session has been held for them yet; a student can't fall short of training
- * that never happened.
+ * that never happened. `offers` are the tiers of offers the student already
+ * holds from other drives (accepted, declined or undecided: declining one
+ * doesn't reopen lower-tier drives); with a tiered `policy` they decide which
+ * drives are still open to the student.
  */
-export function checkEligibility(criteria: PlacementCriteria, record: AcademicRecord | null, ctx: { inUnits: boolean; placed: boolean; attendancePct?: number | null }): Eligibility {
+export function checkEligibility(
+  criteria: PlacementCriteria,
+  record: AcademicRecord | null,
+  ctx: { inUnits: boolean; placed: boolean; attendancePct?: number | null; policy?: PlacementPolicy; offers?: OfferTier[]; driveCtcRupees?: number },
+): Eligibility {
   const reasons: string[] = [];
   const r: AcademicRecord = record ?? { cgpa: null, backlogs: null, tenthPct: null, twelfthPct: null, graduationYear: null };
   if (!ctx.inUnits) reasons.push("Your branch or batch is not invited");
@@ -71,7 +113,15 @@ export function checkEligibility(criteria: PlacementCriteria, record: AcademicRe
   if (criteria.minAttendancePct != null && ctx.attendancePct != null && ctx.attendancePct < criteria.minAttendancePct) {
     reasons.push(`Needs ${criteria.minAttendancePct}% attendance in placement training (yours is ${ctx.attendancePct}%)`);
   }
-  if (ctx.placed && !criteria.allowPlaced) reasons.push("You already hold an offer, and this drive is for students without one");
+  const offers = ctx.offers ?? [];
+  if (ctx.policy?.tiers && offers.length && ctx.driveCtcRupees != null) {
+    const best = offers.reduce((a, b) => (higherTier(b, a) ? b : a));
+    const tier = offerTier(ctx.driveCtcRupees, ctx.policy);
+    if (offers.length >= ctx.policy.maxOffers) reasons.push(`You already hold ${offers.length} offer${offers.length === 1 ? "" : "s"}, the most the placement policy allows`);
+    else if (!criteria.allowPlaced && !higherTier(tier, best)) {
+      reasons.push(best === "super_dream" ? "You hold a Super dream offer, the highest tier" : `You hold a ${OFFER_TIERS[best]} offer, so you can only sit for ${best === "regular" ? "Dream and Super dream" : "Super dream"} drives`);
+    }
+  } else if (ctx.placed && !criteria.allowPlaced) reasons.push("You already hold an offer, and this drive is for students without one");
   return { eligible: reasons.length === 0, reasons };
 }
 

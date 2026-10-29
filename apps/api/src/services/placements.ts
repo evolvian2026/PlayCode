@@ -1,18 +1,23 @@
 import { and, desc, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import {
   checkEligibility,
+  DEFAULT_PLACEMENT_POLICY,
   ENGAGEMENT_BANDS,
   engagementBand,
   formatLpa,
   median,
+  OFFER_TIERS,
+  offerTier,
   readinessBand,
   type AcademicRecord,
+  type OfferTier,
+  type PlacementPolicy,
   type CompanyType,
   type EngagementBand,
   type PlacementCriteria,
 } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
-import { academicRecords, memberships, packs, placementApplications, placementDrives, responses, users, type ApplicationStatus } from "../db/schema";
+import { academicRecords, memberships, packs, placementApplications, placementDrives, responses, tenants, users, type ApplicationStatus } from "../db/schema";
 import { audit } from "../lib/audit";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { readinessFor } from "./analytics";
@@ -111,15 +116,41 @@ async function recordsFor(db: DbOrTx, userIds: string[]): Promise<Map<string, Ac
   return new Map(rows.map((r) => [r.userId, { cgpa: r.cgpa, backlogs: r.backlogs, tenthPct: r.tenthPct, twelfthPct: r.twelfthPct, graduationYear: r.graduationYear }]));
 }
 
-/** Students holding at least one offer. */
-async function placedIds(db: DbOrTx, tenantId: string, userIds: string[]): Promise<Set<string>> {
-  if (userIds.length === 0) return new Set();
-  const rows = await db
-    .selectDistinct({ userId: placementApplications.userId })
-    .from(placementApplications)
-    .where(and(eq(placementApplications.tenantId, tenantId), eq(placementApplications.status, "offered"), inArray(placementApplications.userId, userIds)));
-  return new Set(rows.map((r) => r.userId));
+// ---------- Placement policy ----------
+
+export function policyOf(tenant: { settings: { placementPolicy?: Partial<PlacementPolicy> } }): PlacementPolicy {
+  return { ...DEFAULT_PLACEMENT_POLICY, ...tenant.settings.placementPolicy };
 }
+
+export async function placementPolicy(db: DbOrTx, tenantId: string) {
+  return policyOf(await getTenant(db, tenantId));
+}
+
+export async function setPlacementPolicy(db: Db, args: { tenantId: string; actorId: string; policy: PlacementPolicy }) {
+  if (args.policy.superDreamFromRupees <= args.policy.dreamFromRupees) throw badRequest("Super dream has to start above Dream");
+  await db
+    .update(tenants)
+    .set({ settings: sql`${tenants.settings} || ${JSON.stringify({ placementPolicy: args.policy })}::jsonb` })
+    .where(eq(tenants.id, args.tenantId));
+  await audit(db, { tenantId: args.tenantId, actorId: args.actorId, action: "placements.policy", data: { ...args.policy } });
+  return args.policy;
+}
+
+/** Offers each student holds, by drive (declined ones too: an offer made still counts under the policy). */
+async function offersFor(db: DbOrTx, tenantId: string, userIds: string[]) {
+  const out = new Map<string, { driveId: string; ctcRupees: number }[]>();
+  if (userIds.length === 0) return out;
+  const rows = await db
+    .select({ userId: placementApplications.userId, driveId: placementApplications.driveId, ctc: placementApplications.offerCtcRupees, driveCtc: placementDrives.ctcRupees })
+    .from(placementApplications)
+    .innerJoin(placementDrives, eq(placementDrives.id, placementApplications.driveId))
+    .where(and(eq(placementApplications.tenantId, tenantId), eq(placementApplications.status, "offered"), inArray(placementApplications.userId, userIds)));
+  for (const r of rows) (out.get(r.userId) ?? out.set(r.userId, []).get(r.userId)!).push({ driveId: r.driveId, ctcRupees: r.ctc ?? r.driveCtc });
+  return out;
+}
+
+const tiersOf = (offers: { driveId: string; ctcRupees: number }[] | undefined, policy: PlacementPolicy, exceptDrive: string): OfferTier[] =>
+  (offers ?? []).filter((o) => o.driveId !== exceptDrive).map((o) => offerTier(o.ctcRupees, policy));
 
 /** Days with at least one answer in the 60 days before `at`, in the tenant's time zone. */
 async function activeDays(db: DbOrTx, userId: string, at: Date, timeZone: string): Promise<number> {
@@ -150,12 +181,16 @@ export interface NewDrive {
 async function eligibleStudents(db: DbOrTx, drive: DriveRow, now: Date): Promise<string[]> {
   const units = await tenantUnits(db, drive.tenantId);
   const pool = await studentIdsInUnits(db, drive.tenantId, drive.criteria.unitIds.length ? descendants(units, drive.criteria.unitIds) : units.map((u) => u.id));
-  const [records, placed, attendance] = await Promise.all([
+  const [records, offers, attendance, policy] = await Promise.all([
     recordsFor(db, pool),
-    placedIds(db, drive.tenantId, pool),
+    offersFor(db, drive.tenantId, pool),
     drive.criteria.minAttendancePct != null ? attendanceFor(db, drive.tenantId, pool, now) : new Map<string, { pct: number | null }>(),
+    placementPolicy(db, drive.tenantId),
   ]);
-  return pool.filter((id) => checkEligibility(drive.criteria, records.get(id) ?? null, { inUnits: true, placed: placed.has(id), attendancePct: attendance.get(id)?.pct ?? null }).eligible);
+  return pool.filter((id) => {
+    const held = tiersOf(offers.get(id), policy, drive.id);
+    return checkEligibility(drive.criteria, records.get(id) ?? null, { inUnits: true, placed: held.length > 0, attendancePct: attendance.get(id)?.pct ?? null, policy, offers: held, driveCtcRupees: drive.ctcRupees }).eligible;
+  });
 }
 
 export async function createDrive(db: Db, args: NewDrive & { tenantId: string; actorId: string; now: Date }) {
@@ -204,6 +239,7 @@ export async function setDriveStatus(db: Db, args: { tenantId: string; actorId: 
 const active = (status: ApplicationStatus) => status !== "withdrawn";
 
 export async function listDrives(db: DbOrTx, tenantId: string) {
+  const policy = await placementPolicy(db, tenantId);
   const drives = await db.select().from(placementDrives).where(eq(placementDrives.tenantId, tenantId)).orderBy(desc(placementDrives.driveDate));
   const apps = drives.length
     ? await db.select({ driveId: placementApplications.driveId, status: placementApplications.status }).from(placementApplications).where(eq(placementApplications.tenantId, tenantId))
@@ -220,6 +256,7 @@ export async function listDrives(db: DbOrTx, tenantId: string) {
       registerBy: d.registerBy,
       status: d.status,
       rounds: d.rounds.length,
+      tier: policy.tiers ? offerTier(d.ctcRupees, policy) : null,
       registered: mine.length,
       offers: mine.filter((a) => a.status === "offered").length,
     };
@@ -253,6 +290,8 @@ export async function driveDetail(db: Db, tenantId: string, id: string, now: Dat
         status: a.status,
         roundsCleared: a.roundsCleared,
         offerCtcRupees: a.offerCtcRupees,
+        decision: a.status === "offered" ? (a.decision ?? null) : null,
+        decideBy: a.status === "offered" ? a.decideBy : null,
         registeredAt: a.createdAt,
         readinessAtRegistration: a.readiness[profile] ?? 0,
         activeDays60: a.activeDays60,
@@ -298,6 +337,7 @@ export type ApplicationAction = "advance" | "reject" | "offer" | "reset";
 /** Move applicants through the selection: clear the next round, reject, make an offer, or undo back to registered. */
 export async function updateApplications(db: Db, args: { tenantId: string; actorId: string; driveId: string; userIds: string[]; action: ApplicationAction; ctcRupees?: number; now: Date }) {
   const drive = await loadDrive(db, args.tenantId, args.driveId);
+  const policy = await placementPolicy(db, args.tenantId);
   const apps = await db
     .select()
     .from(placementApplications)
@@ -324,19 +364,23 @@ export async function updateApplications(db: Db, args: { tenantId: string; actor
     } else if (args.action === "reject") {
       set = { status: "rejected" };
     } else if (args.action === "offer") {
-      set = { status: "offered", offerCtcRupees: args.ctcRupees ?? drive.ctcRupees, roundsCleared: drive.rounds.length };
+      // A repeated offer (say, a corrected CTC) keeps the student's answer and deadline.
+      set =
+        a.status === "offered"
+          ? { offerCtcRupees: args.ctcRupees ?? drive.ctcRupees }
+          : { status: "offered", offerCtcRupees: args.ctcRupees ?? drive.ctcRupees, roundsCleared: drive.rounds.length, decision: null, decidedAt: null, decideBy: new Date(args.now.getTime() + policy.decisionDays * DAY_MS) };
       notes.push({
         tenantId: args.tenantId,
         userId: a.userId,
         template: "placement",
         title: `Congratulations! ${drive.company} has made you an offer`,
-        body: `${drive.roleTitle}, ${formatLpa(args.ctcRupees ?? drive.ctcRupees)}. The placement cell will share the next steps.`,
+        body: `${drive.roleTitle}, ${formatLpa(args.ctcRupees ?? drive.ctcRupees)}. Accept or decline it in the app within ${policy.decisionDays} day${policy.decisionDays === 1 ? "" : "s"}.`,
         link: appLink("/play/placements"),
         dedupeKey: `placement-offer:${drive.id}:${a.userId}`,
         sentBy: args.actorId,
       });
     } else {
-      set = { status: "registered", roundsCleared: 0, offerCtcRupees: null };
+      set = { status: "registered", roundsCleared: 0, offerCtcRupees: null, decision: null, decidedAt: null, decideBy: null };
     }
     await db
       .update(placementApplications)
@@ -354,12 +398,13 @@ export async function updateApplications(db: Db, args: { tenantId: string; actor
 // ---------- Students ----------
 
 export async function studentPlacements(db: Db, ctx: { tenantId: string; userId: string; now: Date }) {
-  const [record, mine, units, placed, attendance] = await Promise.all([
+  const [record, mine, units, offers, attendance, policy] = await Promise.all([
     recordsFor(db, [ctx.userId]).then((m) => m.get(ctx.userId) ?? null),
     db.select().from(placementApplications).where(and(eq(placementApplications.tenantId, ctx.tenantId), eq(placementApplications.userId, ctx.userId))),
     studentUnitIdsWithAncestors(db, ctx.tenantId, ctx.userId),
-    placedIds(db, ctx.tenantId, [ctx.userId]),
+    offersFor(db, ctx.tenantId, [ctx.userId]).then((m) => m.get(ctx.userId)),
     attendanceFor(db, ctx.tenantId, [ctx.userId], ctx.now).then((m) => m.get(ctx.userId)!),
+    placementPolicy(db, ctx.tenantId),
   ]);
   const myUnits = new Set(units);
   const drives = await db.select().from(placementDrives).where(eq(placementDrives.tenantId, ctx.tenantId)).orderBy(placementDrives.driveDate);
@@ -372,7 +417,8 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
     if (!open && !(app && active(app.status))) continue;
     const inUnits = d.criteria.unitIds.length === 0 || d.criteria.unitIds.some((u) => myUnits.has(u));
     // Their own offer doesn't count against a drive they're already in.
-    const eligibility = checkEligibility(d.criteria, record, { inUnits, placed: placed.has(ctx.userId) && app?.status !== "offered", attendancePct: attendance.pct });
+    const held = tiersOf(offers, policy, d.id);
+    const eligibility = checkEligibility(d.criteria, record, { inUnits, placed: held.length > 0, attendancePct: attendance.pct, policy, offers: held, driveCtcRupees: d.ctcRupees });
     out.push({
       id: d.id,
       company: d.company,
@@ -387,11 +433,20 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
       pack: d.packId ? { id: d.packId, title: packTitles.get(d.packId) ?? d.packId } : null,
       readinessProfile: profileFor(d.companyType),
       open,
+      tier: policy.tiers ? offerTier(d.ctcRupees, policy) : null,
       eligibility,
-      application: app && active(app.status) ? { status: app.status, roundsCleared: app.roundsCleared, offerCtcRupees: app.offerCtcRupees } : null,
+      application:
+        app && active(app.status)
+          ? { status: app.status, roundsCleared: app.roundsCleared, offerCtcRupees: app.offerCtcRupees, decision: app.status === "offered" ? (app.decision ?? null) : null, decideBy: app.status === "offered" ? app.decideBy : null }
+          : null,
     });
   }
-  return { record, attendance, drives: out };
+  return {
+    record,
+    attendance,
+    policy: policy.tiers ? { tiers: OFFER_TIERS, dreamFromRupees: policy.dreamFromRupees, superDreamFromRupees: policy.superDreamFromRupees, maxOffers: policy.maxOffers } : null,
+    drives: out,
+  };
 }
 
 export async function register(db: Db, ctx: { tenantId: string; userId: string; driveId: string; now: Date }) {
@@ -415,6 +470,78 @@ export async function withdraw(db: Db, ctx: { tenantId: string; userId: string; 
   if (!app || app.status === "withdrawn") throw notFound("Registration");
   if (app.status !== "registered" || drive.registerBy <= ctx.now) throw badRequest("You can only withdraw before registration closes and before the selection starts");
   await db.update(placementApplications).set({ status: "withdrawn", updatedAt: ctx.now }).where(and(eq(placementApplications.driveId, drive.id), eq(placementApplications.userId, ctx.userId)));
+}
+
+/**
+ * A student accepts or declines an offer before its deadline. Only one offer
+ * can be accepted: accepting declines the other offers still waiting for an
+ * answer, and a decision is final (the placement cell can reset it).
+ */
+export async function decideOffer(db: Db, ctx: { tenantId: string; userId: string; driveId: string; accept: boolean; now: Date }) {
+  const drive = await loadDrive(db, ctx.tenantId, ctx.driveId);
+  const mine = await db.select().from(placementApplications).where(and(eq(placementApplications.tenantId, ctx.tenantId), eq(placementApplications.userId, ctx.userId), eq(placementApplications.status, "offered")));
+  const app = mine.find((a) => a.driveId === drive.id);
+  if (!app) throw notFound("Offer");
+  if (app.decision) throw conflict("decided", `You have already ${app.decision} this offer. Talk to your placement cell to change it.`);
+  if (app.decideBy && app.decideBy <= ctx.now) throw badRequest("The time to answer this offer has passed");
+  const where = (driveId: string) => and(eq(placementApplications.driveId, driveId), eq(placementApplications.userId, ctx.userId));
+  if (ctx.accept) {
+    const accepted = mine.find((a) => a.decision === "accepted");
+    if (accepted) throw conflict("accepted_elsewhere", "You have already accepted another offer");
+    for (const other of mine.filter((a) => a.driveId !== drive.id && !a.decision)) await db.update(placementApplications).set({ decision: "declined", decidedAt: ctx.now }).where(where(other.driveId));
+  }
+  await db.update(placementApplications).set({ decision: ctx.accept ? "accepted" : "declined", decidedAt: ctx.now }).where(where(drive.id));
+  await audit(db, { tenantId: ctx.tenantId, actorId: ctx.userId, action: ctx.accept ? "placements.offer_accept" : "placements.offer_decline", target: drive.id });
+}
+
+/**
+ * Hourly: remind students of offers due for an answer within a day, and take
+ * undecided offers past their deadline as accepted (the best one first; any
+ * others then as declined, since only one can be accepted).
+ */
+export async function settleOffers(db: Db, now: Date) {
+  const waiting = await db
+    .select({ a: placementApplications, company: placementDrives.company })
+    .from(placementApplications)
+    .innerJoin(placementDrives, eq(placementDrives.id, placementApplications.driveId))
+    .where(and(eq(placementApplications.status, "offered"), sql`${placementApplications.decision} is null`, sql`${placementApplications.decideBy} is not null`));
+  let reminded = 0;
+  let settled = 0;
+  const soon = waiting.filter(({ a }) => a.decideBy! > now && a.decideBy!.getTime() - now.getTime() <= DAY_MS);
+  reminded += await enqueue(
+    db,
+    soon.map(({ a, company }) => ({
+      tenantId: a.tenantId,
+      userId: a.userId,
+      template: "placement" as const,
+      title: `Answer your ${company} offer by tomorrow`,
+      body: "Accept or decline it in the app. If you don't answer, it's taken as accepted.",
+      link: appLink("/play/placements"),
+      dedupeKey: `offer-remind:${a.driveId}:${a.userId}`,
+    })),
+  );
+  const due = waiting.filter(({ a }) => a.decideBy! <= now).sort((x, y) => (y.a.offerCtcRupees ?? 0) - (x.a.offerCtcRupees ?? 0));
+  for (const { a, company } of due) {
+    const accepted = await db
+      .select({ id: placementApplications.driveId })
+      .from(placementApplications)
+      .where(and(eq(placementApplications.tenantId, a.tenantId), eq(placementApplications.userId, a.userId), eq(placementApplications.status, "offered"), eq(placementApplications.decision, "accepted")));
+    const decision = accepted.length ? "declined" : "accepted";
+    await db.update(placementApplications).set({ decision, decidedAt: now }).where(and(eq(placementApplications.driveId, a.driveId), eq(placementApplications.userId, a.userId)));
+    await enqueue(db, [
+      {
+        tenantId: a.tenantId,
+        userId: a.userId,
+        template: "placement",
+        title: decision === "accepted" ? `Your ${company} offer is taken as accepted` : `Your ${company} offer is taken as declined`,
+        body: decision === "accepted" ? "You didn't answer in time. Talk to your placement cell if that's wrong." : "You had already accepted another offer.",
+        link: appLink("/play/placements"),
+        dedupeKey: `offer-settled:${a.driveId}:${a.userId}`,
+      },
+    ]);
+    settled++;
+  }
+  return { reminded, settled };
 }
 
 // ---------- Outcomes ----------

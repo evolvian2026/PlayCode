@@ -35,6 +35,8 @@ interface Detail {
     status: Status;
     roundsCleared: number;
     offerCtcRupees: number | null;
+    decision: "accepted" | "declined" | null;
+    decideBy: string | null;
     readinessAtRegistration: number;
     activeDays60: number;
   }[];
@@ -219,6 +221,17 @@ export default function PlacementDrive() {
                     <td>{a.activeDays60}</td>
                     <td>
                       <span className={`pill ${STATUS_TONE[a.status]}`}>{stage(a)}</span>
+                      {a.status === "offered" && (
+                        <div className="small muted">
+                          {a.decision === "accepted"
+                            ? "Accepted"
+                            : a.decision === "declined"
+                              ? "Declined"
+                              : a.decideBy
+                                ? `Answering by ${new Date(a.decideBy).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
+                                : "No answer asked"}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

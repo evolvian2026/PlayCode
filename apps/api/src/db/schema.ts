@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -50,6 +50,8 @@ export interface TenantSettings {
   talentPool?: boolean;
   /** Students may have a monthly progress email sent to a parent or guardian. */
   guardianReports?: boolean;
+  /** Offer tiers, the most offers a student may hold, and the time to accept one. */
+  placementPolicy?: Partial<PlacementPolicy>;
 }
 
 export interface TenantBranding {
@@ -801,7 +803,7 @@ export const contestSubmissions = pgTable(
 
 // ---------- Notifications ----------
 
-export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest" | "squad" | "doubt" | "interview_slot" | "class_test" | "training";
+export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest" | "squad" | "doubt" | "interview_slot" | "class_test" | "training" | "circular";
 
 export const notifications = pgTable(
   "notifications",
@@ -1446,6 +1448,10 @@ export const placementApplications = pgTable(
     /** Selection rounds cleared so far. */
     roundsCleared: integer("rounds_cleared").notNull().default(0),
     offerCtcRupees: integer("offer_ctc_rupees"),
+    /** The student's answer to an offer; undecided offers are taken as accepted after `decideBy`. */
+    decision: text("decision").$type<"accepted" | "declined">(),
+    decideBy: timestamp("decide_by", { withTimezone: true }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
     /** Readiness per company profile and practice days in the previous 60, when the student registered: the "before" for outcome reports. */
     readiness: jsonb("readiness").$type<Record<string, number>>().notNull(),
     activeDays60: integer("active_days_60").notNull(),
@@ -1963,3 +1969,36 @@ export const guardians = pgTable("guardians", {
   lastError: text("last_error"),
   createdAt: createdAt(),
 });
+
+// ---------- Circulars ----------
+
+/** A notice from the placement cell to chosen batches, which students may have to acknowledge. */
+export const circulars = pgTable(
+  "circulars",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    /** Batches or sections it is for; empty means every student. */
+    unitIds: jsonb("unit_ids").$type<string[]>().notNull(),
+    requireAck: boolean("require_ack").notNull().default(false),
+    /** Last day to acknowledge, "2026-11-05". */
+    ackBy: text("ack_by"),
+    lastRemindedAt: timestamp("last_reminded_at", { withTimezone: true }),
+    withdrawnAt: timestamp("withdrawn_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("circulars_tenant_idx").on(t.tenantId, t.createdAt)],
+);
+
+export const circularAcks = pgTable(
+  "circular_acks",
+  {
+    circularId: uuid("circular_id").notNull().references(() => circulars.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    at: timestamp("at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.circularId, t.userId] }), index("circular_acks_user_idx").on(t.userId)],
+);

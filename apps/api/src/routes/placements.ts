@@ -3,10 +3,12 @@ import { z } from "zod";
 import { db } from "../db/client";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
 import { requireFeature } from "../services/plan";
+import { companyList, companyPage } from "../services/companies";
 import { batchCsv, batchReport, deleteOutcome, graduationYears, myOutcomes, outcomeQueue, reportOutcome, reviewOutcome, updateOutcome } from "../services/graduate-outcomes";
 import { experienceCounts, experienceOptions, pendingCount, readExperiences, reviewExperience, reviewQueue, submitExperience } from "../services/experiences";
 import {
   createDrive,
+  decideOffer,
   driveCsv,
   driveDetail,
   importRecords,
@@ -14,7 +16,9 @@ import {
   outcomes,
   outcomesCsv,
   parseRecordCsv,
+  placementPolicy,
   register,
+  setPlacementPolicy,
   setDriveStatus,
   studentPlacements,
   updateApplications,
@@ -156,6 +160,10 @@ export async function placementRoutes(app: FastifyInstance) {
     return batchCsv(await batchReport(db, staffAuth(req), year));
   });
 
+  // ---------- Company pages ----------
+  app.get("/student/companies", { preHandler: play }, async (req) => companyList(db, studentCtx(req)));
+  app.get("/student/companies/:name", { preHandler: play }, async (req) => companyPage(db, studentCtx(req), parse(z.object({ name: z.string().min(1).max(120) }), req.params).name));
+
   app.get("/student/placements", { preHandler: requirePermission("practice.play") }, async (req) => studentPlacements(db, { tenantId: tenantOf(req), userId: req.auth.userId, now: app.now() }));
 
   app.post("/student/placements/:id/register", { preHandler: [requirePermission("practice.play"), requireFeature("placements")] }, async (req) => {
@@ -166,5 +174,25 @@ export async function placementRoutes(app: FastifyInstance) {
   app.post("/student/placements/:id/withdraw", { preHandler: requirePermission("practice.play") }, async (req) => {
     await withdraw(db, { tenantId: tenantOf(req), userId: req.auth.userId, driveId: parse(idParam, req.params).id, now: app.now() });
     return studentPlacements(db, { tenantId: tenantOf(req), userId: req.auth.userId, now: app.now() });
+  });
+  app.post("/student/placements/:id/decision", { preHandler: requirePermission("practice.play") }, async (req) => {
+    const { accept } = parse(z.object({ accept: z.boolean() }), req.body);
+    await decideOffer(db, { tenantId: tenantOf(req), userId: req.auth.userId, driveId: parse(idParam, req.params).id, accept, now: app.now() });
+    return studentPlacements(db, { tenantId: tenantOf(req), userId: req.auth.userId, now: app.now() });
+  });
+
+  app.get("/console/placements/policy", { preHandler: manage }, async (req) => placementPolicy(db, tenantOf(req)));
+  app.put("/console/placements/policy", { preHandler: manage }, async (req) => {
+    const policy = parse(
+      z.object({
+        tiers: z.boolean(),
+        dreamFromRupees: z.number().int().min(100_000).max(100_000_000),
+        superDreamFromRupees: z.number().int().min(100_000).max(100_000_000),
+        maxOffers: z.number().int().min(1).max(5),
+        decisionDays: z.number().int().min(1).max(14),
+      }),
+      req.body,
+    );
+    return setPlacementPolicy(db, { tenantId: tenantOf(req), actorId: req.auth.userId, policy });
   });
 }

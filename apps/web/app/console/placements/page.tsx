@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { COMPANY_TYPE_LABELS, formatLpa, type CompanyType } from "@playcode/core";
+import { COMPANY_TYPE_LABELS, formatLpa, OFFER_TIERS, type CompanyType, type OfferTier, type PlacementPolicy } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 
@@ -16,6 +16,7 @@ interface DriveRow {
   registerBy: string;
   status: "open" | "closed" | "completed";
   rounds: number;
+  tier: OfferTier | null;
   registered: number;
   offers: number;
 }
@@ -207,6 +208,72 @@ function NewDrive({ onCreated }: { onCreated: (notified: number) => void }) {
   );
 }
 
+function PolicySettings({ onSaved }: { onSaved: () => void }) {
+  const { data, error, reload } = useApi<PlacementPolicy>("/console/placements/policy");
+  const [f, setF] = useState<PlacementPolicy | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  if (error) return <ErrorBox message={error.message} onRetry={reload} />;
+  if (!data) return <Loading />;
+  const p = f ?? data;
+  const lakhs = (v: number) => String(v / 100_000);
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      await api("/console/placements/policy", { method: "PUT", body: p });
+      setMsg("Saved.");
+      onSaved();
+    } catch (err) {
+      setMsg(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form className="card stack" onSubmit={save}>
+      <h2 style={{ margin: 0 }}>Placement policy</h2>
+      <p className="small muted" style={{ margin: 0 }}>
+        With tiers on, a student who holds an offer can only register for drives in a higher tier, and nobody can hold more than the maximum number of offers. A drive set to take students with offers still counts the maximum. Without tiers, each drive decides whether students with offers may register.
+      </p>
+      <label>
+        <input type="checkbox" checked={p.tiers} onChange={(e) => setF({ ...p, tiers: e.target.checked })} style={{ width: "auto", marginRight: 6 }} />
+        Use Regular, Dream and Super dream tiers
+      </label>
+      <div className="row wrap">
+        <div>
+          <label htmlFor="p-dream">Dream from (LPA)</label>
+          <input id="p-dream" type="number" min={1} step={0.5} value={lakhs(p.dreamFromRupees)} onChange={(e) => setF({ ...p, dreamFromRupees: Math.round(Number(e.target.value) * 100_000) })} style={{ maxWidth: 140 }} />
+        </div>
+        <div>
+          <label htmlFor="p-super">Super dream from (LPA)</label>
+          <input id="p-super" type="number" min={1} step={0.5} value={lakhs(p.superDreamFromRupees)} onChange={(e) => setF({ ...p, superDreamFromRupees: Math.round(Number(e.target.value) * 100_000) })} style={{ maxWidth: 140 }} />
+        </div>
+        <div>
+          <label htmlFor="p-max">Most offers a student can hold</label>
+          <input id="p-max" type="number" min={1} max={5} value={p.maxOffers} onChange={(e) => setF({ ...p, maxOffers: Number(e.target.value) })} style={{ maxWidth: 100 }} />
+        </div>
+        <div>
+          <label htmlFor="p-days">Days to answer an offer</label>
+          <input id="p-days" type="number" min={1} max={14} value={p.decisionDays} onChange={(e) => setF({ ...p, decisionDays: Number(e.target.value) })} style={{ maxWidth: 100 }} />
+        </div>
+      </div>
+      <div className="small muted">Students accept or decline each offer in the app. Accepting one declines their other offers still waiting for an answer; offers left unanswered are taken as accepted when the time runs out.</div>
+      <div className="row">
+        <button className="btn primary small" disabled={busy}>
+          {busy ? "Saving..." : "Save policy"}
+        </button>
+        {msg && (
+          <span className="small" role="status">
+            {msg}
+          </span>
+        )}
+      </div>
+    </form>
+  );
+}
+
 function RecordsImport({ onDone }: { onDone: () => void }) {
   const [csv, setCsv] = useState("");
   const [result, setResult] = useState<{ updated: number; notFound: string[] } | null>(null);
@@ -328,9 +395,9 @@ function TalentPool() {
 
 export default function PlacementsPage() {
   const { data, error, loading, reload } = useApi<{ drives: DriveRow[] }>("/console/placements");
-  const [panel, setPanel] = useState<"none" | "drive" | "records">("none");
+  const [panel, setPanel] = useState<"none" | "drive" | "records" | "policy">("none");
   const [notice, setNotice] = useState<string | null>(null);
-  const toggle = (p: "drive" | "records") => setPanel(panel === p ? "none" : p);
+  const toggle = (p: "drive" | "records" | "policy") => setPanel(panel === p ? "none" : p);
   return (
     <div className="stack" style={{ gap: 16 }}>
       <div className="spread wrap">
@@ -347,6 +414,9 @@ export default function PlacementsPage() {
           <button className="btn" onClick={() => toggle("records")}>
             Academic records
           </button>
+          <button className="btn" aria-pressed={panel === "policy"} onClick={() => toggle("policy")}>
+            Policy
+          </button>
           <button className="btn primary" onClick={() => toggle("drive")}>
             {panel === "drive" ? "Close" : "New drive"}
           </button>
@@ -354,6 +424,7 @@ export default function PlacementsPage() {
       </div>
       {notice && <div className="pill good" style={{ alignSelf: "flex-start" }}>{notice}</div>}
       {panel === "records" && <RecordsImport onDone={reload} />}
+      {panel === "policy" && <PolicySettings onSaved={reload} />}
       {panel === "drive" && (
         <NewDrive
           onCreated={(n) => {
@@ -396,7 +467,10 @@ export default function PlacementsPage() {
                       {new Date(`${d.driveDate}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                       {d.status === "open" && <div className="small muted">register by {new Date(d.registerBy).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</div>}
                     </td>
-                    <td>{formatLpa(d.ctcRupees)}</td>
+                    <td>
+                      {formatLpa(d.ctcRupees)}
+                      {d.tier && <div className="small muted">{OFFER_TIERS[d.tier]}</div>}
+                    </td>
                     <td>{d.registered}</td>
                     <td>{d.offers}</td>
                     <td>

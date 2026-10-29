@@ -144,6 +144,23 @@ function TrainingCard() {
   );
 }
 
+/** Circulars from the placement cell waiting for the student to acknowledge them. */
+function CircularCard() {
+  const t = useT();
+  const { data } = useApi<{ pending: number; circulars: { title: string; requireAck: boolean; acknowledgedAt: string | null }[] }>("/student/circulars");
+  if (!data?.pending) return null;
+  const first = data.circulars.find((c) => c.requireAck && !c.acknowledgedAt)!;
+  return (
+    <Link href="/play/circulars" className="card spread" style={{ color: "inherit", borderColor: "var(--warn)" }}>
+      <div>
+        <b>{t(data.pending === 1 ? "1 circular to acknowledge" : "{n} circulars to acknowledge", { n: data.pending })}</b>
+        <div className="small muted">{first.title}</div>
+      </div>
+      <Icon name="arrow" />
+    </Link>
+  );
+}
+
 /** Answers given offline that haven't been checked yet. */
 function OfflineCard() {
   const t = useT();
@@ -277,6 +294,7 @@ export default function PlayHome() {
         </div>
       )}
 
+      <CircularCard />
       <TrainingCard />
       <PlanCard />
 

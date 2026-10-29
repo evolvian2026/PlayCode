@@ -177,7 +177,7 @@ export async function batchReport(db: Db, auth: AuthContext, year: number) {
     empty
       ? []
       : db
-          .select({ userId: placementApplications.userId, ctc: placementApplications.offerCtcRupees, company: placementDrives.company })
+          .select({ userId: placementApplications.userId, ctc: placementApplications.offerCtcRupees, company: placementDrives.company, decision: placementApplications.decision })
           .from(placementApplications)
           .innerJoin(placementDrives, eq(placementDrives.id, placementApplications.driveId))
           .where(and(eq(placementApplications.tenantId, tenant.id), eq(placementApplications.status, "offered"), inArray(placementApplications.userId, ids))),
@@ -199,12 +199,16 @@ export async function batchReport(db: Db, auth: AuthContext, year: number) {
 
   const verified = reports.filter((r) => r.status === "verified");
   const graduates: Graduate[] = people.map((p) => {
-    const campus = offers.filter((o) => o.userId === p.id);
+    // A declined offer isn't where the graduate went.
+    const campus = offers.filter((o) => o.userId === p.id && o.decision !== "declined");
     const jobs = verified.filter((r) => r.userId === p.id && r.kind === "job");
     const study = verified.find((r) => r.userId === p.id && r.kind === "higher_studies");
     const startup = verified.find((r) => r.userId === p.id && r.kind === "startup");
     const status = graduateStatus({ offer: campus.length + jobs.length > 0, higherStudies: Boolean(study), startup: Boolean(startup) });
-    const allOffers = [...campus.map((o) => ({ ctc: o.ctc ?? 0, where: o.company, campus: true })), ...jobs.map((j) => ({ ctc: j.ctcRupees ?? 0, where: j.organisation, campus: false }))].sort((a, b) => b.ctc - a.ctc);
+    // The offer they accepted, else the best one.
+    const allOffers = [...campus.map((o) => ({ ctc: o.ctc ?? 0, where: o.company, campus: true, accepted: o.decision === "accepted" })), ...jobs.map((j) => ({ ctc: j.ctcRupees ?? 0, where: j.organisation, campus: false, accepted: false }))].sort(
+      (a, b) => Number(b.accepted) - Number(a.accepted) || b.ctc - a.ctc,
+    );
     const best = allOffers[0];
     return {
       id: p.id,

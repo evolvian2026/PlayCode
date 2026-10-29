@@ -10,6 +10,8 @@ import { processOutbox } from "../services/notifications";
 import { runNudges } from "../services/nudges";
 import { sendDueReports } from "../services/reports";
 import { sendGuardianReports } from "../services/guardians";
+import { settleOffers } from "../services/placements";
+import { circularReminders } from "../services/circulars";
 import { reviewPendingSnapshots } from "../services/snapshot-review";
 
 // Hourly job: queue automatic nudges (streaks, due assignments, open tests)
@@ -17,7 +19,9 @@ import { reviewPendingSnapshots } from "../services/snapshot-review";
 // level-3 tests that missed their AI review, email the weekly reports that
 // are due, send billing emails (new invoices, reminders, licence renewals),
 // publish results, ratings and certificates of contests that have ended, and
-// send parents last month's progress email in the first week of a month.
+// send parents last month's progress email in the first week of a month,
+// settle placement offers whose time to answer has passed, and remind students
+// of circulars to acknowledge by tomorrow.
 // Usage: pnpm nudges:run
 const now = new Date();
 try {
@@ -34,6 +38,8 @@ try {
       reports: await sendDueReports(db, now),
       billingEmails: await sendBillingNotices(db, now),
       guardianEmails: await sendGuardianReports(db, now),
+      offers: await settleOffers(db, now),
+      circularReminders: await circularReminders(db, now),
     })),
   );
 } catch (err) {
