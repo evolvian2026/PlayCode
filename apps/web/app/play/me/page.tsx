@@ -179,6 +179,14 @@ export default function MePage() {
         <Icon name="arrow" />
       </Link>
 
+      <Link href="/play/help" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Ask the placement cell")}</b>
+          <div className="small muted">{tr("Questions about your record, a drive or your documents")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
       <Link href="/play/documents" className="card spread" style={{ color: "inherit" }}>
         <div>
           <b>{tr("Documents")}</b>

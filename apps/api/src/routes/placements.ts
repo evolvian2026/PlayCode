@@ -198,7 +198,7 @@ export async function placementRoutes(app: FastifyInstance) {
   });
   app.post("/console/placements/:id/schedules/:scheduleId/slots/:userId", { preHandler: manage }, async (req) => {
     const p = parse(z.object({ id: z.string().uuid(), scheduleId: z.string().uuid(), userId: z.string().uuid() }), req.params);
-    const { status } = parse(z.object({ status: z.enum(["scheduled", "done", "no_show"]) }), req.body);
+    const { status } = parse(z.object({ status: z.enum(["scheduled", "done", "no_show", "excused"]) }), req.body);
     return markSlot(db, { tenantId: tenantOf(req), userId: req.auth.userId }, p.id, p.scheduleId, p.userId, status);
   });
 
@@ -211,6 +211,7 @@ export async function placementRoutes(app: FastifyInstance) {
         superDreamFromRupees: z.number().int().min(100_000).max(100_000_000),
         maxOffers: z.number().int().min(1).max(5),
         decisionDays: z.number().int().min(1).max(14),
+        maxNoShows: z.number().int().min(1).max(10).nullable().default(null),
       }),
       req.body,
     );

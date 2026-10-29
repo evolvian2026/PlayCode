@@ -33,3 +33,4 @@ export * from "./mentoring";
 export * from "./outcomes";
 export * from "./guardian";
 export * from "./documents";
+export * from "./helpdesk";

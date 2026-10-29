@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -2072,7 +2072,75 @@ export const driveSlots = pgTable(
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     panel: integer("panel").notNull(),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
-    status: text("status").$type<"scheduled" | "done" | "no_show">().notNull().default("scheduled"),
+    /** An excused absence doesn't count under the no-show rule. */
+    status: text("status").$type<"scheduled" | "done" | "no_show" | "excused">().notNull().default("scheduled"),
   },
   (t) => [primaryKey({ columns: [t.scheduleId, t.userId] }), index("drive_slots_user_idx").on(t.userId)],
+);
+
+// ---------- Placement helpdesk ----------
+
+export interface RecordCorrection {
+  field: RecordField;
+  current: number | null;
+  proposed: number;
+  status: "pending" | "applied" | "declined";
+}
+
+/** A student's query to the placement cell, possibly asking for a correction to their academic record. */
+export const helpTickets = pgTable(
+  "help_tickets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    category: text("category").$type<HelpCategory>().notNull(),
+    subject: text("subject").notNull(),
+    status: text("status").$type<"open" | "answered" | "closed">().notNull().default("open"),
+    correction: jsonb("correction").$type<RecordCorrection>(),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("help_tickets_tenant_idx").on(t.tenantId, t.status, t.updatedAt), index("help_tickets_user_idx").on(t.userId)],
+);
+
+export const helpMessages = pgTable(
+  "help_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ticketId: uuid("ticket_id").notNull().references(() => helpTickets.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id").references(() => users.id, { onDelete: "set null" }),
+    fromStaff: boolean("from_staff").notNull(),
+    body: text("body").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("help_messages_ticket_idx").on(t.ticketId, t.createdAt)],
+);
+
+// ---------- Projects and internships ----------
+
+/** A project or internship a student adds to their resume; internships can be verified by the college. */
+export const resumeEntries = pgTable(
+  "resume_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<ResumeEntryKind>().notNull(),
+    title: text("title").notNull(),
+    /** The company for an internship; for a project, what it was for (a course, a hackathon). */
+    organisation: text("organisation").notNull().default(""),
+    /** Months, "2026-05"; no end while it's ongoing. */
+    startMonth: text("start_month").notNull(),
+    endMonth: text("end_month"),
+    description: text("description").notNull().default(""),
+    link: text("link"),
+    verification: text("verification").$type<"none" | "requested" | "verified" | "rejected">().notNull().default("none"),
+    verificationNote: text("verification_note"),
+    verifiedBy: uuid("verified_by"),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("resume_entries_user_idx").on(t.userId), index("resume_entries_tenant_idx").on(t.tenantId, t.verification)],
 );

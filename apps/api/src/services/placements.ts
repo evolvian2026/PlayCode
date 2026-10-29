@@ -17,7 +17,7 @@ import {
   type PlacementCriteria,
 } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
-import { academicRecords, memberships, packs, placementApplications, placementDrives, responses, tenants, users, type ApplicationStatus } from "../db/schema";
+import { academicRecords, driveSchedules, driveSlots, memberships, packs, placementApplications, placementDrives, responses, tenants, users, type ApplicationStatus } from "../db/schema";
 import { audit } from "../lib/audit";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { readinessFor } from "./analytics";
@@ -150,6 +150,19 @@ async function offersFor(db: DbOrTx, tenantId: string, userIds: string[]) {
   return out;
 }
 
+/** Drives each student registered for and didn't turn up to (an interview slot marked absent, not excused). */
+async function noShowsFor(db: DbOrTx, tenantId: string, userIds: string[]) {
+  const out = new Map<string, number>();
+  if (userIds.length === 0) return out;
+  const rows = await db
+    .selectDistinct({ userId: driveSlots.userId, driveId: driveSchedules.driveId })
+    .from(driveSlots)
+    .innerJoin(driveSchedules, eq(driveSchedules.id, driveSlots.scheduleId))
+    .where(and(eq(driveSchedules.tenantId, tenantId), eq(driveSlots.status, "no_show"), inArray(driveSlots.userId, userIds)));
+  for (const r of rows) out.set(r.userId, (out.get(r.userId) ?? 0) + 1);
+  return out;
+}
+
 const tiersOf = (offers: { driveId: string; ctcRupees: number }[] | undefined, policy: PlacementPolicy, exceptDrive: string): OfferTier[] =>
   (offers ?? []).filter((o) => o.driveId !== exceptDrive).map((o) => offerTier(o.ctcRupees, policy));
 
@@ -182,15 +195,16 @@ export interface NewDrive {
 async function eligibleStudents(db: DbOrTx, drive: DriveRow, now: Date): Promise<string[]> {
   const units = await tenantUnits(db, drive.tenantId);
   const pool = await studentIdsInUnits(db, drive.tenantId, drive.criteria.unitIds.length ? descendants(units, drive.criteria.unitIds) : units.map((u) => u.id));
-  const [records, offers, attendance, policy] = await Promise.all([
+  const policy = await placementPolicy(db, drive.tenantId);
+  const [records, offers, attendance, noShows] = await Promise.all([
     recordsFor(db, pool),
     offersFor(db, drive.tenantId, pool),
     drive.criteria.minAttendancePct != null ? attendanceFor(db, drive.tenantId, pool, now) : new Map<string, { pct: number | null }>(),
-    placementPolicy(db, drive.tenantId),
+    policy.maxNoShows != null ? noShowsFor(db, drive.tenantId, pool) : new Map<string, number>(),
   ]);
   return pool.filter((id) => {
     const held = tiersOf(offers.get(id), policy, drive.id);
-    return checkEligibility(drive.criteria, records.get(id) ?? null, { inUnits: true, placed: held.length > 0, attendancePct: attendance.get(id)?.pct ?? null, policy, offers: held, driveCtcRupees: drive.ctcRupees }).eligible;
+    return checkEligibility(drive.criteria, records.get(id) ?? null, { inUnits: true, placed: held.length > 0, attendancePct: attendance.get(id)?.pct ?? null, policy, offers: held, driveCtcRupees: drive.ctcRupees, noShows: noShows.get(id) ?? 0 }).eligible;
   });
 }
 
@@ -399,7 +413,7 @@ export async function updateApplications(db: Db, args: { tenantId: string; actor
 // ---------- Students ----------
 
 export async function studentPlacements(db: Db, ctx: { tenantId: string; userId: string; now: Date }) {
-  const [record, mine, units, offers, attendance, policy, slots] = await Promise.all([
+  const [record, mine, units, offers, attendance, policy, slots, noShows] = await Promise.all([
     recordsFor(db, [ctx.userId]).then((m) => m.get(ctx.userId) ?? null),
     db.select().from(placementApplications).where(and(eq(placementApplications.tenantId, ctx.tenantId), eq(placementApplications.userId, ctx.userId))),
     studentUnitIdsWithAncestors(db, ctx.tenantId, ctx.userId),
@@ -407,6 +421,7 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
     attendanceFor(db, ctx.tenantId, [ctx.userId], ctx.now).then((m) => m.get(ctx.userId)!),
     placementPolicy(db, ctx.tenantId),
     mySlots(db, ctx.tenantId, ctx.userId),
+    noShowsFor(db, ctx.tenantId, [ctx.userId]).then((m) => m.get(ctx.userId) ?? 0),
   ]);
   const myUnits = new Set(units);
   const drives = await db.select().from(placementDrives).where(eq(placementDrives.tenantId, ctx.tenantId)).orderBy(placementDrives.driveDate);
@@ -420,7 +435,7 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
     const inUnits = d.criteria.unitIds.length === 0 || d.criteria.unitIds.some((u) => myUnits.has(u));
     // Their own offer doesn't count against a drive they're already in.
     const held = tiersOf(offers, policy, d.id);
-    const eligibility = checkEligibility(d.criteria, record, { inUnits, placed: held.length > 0, attendancePct: attendance.pct, policy, offers: held, driveCtcRupees: d.ctcRupees });
+    const eligibility = checkEligibility(d.criteria, record, { inUnits, placed: held.length > 0, attendancePct: attendance.pct, policy, offers: held, driveCtcRupees: d.ctcRupees, noShows });
     out.push({
       id: d.id,
       company: d.company,
@@ -454,6 +469,8 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
     record,
     attendance,
     policy: policy.tiers ? { tiers: OFFER_TIERS, dreamFromRupees: policy.dreamFromRupees, superDreamFromRupees: policy.superDreamFromRupees, maxOffers: policy.maxOffers } : null,
+    /** Drives missed, and how many the policy allows (null when the rule is off). */
+    noShows: { count: noShows, max: policy.maxNoShows },
     drives: out,
   };
 }

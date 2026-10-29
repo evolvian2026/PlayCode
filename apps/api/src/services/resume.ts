@@ -10,6 +10,7 @@ import { effectiveBranding } from "./branding";
 import { certificateCode } from "./certificates";
 import { appLink } from "./notifications";
 import { recordConsent } from "./privacy";
+import { myEntries } from "./resume-entries";
 import { tenantToday } from "./tenant";
 
 // A student's verified record from PlayCode (readiness, skills they have
@@ -60,7 +61,7 @@ export async function resumeData(db: Db, userId: string, now: Date) {
   if (!user?.tenantId || user.status !== "active") throw notFound("Student");
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, user.tenantId));
   const today = tenantToday(tenant!, now);
-  const [own, record, units, readiness, ratings, certs, profile, solved, interview] = await Promise.all([
+  const [own, record, units, readiness, ratings, certs, profile, solved, interview, entries] = await Promise.all([
     getOwnProfile(db, userId),
     db.select().from(academicRecords).where(eq(academicRecords.userId, userId)),
     db.select({ name: orgUnits.name, kind: orgUnits.kind }).from(memberships).innerJoin(orgUnits, eq(orgUnits.id, memberships.orgUnitId)).where(and(eq(memberships.userId, userId), eq(memberships.role, "student"))),
@@ -76,6 +77,7 @@ export async function resumeData(db: Db, userId: string, now: Date) {
       .groupBy(questions.type),
     // The resume shows the latest technical round; the HR round is practice for the student alone.
     db.select().from(interviews).where(and(eq(interviews.userId, userId), eq(interviews.status, "finished"), ne(interviews.track, "hr"))).orderBy(desc(interviews.finishedAt)).limit(1),
+    myEntries(db, userId),
   ]);
   const branding = await effectiveBranding(db, tenant!);
   const [activeDays] = await db
@@ -115,6 +117,9 @@ export async function resumeData(db: Db, userId: string, now: Date) {
       longestStreak: profile[0]?.streakLongest ?? 0,
     },
     mockInterview: latest?.scorecard ? { track: latest.track, overall: latest.scorecard.overall, scores: latest.scorecard.scores, at: latest.finishedAt } : null,
+    /** What the student wrote about their internships and projects; verified internships say so. */
+    internships: entries.entries.filter((e) => e.kind === "internship").map(({ title, organisation, period, description, link, verification }) => ({ title, organisation, period, description, link, verified: verification === "verified" })),
+    projects: entries.entries.filter((e) => e.kind === "project").map(({ title, organisation, period, description, link }) => ({ title, organisation, period, description, link })),
     /** Coding contests: the rating once at least one contest is rated. */
     contests: profile[0]?.contestsRated ? { rating: profile[0].contestRating, rated: profile[0].contestsRated } : null,
     generatedAt: now,
@@ -147,6 +152,8 @@ export function shareableProfile(d: ResumeData, now: Date) {
     practice: d.practice,
     mockInterview: d.mockInterview && !d.hide.interview ? { track: d.mockInterview.track, overall: d.mockInterview.overall } : null,
     contests: d.contests,
+    internships: d.internships,
+    projects: d.projects,
     verifiedAt: now,
   };
 }
@@ -222,6 +229,22 @@ export function renderResumePdf(d: ResumeData, opts: { compress?: boolean } = {}
     );
   }
   if (d.contests) doc.text(`Coding contest rating ${d.contests.rating} over ${d.contests.rated} rated contest${d.contests.rated === 1 ? "" : "s"}.`, { width });
+
+  const entry = (e: { title: string; organisation: string; period: string; description: string; link: string | null }, mark: string | null) => {
+    doc.font("Helvetica-Bold").fontSize(10).fillColor(ink).text(e.organisation ? `${e.title}, ${e.organisation}` : e.title, { width, continued: Boolean(mark) });
+    if (mark) doc.font("Helvetica").fontSize(8.5).fillColor(accent).text(`   ${mark}`);
+    doc.font("Helvetica").fontSize(9).fillColor(muted).text([e.period, e.link].filter(Boolean).join("  ·  "), { width });
+    if (e.description) doc.font("Helvetica").fontSize(9.5).fillColor(ink).text(e.description, { width });
+    doc.moveDown(0.3);
+  };
+  if (d.internships.length) {
+    heading("Internships");
+    for (const e of d.internships) entry(e, e.verified ? `Verified by ${d.institution}` : null);
+  }
+  if (d.projects.length) {
+    heading("Projects");
+    for (const e of d.projects) entry(e, null);
+  }
 
   if (d.skills.length) {
     heading("Skills mastered");

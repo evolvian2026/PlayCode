@@ -28,6 +28,7 @@ import {
   duels,
   erasureRequests,
   guardians,
+  helpTickets,
   integrityEvents,
   interviewExperiences,
   groupDiscussions,
@@ -43,6 +44,7 @@ import {
   mentorAssignments,
   mentoringMeetings,
   mistakes,
+  resumeEntries,
   studentOutcomes,
   trainingFeedback,
   notifications,
@@ -66,6 +68,7 @@ import {
   writingAttempts,
   type ConsentPurpose,
 } from "../db/schema";
+import { ticketsForExport } from "./helpdesk";
 import { audit } from "../lib/audit";
 import { conflict, forbidden, notFound } from "../lib/errors";
 import { deleteObject } from "../lib/storage";
@@ -217,6 +220,8 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .from(documentSubmissions)
       .innerJoin(documentRequests, eq(documentRequests.id, documentSubmissions.requestId))
       .where(eq(documentSubmissions.userId, userId)),
+    helpdesk: await ticketsForExport(db, userId),
+    projectsAndInternships: await db.select({ kind: resumeEntries.kind, title: resumeEntries.title, organisation: resumeEntries.organisation, startMonth: resumeEntries.startMonth, endMonth: resumeEntries.endMonth, description: resumeEntries.description, link: resumeEntries.link, verification: resumeEntries.verification }).from(resumeEntries).where(eq(resumeEntries.userId, userId)),
     circularsAcknowledged: await db.select({ title: circulars.title, at: circularAcks.at }).from(circularAcks).innerJoin(circulars, eq(circulars.id, circularAcks.circularId)).where(eq(circularAcks.userId, userId)),
     outcomes: await db.select({ kind: studentOutcomes.kind, organisation: studentOutcomes.organisation, detail: studentOutcomes.detail, ctcRupees: studentOutcomes.ctcRupees, outcomeDate: studentOutcomes.outcomeDate, status: studentOutcomes.status, reviewNote: studentOutcomes.reviewNote, createdAt: studentOutcomes.createdAt }).from(studentOutcomes).where(eq(studentOutcomes.userId, userId)),
     guardian: (await db.select({ name: guardians.name, relation: guardians.relation, email: guardians.email, confirmedAt: guardians.confirmedAt, stoppedAt: guardians.stoppedAt, lastReportMonth: guardians.lastReportMonth }).from(guardians).where(eq(guardians.userId, userId)))[0] ?? null,
@@ -326,6 +331,8 @@ export async function resolveErasure(
     await tx.delete(guardians).where(eq(guardians.userId, user.id));
     await tx.delete(circularAcks).where(eq(circularAcks.userId, user.id));
     await tx.delete(documentSubmissions).where(eq(documentSubmissions.userId, user.id));
+    await tx.delete(helpTickets).where(eq(helpTickets.userId, user.id));
+    await tx.delete(resumeEntries).where(eq(resumeEntries.userId, user.id));
     await tx.delete(mentorAssignments).where(or(eq(mentorAssignments.studentId, user.id), eq(mentorAssignments.mentorId, user.id)));
     await tx.delete(trainingAttendance).where(eq(trainingAttendance.userId, user.id));
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, user.id));

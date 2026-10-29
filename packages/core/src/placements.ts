@@ -60,9 +60,11 @@ export interface PlacementPolicy {
   maxOffers: number;
   /** Days a student has to accept or decline an offer; undecided offers are then taken as accepted. */
   decisionDays: number;
+  /** Drives a student may register for and then miss before they can't register for more; null turns the rule off. */
+  maxNoShows: number | null;
 }
 
-export const DEFAULT_PLACEMENT_POLICY: PlacementPolicy = { tiers: false, dreamFromRupees: 600_000, superDreamFromRupees: 1_000_000, maxOffers: 2, decisionDays: 3 };
+export const DEFAULT_PLACEMENT_POLICY: PlacementPolicy = { tiers: false, dreamFromRupees: 600_000, superDreamFromRupees: 1_000_000, maxOffers: 2, decisionDays: 3, maxNoShows: null };
 
 export function offerTier(ctcRupees: number, policy: PlacementPolicy): OfferTier {
   if (ctcRupees >= policy.superDreamFromRupees) return "super_dream";
@@ -85,7 +87,7 @@ export function higherTier(a: OfferTier, b: OfferTier): boolean {
 export function checkEligibility(
   criteria: PlacementCriteria,
   record: AcademicRecord | null,
-  ctx: { inUnits: boolean; placed: boolean; attendancePct?: number | null; policy?: PlacementPolicy; offers?: OfferTier[]; driveCtcRupees?: number },
+  ctx: { inUnits: boolean; placed: boolean; attendancePct?: number | null; policy?: PlacementPolicy; offers?: OfferTier[]; driveCtcRupees?: number; noShows?: number },
 ): Eligibility {
   const reasons: string[] = [];
   const r: AcademicRecord = record ?? { cgpa: null, backlogs: null, tenthPct: null, twelfthPct: null, graduationYear: null };
@@ -112,6 +114,9 @@ export function checkEligibility(
   }
   if (criteria.minAttendancePct != null && ctx.attendancePct != null && ctx.attendancePct < criteria.minAttendancePct) {
     reasons.push(`Needs ${criteria.minAttendancePct}% attendance in placement training (yours is ${ctx.attendancePct}%)`);
+  }
+  if (ctx.policy?.maxNoShows != null && (ctx.noShows ?? 0) >= ctx.policy.maxNoShows) {
+    reasons.push(`You missed ${ctx.noShows} drive${ctx.noShows === 1 ? "" : "s"} you registered for. Talk to your placement cell.`);
   }
   const offers = ctx.offers ?? [];
   if (ctx.policy?.tiers && offers.length && ctx.driveCtcRupees != null) {

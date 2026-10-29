@@ -106,12 +106,28 @@ export async function driveScheduleList(db: Db, tenantId: string, driveId: strin
   };
 }
 
-export async function markSlot(db: Db, auth: Auth, driveId: string, scheduleId: string, userId: string, status: "scheduled" | "done" | "no_show") {
+export async function markSlot(db: Db, auth: Auth, driveId: string, scheduleId: string, userId: string, status: "scheduled" | "done" | "no_show" | "excused") {
   const drive = await loadDrive(db, auth.tenantId, driveId);
   const [s] = await db.select().from(driveSchedules).where(and(eq(driveSchedules.id, scheduleId), eq(driveSchedules.driveId, drive.id)));
   if (!s) throw notFound("Schedule");
-  const res = await db.update(driveSlots).set({ status }).where(and(eq(driveSlots.scheduleId, s.id), eq(driveSlots.userId, userId))).returning();
-  if (!res.length) throw notFound("Slot");
+  const [before] = await db.select().from(driveSlots).where(and(eq(driveSlots.scheduleId, s.id), eq(driveSlots.userId, userId)));
+  if (!before) throw notFound("Slot");
+  await db.update(driveSlots).set({ status }).where(and(eq(driveSlots.scheduleId, s.id), eq(driveSlots.userId, userId)));
+  if (status === "no_show" && before.status !== "no_show") {
+    await enqueue(db, [
+      {
+        tenantId: auth.tenantId,
+        userId,
+        template: "placement",
+        title: `${drive.company}: you were marked absent`,
+        body: `You missed your ${drive.rounds[s.round] ?? "interview"} slot. If you had a reason, tell your placement cell: missing drives you registered for can stop you registering for new ones.`,
+        link: appLink("/play/help"),
+        dedupeKey: `drive-no-show:${s.id}:${userId}`,
+        sentBy: auth.userId,
+      },
+    ]);
+    void processOutbox(db, new Date()).catch(() => {});
+  }
   return { ok: true };
 }
 

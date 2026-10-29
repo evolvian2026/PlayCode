@@ -255,11 +255,15 @@ function PolicySettings({ onSaved }: { onSaved: () => void }) {
           <input id="p-max" type="number" min={1} max={5} value={p.maxOffers} onChange={(e) => setF({ ...p, maxOffers: Number(e.target.value) })} style={{ maxWidth: 100 }} />
         </div>
         <div>
+          <label htmlFor="p-noshow">Missed drives allowed (empty for no limit)</label>
+          <input id="p-noshow" type="number" min={1} max={10} value={p.maxNoShows ?? ""} onChange={(e) => setF({ ...p, maxNoShows: e.target.value ? Number(e.target.value) : null })} style={{ maxWidth: 100 }} />
+        </div>
+        <div>
           <label htmlFor="p-days">Days to answer an offer</label>
           <input id="p-days" type="number" min={1} max={14} value={p.decisionDays} onChange={(e) => setF({ ...p, decisionDays: Number(e.target.value) })} style={{ maxWidth: 100 }} />
         </div>
       </div>
-      <div className="small muted">Students accept or decline each offer in the app. Accepting one declines their other offers still waiting for an answer; offers left unanswered are taken as accepted when the time runs out.</div>
+      <div className="small muted">A missed drive is an interview slot marked &ldquo;Didn&apos;t come&rdquo;; mark it &ldquo;Excused absence&rdquo; when the student had a reason. Students who reach the limit can&apos;t register for new drives. Students accept or decline each offer in the app. Accepting one declines their other offers still waiting for an answer; offers left unanswered are taken as accepted when the time runs out.</div>
       <div className="row">
         <button className="btn primary small" disabled={busy}>
           {busy ? "Saving..." : "Save policy"}

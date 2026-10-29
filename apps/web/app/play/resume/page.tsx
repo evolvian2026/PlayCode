@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { Bar, ErrorBox, Loading, masteryTone } from "@/components/ui";
+import { ResumeEntries } from "@/components/ResumeEntries";
 import { api, errorMessage, fetchObjectUrl, useApi } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 
@@ -123,6 +124,8 @@ export default function ResumePage() {
           {msg && <span className="small muted">{msg}</span>}
         </div>
       </form>
+
+      <ResumeEntries onChange={() => void reload()} />
 
       <div className="card stack">
         <h2 style={{ margin: 0 }}>{t("Verified by {app}", { app: r.appName })}</h2>

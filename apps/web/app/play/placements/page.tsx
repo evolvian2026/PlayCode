@@ -39,6 +39,7 @@ interface Placements {
   record: { cgpa: number | null; backlogs: number | null; tenthPct: number | null; twelfthPct: number | null; graduationYear: number | null } | null;
   attendance: { sessions: number; attended: number; pct: number | null };
   policy: { dreamFromRupees: number; superDreamFromRupees: number; maxOffers: number } | null;
+  noShows: { count: number; max: number | null };
   drives: Drive[];
 }
 
@@ -242,8 +243,22 @@ export default function StudentPlacements() {
             {t("Training attendance")}: {data.attendance.pct}% ({t("{attended} of {held} sessions", { attended: data.attendance.attended, held: data.attendance.sessions })})
           </div>
         )}
-        <div className="muted">{t("Something wrong? Tell your placement cell.")}</div>
+        <div>
+          <Link href="/play/help?new=record" className="muted">
+            {t("Something wrong? Tell your placement cell.")}
+          </Link>
+        </div>
       </div>
+      {data.noShows.count > 0 && (
+        <div className="card tight small" role="note" style={{ borderColor: "var(--warn)" }}>
+          {data.noShows.max !== null && data.noShows.count >= data.noShows.max
+            ? t("You missed {n} drives you registered for, so you can't register for new ones. Talk to your placement cell.", { n: data.noShows.count })
+            : data.noShows.max !== null
+              ? t("You missed {n} of the drives you registered for. After {max}, you can't register for new ones.", { n: data.noShows.count, max: data.noShows.max })
+              : t("You missed {n} of the drives you registered for. If you can't go, withdraw before registration closes.", { n: data.noShows.count })}{" "}
+          <Link href="/play/help?new=drive">{t("Had a reason? Tell your placement cell.")}</Link>
+        </div>
+      )}
       {data.policy && (
         <div className="card tight small">
           <b>{t("Placement policy")}</b>

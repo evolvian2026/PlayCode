@@ -18,6 +18,7 @@ import {
 } from "../db/schema";
 import { forbidden } from "../lib/errors";
 import { mentoringStats } from "./mentoring";
+import { internshipStats } from "./resume-entries";
 import { pdfSafe } from "./papers";
 import { descendants, scopedUnitIds, studentIdsInUnits, tenantUnits, type AuthContext } from "./scope";
 import { getTenant } from "./tenant";
@@ -145,6 +146,7 @@ export async function activityReport(db: Db, auth: AuthContext, period: ReportPe
     classTests,
     practice: { answers, mockTests: mocks, mockInterviews, groupDiscussions: gds, writing },
     mentoring: await mentoringStats(db, tenantId, students, period.from, period.to),
+    internships: await internshipStats(db, tenantId, inScope, period.from, period.to),
     placements: {
       companies,
       registered: new Set(apps.map((a) => a.userId)).size,
@@ -188,6 +190,8 @@ export function activityCsv(r: ActivityReport): string {
     [],
     ["Mentoring", "Mentors", "Mentees", "Mentees per mentor", "Meetings", "Students met"],
     ["", r.mentoring.mentors, `${r.mentoring.mentees} (${r.mentoring.coveragePct}%)`, r.mentoring.ratio ?? "", r.mentoring.meetings, r.mentoring.studentsMet],
+    [],
+    ["Internships verified by the institution", r.internships.internships, "Students", r.internships.students],
     [],
     ["Placement drives"],
     ["Date", "Company", "Role", "CTC (Rs)", "Registered", "Offers"],
@@ -295,6 +299,7 @@ export function activityPdf(r: ActivityReport): Promise<Buffer> {
     ["Students with a mentor", `${m.mentees} of ${r.students} (${m.coveragePct}%)`],
     ["Mentees per mentor", m.ratio === null ? "-" : `1:${m.ratio}`],
     ["Mentoring meetings held", `${m.meetings}, with ${m.studentsMet} students`],
+    ["Internships verified", `${r.internships.internships}, by ${r.internships.students} students`],
   ]);
 
   heading("Placement drives");

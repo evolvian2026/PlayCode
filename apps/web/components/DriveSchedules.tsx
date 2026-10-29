@@ -17,7 +17,7 @@ interface Schedule {
   endsAt: string;
   slotMinutes: number;
   panels: Panel[];
-  slots: { userId: string; name: string; rollNo: string | null; panel: number; startsAt: string; status: "scheduled" | "done" | "no_show" }[];
+  slots: { userId: string; name: string; rollNo: string | null; panel: number; startsAt: string; status: "scheduled" | "done" | "no_show" | "excused" }[];
 }
 
 const time = (d: string) => new Date(d).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
@@ -207,6 +207,7 @@ export function DriveSchedules({ driveId, rounds, waiting }: { driveId: string; 
                                 <option value="scheduled">Waiting</option>
                                 <option value="done">Interviewed</option>
                                 <option value="no_show">Didn&apos;t come</option>
+                                <option value="excused">Excused absence</option>
                               </select>
                             </td>
                           </tr>
