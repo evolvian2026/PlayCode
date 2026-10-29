@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { assignSlots, type Panel } from "@playcode/core";
 import type { Db } from "../db/client";
-import { driveSchedules, driveSlots, placementApplications, placementDrives, users } from "../db/schema";
+import { driveSchedules, driveSlots, placementApplications, placementDrives, users, type SlotFeedback } from "../db/schema";
 import { audit } from "../lib/audit";
 import { badRequest, notFound } from "../lib/errors";
 import { appLink, enqueue, processOutbox } from "./notifications";
@@ -100,7 +100,7 @@ export async function driveScheduleList(db: Db, tenantId: string, driveId: strin
         endsAt: new Date(last + s.slotMinutes * 60_000),
         slotMinutes: s.slotMinutes,
         panels: s.panels,
-        slots: mine.map((x) => ({ userId: x.slot.userId, name: x.name, rollNo: x.rollNo, panel: x.slot.panel, startsAt: x.slot.startsAt, status: x.slot.status })),
+        slots: mine.map((x) => ({ userId: x.slot.userId, name: x.name, rollNo: x.rollNo, panel: x.slot.panel, startsAt: x.slot.startsAt, status: x.slot.status, feedback: x.slot.feedback })),
       };
     }),
   };
@@ -131,6 +131,45 @@ export async function markSlot(db: Db, auth: Auth, driveId: string, scheduleId: 
   return { ok: true };
 }
 
+export interface FeedbackInput {
+  ratings: SlotFeedback["ratings"];
+  wentWell: string;
+  workOn: string;
+}
+
+/**
+ * The panel's feedback on one interview, which the placement cell passes on:
+ * ratings and what to work on. Recording it marks the student interviewed.
+ */
+export async function saveFeedback(db: Db, auth: Auth, driveId: string, scheduleId: string, userId: string, input: FeedbackInput, now: Date) {
+  const drive = await loadDrive(db, auth.tenantId, driveId);
+  const [s] = await db.select().from(driveSchedules).where(and(eq(driveSchedules.id, scheduleId), eq(driveSchedules.driveId, drive.id)));
+  if (!s) throw notFound("Schedule");
+  const [slot] = await db.select().from(driveSlots).where(and(eq(driveSlots.scheduleId, s.id), eq(driveSlots.userId, userId)));
+  if (!slot) throw notFound("Slot");
+  if (slot.status === "no_show" || slot.status === "excused") throw badRequest("This student wasn't interviewed");
+  const [me] = await db.select({ name: users.name }).from(users).where(eq(users.id, auth.userId));
+  const feedback: SlotFeedback = { ratings: input.ratings, wentWell: input.wentWell.trim(), workOn: input.workOn.trim(), by: me?.name ?? "Placement cell", at: now.toISOString() };
+  await db.update(driveSlots).set({ feedback, status: "done" }).where(and(eq(driveSlots.scheduleId, s.id), eq(driveSlots.userId, userId)));
+  const round = drive.rounds[s.round] ?? "interview";
+  await enqueue(db, [
+    {
+      tenantId: auth.tenantId,
+      userId,
+      template: "placement",
+      title: `Feedback from your ${drive.company} ${round}`,
+      body: feedback.workOn ? `To work on: ${feedback.workOn.slice(0, 140)}` : "See it on the Placements page.",
+      link: appLink("/play/placements"),
+      // A later correction to the feedback is a new message.
+      dedupeKey: `slot-feedback:${s.id}:${userId}:${now.getTime()}`,
+      sentBy: auth.userId,
+    },
+  ]);
+  void processOutbox(db, now).catch(() => {});
+  await audit(db, { tenantId: auth.tenantId, actorId: auth.userId, action: "placements.interview_feedback", target: drive.id, data: { userId, round: s.round } });
+  return driveScheduleList(db, auth.tenantId, drive.id);
+}
+
 /** A student's interview slots, by drive, for their drive cards. */
 export async function mySlots(db: Db, tenantId: string, userId: string) {
   const rows = await db
@@ -139,10 +178,11 @@ export async function mySlots(db: Db, tenantId: string, userId: string) {
     .innerJoin(driveSchedules, eq(driveSchedules.id, driveSlots.scheduleId))
     .innerJoin(placementDrives, eq(placementDrives.id, driveSchedules.driveId))
     .where(and(eq(driveSlots.userId, userId), eq(driveSchedules.tenantId, tenantId)));
-  const out = new Map<string, { round: string; startsAt: Date; panel: Panel; status: string }[]>();
+  const out = new Map<string, { round: string; startsAt: Date; panel: Panel; status: string; feedback: Omit<SlotFeedback, "by"> | null }[]>();
   for (const r of rows) {
     const list = out.get(r.schedule.driveId) ?? out.set(r.schedule.driveId, []).get(r.schedule.driveId)!;
-    list.push({ round: r.rounds[r.schedule.round] ?? "", startsAt: r.slot.startsAt, panel: r.schedule.panels[r.slot.panel]!, status: r.slot.status });
+    const f = r.slot.feedback;
+    list.push({ round: r.rounds[r.schedule.round] ?? "", startsAt: r.slot.startsAt, panel: r.schedule.panels[r.slot.panel]!, status: r.slot.status, feedback: f ? { ratings: f.ratings, wentWell: f.wentWell, workOn: f.workOn, at: f.at } : null });
   }
   for (const list of out.values()) list.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   return out;

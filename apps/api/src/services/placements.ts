@@ -17,7 +17,7 @@ import {
   type PlacementCriteria,
 } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
-import { academicRecords, driveSchedules, driveSlots, memberships, packs, placementApplications, placementDrives, responses, tenants, users, type ApplicationStatus } from "../db/schema";
+import { academicRecords, assessments, driveRoundTests, driveSchedules, driveSlots, memberships, packs, placementApplications, placementDrives, responses, tenants, users, type ApplicationStatus } from "../db/schema";
 import { audit } from "../lib/audit";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { readinessFor } from "./analytics";
@@ -413,7 +413,7 @@ export async function updateApplications(db: Db, args: { tenantId: string; actor
 // ---------- Students ----------
 
 export async function studentPlacements(db: Db, ctx: { tenantId: string; userId: string; now: Date }) {
-  const [record, mine, units, offers, attendance, policy, slots, noShows] = await Promise.all([
+  const [record, mine, units, offers, attendance, policy, slots, noShows, tests] = await Promise.all([
     recordsFor(db, [ctx.userId]).then((m) => m.get(ctx.userId) ?? null),
     db.select().from(placementApplications).where(and(eq(placementApplications.tenantId, ctx.tenantId), eq(placementApplications.userId, ctx.userId))),
     studentUnitIdsWithAncestors(db, ctx.tenantId, ctx.userId),
@@ -422,6 +422,12 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
     placementPolicy(db, ctx.tenantId),
     mySlots(db, ctx.tenantId, ctx.userId),
     noShowsFor(db, ctx.tenantId, [ctx.userId]).then((m) => m.get(ctx.userId) ?? 0),
+    // Drive rounds run as PlayCode tests.
+    db
+      .select({ driveId: driveRoundTests.driveId, round: driveRoundTests.round, id: assessments.id, title: assessments.title, openAt: assessments.openAt, closeAt: assessments.closeAt })
+      .from(driveRoundTests)
+      .innerJoin(assessments, eq(assessments.id, driveRoundTests.assessmentId))
+      .where(eq(driveRoundTests.tenantId, ctx.tenantId)),
   ]);
   const myUnits = new Set(units);
   const drives = await db.select().from(placementDrives).where(eq(placementDrives.tenantId, ctx.tenantId)).orderBy(placementDrives.driveDate);
@@ -461,6 +467,11 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
               decision: app.status === "offered" ? (app.decision ?? null) : null,
               decideBy: app.status === "offered" ? app.decideBy : null,
               slots: slots.get(d.id) ?? [],
+              // The test for the round they're waiting for, if it's taken on PlayCode.
+              test:
+                app.status === "registered" || app.status === "shortlisted"
+                  ? (tests.filter((x) => x.driveId === d.id && x.round === app.roundsCleared).map(({ id, title, openAt, closeAt }) => ({ id, title, openAt, closeAt, round: d.rounds[app.roundsCleared] ?? "" }))[0] ?? null)
+                  : null,
             }
           : null,
     });

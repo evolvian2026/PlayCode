@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { COMPANY_TYPE_LABELS, formatLpa, type CompanyType } from "@playcode/core";
 import { DriveSchedules } from "@/components/DriveSchedules";
+import { RoundTests } from "@/components/RoundTests";
 import { ErrorBox, Loading, Stat } from "@/components/ui";
 import { api, errorMessage, fetchObjectUrl, useApi } from "@/lib/api";
 
@@ -85,6 +86,20 @@ export default function PlacementDrive() {
     reload();
   }
 
+  async function resumeBook(stage: "registered" | "in_selection" | "offered") {
+    setMsg(null);
+    try {
+      const url = await fetchObjectUrl(`/console/placements/${id}/resume-book?stage=${stage}`);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${data?.drive.company ?? "drive"}-resumes.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (e) {
+      setMsg(errorMessage(e));
+    }
+  }
+
   async function download() {
     const url = await fetchObjectUrl(`/console/placements/${id}/export`);
     const a = document.createElement("a");
@@ -121,6 +136,19 @@ export default function PlacementDrive() {
           <button className="btn small" onClick={download}>
             Export registrations (CSV)
           </button>
+          <select
+            aria-label="Download resumes"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) void resumeBook(e.target.value as "registered" | "in_selection" | "offered");
+            }}
+            style={{ width: "auto" }}
+          >
+            <option value="">Resume book (PDF)...</option>
+            <option value="registered">Everyone registered</option>
+            <option value="in_selection">Still in the selection</option>
+            <option value="offered">Offers</option>
+          </select>
           {drive.status === "open" && (
             <button className="btn small ghost" onClick={() => setStatus("closed")}>
               Close registration
@@ -147,6 +175,8 @@ export default function PlacementDrive() {
         ))}
         <Stat label="Offers" value={summary.offers} />
       </div>
+
+      <RoundTests driveId={drive.id} rounds={drive.rounds} onApplied={() => void reload()} />
 
       <DriveSchedules
         key={data.applicants.map((a) => `${a.userId}:${a.roundsCleared}:${a.status}`).join(",")}

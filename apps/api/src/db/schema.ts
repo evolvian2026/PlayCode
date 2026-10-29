@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -2065,6 +2065,14 @@ export const driveSchedules = pgTable(
   (t) => [uniqueIndex("drive_schedules_round_idx").on(t.driveId, t.round)],
 );
 
+export interface SlotFeedback {
+  ratings: Record<InterviewFeedbackDimension, number>;
+  wentWell: string;
+  workOn: string;
+  by: string;
+  at: string;
+}
+
 export const driveSlots = pgTable(
   "drive_slots",
   {
@@ -2074,6 +2082,8 @@ export const driveSlots = pgTable(
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     /** An excused absence doesn't count under the no-show rule. */
     status: text("status").$type<"scheduled" | "done" | "no_show" | "excused">().notNull().default("scheduled"),
+    /** What the panel said, passed on to the student. */
+    feedback: jsonb("feedback").$type<SlotFeedback>(),
   },
   (t) => [primaryKey({ columns: [t.scheduleId, t.userId] }), index("drive_slots_user_idx").on(t.userId)],
 );
@@ -2143,4 +2153,22 @@ export const resumeEntries = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
   },
   (t) => [index("resume_entries_user_idx").on(t.userId), index("resume_entries_tenant_idx").on(t.tenantId, t.verification)],
+);
+
+// ---------- PlayCode tests as drive rounds ----------
+
+/** A drive round run as a PlayCode test, with the cut-off that moves students on. */
+export const driveRoundTests = pgTable(
+  "drive_round_tests",
+  {
+    driveId: uuid("drive_id").notNull().references(() => placementDrives.id, { onDelete: "cascade" }),
+    round: integer("round").notNull(),
+    assessmentId: uuid("assessment_id").notNull().references(() => assessments.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    cutoffPct: integer("cutoff_pct").notNull(),
+    appliedAt: timestamp("applied_at", { withTimezone: true }),
+    appliedBy: uuid("applied_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.driveId, t.round] })],
 );

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { formatLpa, OFFER_TIERS, type CompanyType, type OfferTier } from "@playcode/core";
+import { formatLpa, INTERVIEW_FEEDBACK_DIMENSIONS, OFFER_TIERS, type CompanyType, type InterviewFeedbackDimension, type OfferTier } from "@playcode/core";
 import { Icon } from "@/components/Icon";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
@@ -25,14 +25,15 @@ interface Drive {
   open: boolean;
   tier: OfferTier | null;
   eligibility: { eligible: boolean; reasons: string[] };
-  application: { status: "registered" | "shortlisted" | "rejected" | "offered"; roundsCleared: number; offerCtcRupees: number | null; decision: "accepted" | "declined" | null; decideBy: string | null; slots: Slot[] } | null;
+  application: { status: "registered" | "shortlisted" | "rejected" | "offered"; roundsCleared: number; offerCtcRupees: number | null; decision: "accepted" | "declined" | null; decideBy: string | null; slots: Slot[]; test: { id: string; title: string; openAt: string; closeAt: string; round: string } | null } | null;
 }
 
 interface Slot {
   round: string;
   startsAt: string;
   panel: { name: string; room: string; interviewer: string };
-  status: "scheduled" | "done" | "no_show";
+  status: "scheduled" | "done" | "no_show" | "excused";
+  feedback: { ratings: Record<InterviewFeedbackDimension, number>; wentWell: string; workOn: string; at: string } | null;
 }
 
 interface Placements {
@@ -165,10 +166,53 @@ function DriveCard({ drive, experiences, onChange }: { drive: Drive; experiences
           <div className="small muted">{t("Be there 10 minutes early with your resume and college ID.")}</div>
         </div>
       )}
+      {app?.test && new Date(app.test.closeAt) > new Date() && (
+        <div className="stack" style={{ gap: 4, background: "var(--surface-2)", padding: "8px 10px", borderRadius: 8 }}>
+          <div className="small">
+            <b>{t("{round} on PlayCode: {title}", { round: app.test.round, title: app.test.title })}</b>
+            <div>
+              {new Date(app.test.openAt) > new Date()
+                ? t("Opens {date}", { date: new Date(app.test.openAt).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) })
+                : t("Open until {date}", { date: new Date(app.test.closeAt).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) })}
+            </div>
+          </div>
+          {new Date(app.test.openAt) <= new Date() && (
+            <Link className="btn primary small" style={{ alignSelf: "flex-start" }} href={`/play/tests/${app.test.id}`}>
+              {t("Take the test")}
+            </Link>
+          )}
+        </div>
+      )}
+      {app?.slots
+        .filter((s) => s.feedback)
+        .map((s) => (
+          <div key={`fb-${s.round}`} className="stack" style={{ gap: 4, border: "1px solid var(--border)", padding: "8px 10px", borderRadius: 8 }}>
+            <b className="small">{t("Feedback from your {round}", { round: s.round })}</b>
+            <div className="row wrap small" style={{ gap: 10 }}>
+              {(Object.keys(INTERVIEW_FEEDBACK_DIMENSIONS) as InterviewFeedbackDimension[]).map((d) => (
+                <span key={d}>
+                  {t(INTERVIEW_FEEDBACK_DIMENSIONS[d])}: <b>{s.feedback!.ratings[d]}/5</b>
+                </span>
+              ))}
+            </div>
+            {s.feedback!.wentWell && (
+              <div className="small">
+                <b>{t("Went well:")}</b> {s.feedback!.wentWell}
+              </div>
+            )}
+            {s.feedback!.workOn && (
+              <div className="small">
+                <b>{t("To work on:")}</b> {s.feedback!.workOn}
+              </div>
+            )}
+          </div>
+        ))}
       {app ? (
         <Rounds drive={drive} />
       ) : drive.eligibility.eligible ? (
-        <div className="small muted">{t("Register by {date}. Rounds: {rounds}.", { date: fmt(new Date(drive.registerBy)), rounds: drive.rounds.join(", ") })}</div>
+        <div className="small muted">
+          {t("Register by {date}. Rounds: {rounds}.", { date: fmt(new Date(drive.registerBy)), rounds: drive.rounds.join(", ") })} {t("Registering shares your resume with {company}.", { company: drive.company })}
+        </div>
       ) : (
         <ul className="small muted" style={{ margin: 0, paddingLeft: 18 }}>
           {drive.eligibility.reasons.map((r) => (

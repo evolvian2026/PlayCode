@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { INTERVIEW_FEEDBACK_DIMENSIONS, type InterviewFeedbackDimension } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 
@@ -17,7 +18,73 @@ interface Schedule {
   endsAt: string;
   slotMinutes: number;
   panels: Panel[];
-  slots: { userId: string; name: string; rollNo: string | null; panel: number; startsAt: string; status: "scheduled" | "done" | "no_show" | "excused" }[];
+  slots: { userId: string; name: string; rollNo: string | null; panel: number; startsAt: string; status: "scheduled" | "done" | "no_show" | "excused"; feedback: Feedback | null }[];
+}
+
+interface Feedback {
+  ratings: Record<InterviewFeedbackDimension, number>;
+  wentWell: string;
+  workOn: string;
+  by: string;
+  at: string;
+}
+
+const DIMS = Object.keys(INTERVIEW_FEEDBACK_DIMENSIONS) as InterviewFeedbackDimension[];
+
+function FeedbackForm({ driveId, schedule, slot, onSaved, onCancel }: { driveId: string; schedule: Schedule; slot: Schedule["slots"][number]; onSaved: (s: { schedules: Schedule[] }) => void; onCancel: () => void }) {
+  const [ratings, setRatings] = useState<Partial<Record<InterviewFeedbackDimension, number>>>(slot.feedback?.ratings ?? {});
+  const [wentWell, setWentWell] = useState(slot.feedback?.wentWell ?? "");
+  const [workOn, setWorkOn] = useState(slot.feedback?.workOn ?? "");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      onSaved(await api<{ schedules: Schedule[] }>(`/console/placements/${driveId}/schedules/${schedule.id}/slots/${slot.userId}/feedback`, { method: "PUT", body: { ratings, wentWell, workOn } }));
+    } catch (err) {
+      setMsg(errorMessage(err));
+      setBusy(false);
+    }
+  }
+  return (
+    <form className="card stack no-print" onSubmit={submit} style={{ gap: 8 }}>
+      <b>
+        Feedback for {slot.name}: {schedule.roundName}
+      </b>
+      <div className="small muted">The student sees this, without your name. Ratings from 1 (needs a lot of work) to 5 (excellent).</div>
+      {DIMS.map((d) => (
+        <div key={d} role="group" aria-label={INTERVIEW_FEEDBACK_DIMENSIONS[d]} className="row wrap" style={{ gap: 6 }}>
+          <span className="small" style={{ minWidth: 150 }}>
+            {INTERVIEW_FEEDBACK_DIMENSIONS[d]}
+          </span>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button key={n} type="button" className={`btn small ${ratings[d] === n ? "primary" : ""}`} aria-pressed={ratings[d] === n} aria-label={`${n} of 5`} onClick={() => setRatings({ ...ratings, [d]: n })} style={{ minWidth: 36 }}>
+              {n}
+            </button>
+          ))}
+        </div>
+      ))}
+      <div>
+        <label htmlFor="f-well">What went well</label>
+        <textarea id="f-well" className="prose" rows={2} value={wentWell} onChange={(e) => setWentWell(e.target.value)} maxLength={1000} />
+      </div>
+      <div>
+        <label htmlFor="f-work">What to work on</label>
+        <textarea id="f-work" className="prose" rows={2} value={workOn} onChange={(e) => setWorkOn(e.target.value)} maxLength={1000} />
+      </div>
+      {msg && <ErrorBox message={msg} />}
+      <div className="row">
+        <button className="btn primary small" disabled={busy || DIMS.some((d) => !ratings[d])}>
+          {busy ? "Saving..." : "Save and tell the student"}
+        </button>
+        <button type="button" className="btn ghost small" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
 }
 
 const time = (d: string) => new Date(d).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
@@ -124,6 +191,7 @@ export function DriveSchedules({ driveId, rounds, waiting }: { driveId: string; 
   const { data, error, loading, reload, setData } = useApi<{ schedules: Schedule[] }>(`/console/placements/${driveId}/schedules`);
   const [adding, setAdding] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [feedbackFor, setFeedbackFor] = useState<{ scheduleId: string; userId: string } | null>(null);
 
   async function mark(s: Schedule, userId: string, status: Schedule["slots"][number]["status"]) {
     setMsg(null);
@@ -184,7 +252,7 @@ export function DriveSchedules({ driveId, rounds, waiting }: { driveId: string; 
                 · {day(s.startsAt)}, {time(s.startsAt)} to {time(s.endsAt)} · {s.slotMinutes} min each
               </span>
             </div>
-            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))" }}>
               {s.panels.map((p, i) => (
                 <div key={i} className="card tight stack" style={{ gap: 4 }}>
                   <div>
@@ -203,6 +271,17 @@ export function DriveSchedules({ driveId, rounds, waiting }: { driveId: string; 
                               <div className="muted">{x.rollNo}</div>
                             </td>
                             <td className="no-print">
+                              {x.status !== "no_show" && x.status !== "excused" && (
+                                <button
+                                  className="btn ghost small"
+                                  aria-label={`${x.feedback ? "Edit feedback" : "Feedback"} for ${x.name}`}
+                                  onClick={() => setFeedbackFor({ scheduleId: s.id, userId: x.userId })}
+                                >
+                                  {x.feedback ? "Edit feedback" : "Feedback"}
+                                </button>
+                              )}
+                            </td>
+                            <td className="no-print">
                               <select aria-label={`${x.name}: interview status`} value={x.status} onChange={(e) => mark(s, x.userId, e.target.value as Schedule["slots"][number]["status"])} style={{ width: "auto" }}>
                                 <option value="scheduled">Waiting</option>
                                 <option value="done">Interviewed</option>
@@ -217,6 +296,19 @@ export function DriveSchedules({ driveId, rounds, waiting }: { driveId: string; 
                 </div>
               ))}
             </div>
+            {feedbackFor?.scheduleId === s.id && (
+              <FeedbackForm
+                key={feedbackFor.userId}
+                driveId={driveId}
+                schedule={s}
+                slot={s.slots.find((x) => x.userId === feedbackFor.userId)!}
+                onCancel={() => setFeedbackFor(null)}
+                onSaved={(d) => {
+                  setData(d);
+                  setFeedbackFor(null);
+                }}
+              />
+            )}
           </section>
         ))
       )}

@@ -30,3 +30,13 @@ describe("placement policy", () => {
     expect(r.reasons).toEqual(["You already hold an offer, and this drive is for students without one"]);
   });
 });
+
+describe("test rounds", () => {
+  it("compares the score with the cut-off", async () => {
+    const { cutoffResult } = await import("../src");
+    expect(cutoffResult(30, 50, 60)).toEqual({ pct: 60, passed: true });
+    expect(cutoffResult(29, 50, 60)).toEqual({ pct: 58, passed: false });
+    expect(cutoffResult(1, 3, 33)).toEqual({ pct: 33.3, passed: true });
+    expect(cutoffResult(0, 0, 10)).toEqual({ pct: 0, passed: false });
+  });
+});

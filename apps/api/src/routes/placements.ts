@@ -4,7 +4,9 @@ import { db } from "../db/client";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
 import { requireFeature } from "../services/plan";
 import { companyList, companyPage } from "../services/companies";
-import { createSchedule, driveScheduleList, markSlot } from "../services/drive-schedules";
+import { createSchedule, driveScheduleList, markSlot, saveFeedback } from "../services/drive-schedules";
+import { resumeBook } from "../services/resume-book";
+import { applyRoundTest, removeRoundTest, roundTests, setRoundTest } from "../services/round-tests";
 import { batchCsv, batchReport, deleteOutcome, graduationYears, myOutcomes, outcomeQueue, reportOutcome, reviewOutcome, updateOutcome } from "../services/graduate-outcomes";
 import { experienceCounts, experienceOptions, pendingCount, readExperiences, reviewExperience, reviewQueue, submitExperience } from "../services/experiences";
 import {
@@ -182,6 +184,30 @@ export async function placementRoutes(app: FastifyInstance) {
     return studentPlacements(db, { tenantId: tenantOf(req), userId: req.auth.userId, now: app.now() });
   });
 
+  app.get("/console/placements/:id/resume-book", { preHandler: [requirePermission("reports.export"), ...manage] }, async (req, reply) => {
+    const { stage } = parse(z.object({ stage: z.enum(["registered", "in_selection", "offered"]).default("registered") }), req.query);
+    const book = await resumeBook(db, { tenantId: tenantOf(req), actorId: req.auth.userId, driveId: parse(idParam, req.params).id, stage, now: app.now() });
+    return reply.header("content-type", "application/pdf").header("content-disposition", `attachment; filename="${book.fileName}"`).header("x-students", String(book.students)).send(book.pdf);
+  });
+
+  // ---------- Rounds taken as PlayCode tests ----------
+  const roundParam = z.object({ id: z.string().uuid(), round: z.coerce.number().int().min(0).max(7) });
+  const staffOf = (req: FastifyRequest) => ({ tenantId: tenantOf(req), userId: req.auth.userId });
+  app.get("/console/placements/:id/round-tests", { preHandler: manage }, async (req) => roundTests(db, tenantOf(req), parse(idParam, req.params).id, app.now()));
+  app.put("/console/placements/:id/round-tests/:round", { preHandler: manage }, async (req) => {
+    const p = parse(roundParam, req.params);
+    const body = parse(z.object({ assessmentId: z.string().uuid(), cutoffPct: z.number().int().min(1).max(100) }), req.body);
+    return setRoundTest(db, staffOf(req), p.id, { round: p.round, ...body }, app.now());
+  });
+  app.delete("/console/placements/:id/round-tests/:round", { preHandler: manage }, async (req) => {
+    const p = parse(roundParam, req.params);
+    return removeRoundTest(db, staffOf(req), p.id, p.round, app.now());
+  });
+  app.post("/console/placements/:id/round-tests/:round/apply", { preHandler: manage }, async (req) => {
+    const p = parse(roundParam, req.params);
+    return applyRoundTest(db, staffOf(req), p.id, p.round, app.now());
+  });
+
   // ---------- Interview schedules ----------
   app.get("/console/placements/:id/schedules", { preHandler: manage }, async (req) => driveScheduleList(db, tenantOf(req), parse(idParam, req.params).id));
   app.post("/console/placements/:id/schedules", { preHandler: manage }, async (req) => {
@@ -200,6 +226,13 @@ export async function placementRoutes(app: FastifyInstance) {
     const p = parse(z.object({ id: z.string().uuid(), scheduleId: z.string().uuid(), userId: z.string().uuid() }), req.params);
     const { status } = parse(z.object({ status: z.enum(["scheduled", "done", "no_show", "excused"]) }), req.body);
     return markSlot(db, { tenantId: tenantOf(req), userId: req.auth.userId }, p.id, p.scheduleId, p.userId, status);
+  });
+
+  app.put("/console/placements/:id/schedules/:scheduleId/slots/:userId/feedback", { preHandler: manage }, async (req) => {
+    const p = parse(z.object({ id: z.string().uuid(), scheduleId: z.string().uuid(), userId: z.string().uuid() }), req.params);
+    const rating = z.number().int().min(1).max(5);
+    const input = parse(z.object({ ratings: z.object({ communication: rating, technical: rating, problemSolving: rating }), wentWell: z.string().max(1000).default(""), workOn: z.string().max(1000).default("") }), req.body);
+    return saveFeedback(db, { tenantId: tenantOf(req), userId: req.auth.userId }, p.id, p.scheduleId, p.userId, input, app.now());
   });
 
   app.get("/console/placements/policy", { preHandler: manage }, async (req) => placementPolicy(db, tenantOf(req)));

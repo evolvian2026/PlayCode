@@ -1018,6 +1018,15 @@ const HI: Record<string, string> = {
   "Verified by your college": "आपके कॉलेज द्वारा सत्यापित",
   "Not verified yet": "अभी सत्यापित नहीं",
   Applied: "लागू किया गया",
+  // Phase 28: drive tests and interview feedback
+  "{round} on PlayCode: {title}": "PlayCode पर {round}: {title}",
+  "Opens {date}": "{date} को खुलेगा",
+  "Open until {date}": "{date} तक खुला है",
+  "Take the test": "टेस्ट दें",
+  "Feedback from your {round}": "आपके {round} का फ़ीडबैक",
+  "Went well:": "अच्छा रहा:",
+  "To work on:": "सुधार करें:",
+  "Registering shares your resume with {company}.": "रजिस्टर करने पर आपका रिज़्यूमे {company} के साथ साझा किया जाएगा।",
 };
 
 const STORAGE_KEY = "playcode.locale";

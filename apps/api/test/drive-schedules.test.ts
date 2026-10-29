@@ -59,7 +59,7 @@ describe("drive-day interview schedules", () => {
     const note = (await db.select().from(notifications).where(eq(notifications.userId, students[3]!.id))).find((n) => n.title.startsWith("Juspay Online test"));
     expect(note!.body).toContain("Panel 2, Room 205");
     const mine = (await t.get(students[3]!.token, "/student/placements")).body.drives.find((d: { id: string }) => d.id === drive);
-    expect(mine.application.slots).toEqual([{ round: "Online test", startsAt: new Date(at.getTime() + 20 * 60_000).toISOString(), panel: panels[1], status: "scheduled" }]);
+    expect(mine.application.slots).toEqual([{ round: "Online test", startsAt: new Date(at.getTime() + 20 * 60_000).toISOString(), panel: panels[1], status: "scheduled", feedback: null }]);
     const cal = (await t.get(students[3]!.token, `/student/calendar?from=${START.toISOString()}&to=${new Date(START.getTime() + 5 * DAY).toISOString()}`)).body.events;
     expect(cal).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "drive_round", title: "Juspay: Online test", location: "Panel 2, Room 205" })]));
   });

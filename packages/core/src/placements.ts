@@ -160,3 +160,21 @@ export function median(values: number[]): number | null {
   const mid = Math.floor(s.length / 2);
   return s.length % 2 ? s[mid]! : Math.round((s[mid - 1]! + s[mid]!) / 2);
 }
+
+/** Interview feedback the placement cell passes on to a student after a drive interview, each 1-5. */
+export type InterviewFeedbackDimension = "communication" | "technical" | "problemSolving";
+
+export const INTERVIEW_FEEDBACK_DIMENSIONS: Record<InterviewFeedbackDimension, string> = {
+  communication: "Communication",
+  technical: "Technical knowledge",
+  problemSolving: "Problem solving",
+};
+
+/** A PlayCode test as a drive round: the percentage scored, and whether it clears the cut-off. */
+export function cutoffResult(score: number, max: number, cutoffPct: number): { pct: number; passed: boolean } {
+  const pct = max > 0 ? Math.round((score / max) * 1000) / 10 : 0;
+  return { pct, passed: pct >= cutoffPct };
+}
+
+/** Attempts this risky (from proctoring) are held back for a person to look at instead of being advanced automatically. */
+export const ROUND_TEST_REVIEW_RISK = 60;
