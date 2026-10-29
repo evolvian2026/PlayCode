@@ -24,6 +24,8 @@ const NAV: NavItem[] = [
   { href: "/console/placements", label: "Placements", icon: "briefcase", perm: "placements.manage", feature: "placements" },
   { href: "/console/experiences", label: "Interview experiences", icon: "book", perm: "placements.manage", feature: "placements" },
   { href: "/console/outcomes", label: "Graduate outcomes", icon: "award", perm: "placements.manage", feature: "placements" },
+  { href: "/console/calendar", label: "Calendar", icon: "calendar", perm: ["placements.manage", "assignments.manage"], noCompany: true },
+  { href: "/console/documents", label: "Documents", icon: "clipboard", perm: ["placements.manage", "assignments.manage"], noCompany: true },
   { href: "/console/circulars", label: "Circulars", icon: "megaphone", perm: ["placements.manage", "assignments.manage"], noCompany: true },
   { href: "/console/training", label: "Training sessions", icon: "calendar", perm: ["placements.manage", "assignments.manage"], noCompany: true },
   { href: "/console/interview-slots", label: "Interview slots", icon: "users", perm: ["placements.manage", "assignments.manage"], noCompany: true },

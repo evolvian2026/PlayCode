@@ -1,7 +1,7 @@
 // A student's dated events in one list, and the iCalendar (RFC 5545) text a
 // calendar app subscribes to.
 
-export type CalendarKind = "training" | "test" | "assignment" | "contest" | "drive" | "drive_deadline" | "interview";
+export type CalendarKind = "training" | "test" | "assignment" | "contest" | "drive" | "drive_deadline" | "drive_round" | "interview";
 
 export const CALENDAR_KINDS: Record<CalendarKind, string> = {
   training: "Training",
@@ -10,6 +10,7 @@ export const CALENDAR_KINDS: Record<CalendarKind, string> = {
   contest: "Contest",
   drive: "Placement drive",
   drive_deadline: "Registration closes",
+  drive_round: "Drive interview",
   interview: "Mock interview",
 };
 
@@ -80,4 +81,21 @@ export function toIcs(events: CalendarEvent[], opts: { name: string; now: Date }
   }
   lines.push("END:VCALENDAR");
   return lines.map(foldIcsLine).join("\r\n") + "\r\n";
+}
+
+/** What the placement cell and faculty see on the console calendar. */
+export type StaffCalendarKind = "drive" | "drive_deadline" | "interview_day" | "training" | "circular_due" | "document_due" | "offers_due";
+
+export const STAFF_CALENDAR_KINDS: Record<StaffCalendarKind, string> = {
+  drive: "Placement drive",
+  drive_deadline: "Registration closes",
+  interview_day: "Interviews",
+  training: "Training",
+  circular_due: "Circular due",
+  document_due: "Documents due",
+  offers_due: "Offer answers due",
+};
+
+export interface StaffCalendarEvent extends Omit<CalendarEvent, "kind"> {
+  kind: StaffCalendarKind;
 }

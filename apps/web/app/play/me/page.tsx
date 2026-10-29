@@ -179,6 +179,14 @@ export default function MePage() {
         <Icon name="arrow" />
       </Link>
 
+      <Link href="/play/documents" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Documents")}</b>
+          <div className="small muted">{tr("Files your placement cell has asked for")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
       <Link href="/play/circulars" className="card spread" style={{ color: "inherit" }}>
         <div>
           <b>{tr("Circulars")}</b>

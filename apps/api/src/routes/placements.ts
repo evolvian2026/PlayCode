@@ -4,6 +4,7 @@ import { db } from "../db/client";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
 import { requireFeature } from "../services/plan";
 import { companyList, companyPage } from "../services/companies";
+import { createSchedule, driveScheduleList, markSlot } from "../services/drive-schedules";
 import { batchCsv, batchReport, deleteOutcome, graduationYears, myOutcomes, outcomeQueue, reportOutcome, reviewOutcome, updateOutcome } from "../services/graduate-outcomes";
 import { experienceCounts, experienceOptions, pendingCount, readExperiences, reviewExperience, reviewQueue, submitExperience } from "../services/experiences";
 import {
@@ -179,6 +180,26 @@ export async function placementRoutes(app: FastifyInstance) {
     const { accept } = parse(z.object({ accept: z.boolean() }), req.body);
     await decideOffer(db, { tenantId: tenantOf(req), userId: req.auth.userId, driveId: parse(idParam, req.params).id, accept, now: app.now() });
     return studentPlacements(db, { tenantId: tenantOf(req), userId: req.auth.userId, now: app.now() });
+  });
+
+  // ---------- Interview schedules ----------
+  app.get("/console/placements/:id/schedules", { preHandler: manage }, async (req) => driveScheduleList(db, tenantOf(req), parse(idParam, req.params).id));
+  app.post("/console/placements/:id/schedules", { preHandler: manage }, async (req) => {
+    const input = parse(
+      z.object({
+        round: z.number().int().min(0).max(7),
+        startsAt: z.coerce.date(),
+        slotMinutes: z.number().int().min(5).max(180),
+        panels: z.array(z.object({ name: z.string().trim().min(1, "Name each panel").max(60), room: z.string().trim().max(60).default(""), interviewer: z.string().trim().max(120).default("") })).min(1).max(20),
+      }),
+      req.body,
+    );
+    return createSchedule(db, { tenantId: tenantOf(req), userId: req.auth.userId }, parse(idParam, req.params).id, input, app.now());
+  });
+  app.post("/console/placements/:id/schedules/:scheduleId/slots/:userId", { preHandler: manage }, async (req) => {
+    const p = parse(z.object({ id: z.string().uuid(), scheduleId: z.string().uuid(), userId: z.string().uuid() }), req.params);
+    const { status } = parse(z.object({ status: z.enum(["scheduled", "done", "no_show"]) }), req.body);
+    return markSlot(db, { tenantId: tenantOf(req), userId: req.auth.userId }, p.id, p.scheduleId, p.userId, status);
   });
 
   app.get("/console/placements/policy", { preHandler: manage }, async (req) => placementPolicy(db, tenantOf(req)));

@@ -948,6 +948,23 @@ const HI: Record<string, string> = {
   "You're in the selection": "आप चयन प्रक्रिया में हैं",
   "You took part": "आपने भाग लिया",
   "You got an offer": "आपको ऑफ़र मिला",
+  // Phase 26: documents, interview slots
+  "Be there 10 minutes early with your resume and college ID.": "अपने रिज़्यूमे और कॉलेज आईडी के साथ 10 मिनट पहले पहुँचें।",
+  Documents: "दस्तावेज़",
+  "Files your placement cell has asked for. A PDF, or a clear photo (JPG or PNG), up to 5 MB.": "प्लेसमेंट सेल ने जो फ़ाइलें माँगी हैं। एक PDF, या साफ़ फ़ोटो (JPG या PNG), 5 MB तक।",
+  "Files your placement cell has asked for": "प्लेसमेंट सेल ने जो फ़ाइलें माँगी हैं",
+  "Nothing to upload right now.": "अभी कुछ अपलोड नहीं करना है।",
+  "Upload by {date}": "{date} तक अपलोड करें",
+  "Not uploaded": "अपलोड नहीं किया",
+  "Waiting to be checked": "जाँच का इंतज़ार",
+  "Upload again": "फिर से अपलोड करें",
+  "Uploading...": "अपलोड हो रहा है...",
+  "Upload a new file": "नई फ़ाइल अपलोड करें",
+  "Upload a file": "फ़ाइल अपलोड करें",
+  "The file is larger than 5 MB. Scan it at a lower resolution or upload a photo.": "फ़ाइल 5 MB से बड़ी है। कम रिज़ॉल्यूशन पर स्कैन करें या फ़ोटो अपलोड करें।",
+  "1 document to upload": "1 दस्तावेज़ अपलोड करना है",
+  "{n} documents to upload": "{n} दस्तावेज़ अपलोड करने हैं",
+  "Drive interview": "ड्राइव इंटरव्यू",
 };
 
 const STORAGE_KEY = "playcode.locale";

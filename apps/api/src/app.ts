@@ -28,6 +28,8 @@ import { mentoringConsoleRoutes, mentoringStudentRoutes } from "./routes/mentori
 import { trainingConsoleRoutes, trainingStudentRoutes } from "./routes/training";
 import { guardianConsoleRoutes, guardianPublicRoutes, guardianStudentRoutes } from "./routes/guardians";
 import { circularConsoleRoutes, circularStudentRoutes } from "./routes/circulars";
+import { documentConsoleRoutes, documentStudentRoutes } from "./routes/documents";
+import { staffCalendarRoutes } from "./routes/staff-calendar";
 import { paperRoutes } from "./routes/papers";
 import { writingRoutes } from "./routes/writing";
 import { interviewRoutes } from "./routes/interviews";
@@ -160,6 +162,8 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(mentoringConsoleRoutes, { prefix: "/console" });
   await app.register(guardianConsoleRoutes, { prefix: "/console" });
   await app.register(circularConsoleRoutes, { prefix: "/console" });
+  await app.register(documentConsoleRoutes, { prefix: "/console" });
+  await app.register(staffCalendarRoutes, { prefix: "/console" });
   await app.register(adminRoutes, { prefix: "/admin" });
   await app.register(engageRoutes);
   await app.register(developerRoutes, { prefix: "/console" });
@@ -184,6 +188,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(guardianStudentRoutes);
   await app.register(guardianPublicRoutes);
   await app.register(circularStudentRoutes);
+  await app.register(documentStudentRoutes);
   await app.register(writingRoutes);
   await app.register(resumeRoutes);
   await app.register(talentRoutes);

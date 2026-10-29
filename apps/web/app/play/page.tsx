@@ -161,6 +161,23 @@ function CircularCard() {
   );
 }
 
+/** Documents the placement cell asked for that still need uploading. */
+function DocumentsCard() {
+  const t = useT();
+  const { data } = useApi<{ todo: number; requests: { title: string; closed: boolean; file: { status: string } | null }[] }>("/student/documents");
+  if (!data?.todo) return null;
+  const first = data.requests.find((r) => !r.closed && (!r.file || r.file.status === "rejected"))!;
+  return (
+    <Link href="/play/documents" className="card spread" style={{ color: "inherit", borderColor: "var(--warn)" }}>
+      <div>
+        <b>{t(data.todo === 1 ? "1 document to upload" : "{n} documents to upload", { n: data.todo })}</b>
+        <div className="small muted">{first.title}</div>
+      </div>
+      <Icon name="arrow" />
+    </Link>
+  );
+}
+
 /** Answers given offline that haven't been checked yet. */
 function OfflineCard() {
   const t = useT();
@@ -295,6 +312,7 @@ export default function PlayHome() {
       )}
 
       <CircularCard />
+      <DocumentsCard />
       <TrainingCard />
       <PlanCard />
 

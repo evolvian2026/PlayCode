@@ -25,7 +25,14 @@ interface Drive {
   open: boolean;
   tier: OfferTier | null;
   eligibility: { eligible: boolean; reasons: string[] };
-  application: { status: "registered" | "shortlisted" | "rejected" | "offered"; roundsCleared: number; offerCtcRupees: number | null; decision: "accepted" | "declined" | null; decideBy: string | null } | null;
+  application: { status: "registered" | "shortlisted" | "rejected" | "offered"; roundsCleared: number; offerCtcRupees: number | null; decision: "accepted" | "declined" | null; decideBy: string | null; slots: Slot[] } | null;
+}
+
+interface Slot {
+  round: string;
+  startsAt: string;
+  panel: { name: string; room: string; interviewer: string };
+  status: "scheduled" | "done" | "no_show";
 }
 
 interface Placements {
@@ -136,6 +143,25 @@ function DriveCard({ drive, experiences, onChange }: { drive: Drive; experiences
               </div>
             </>
           ) : null}
+        </div>
+      )}
+      {app && app.slots.some((s) => s.status === "scheduled" && new Date(s.startsAt).getTime() > Date.now() - 3 * 3_600_000) && (
+        <div className="stack" style={{ gap: 4, background: "var(--surface-2)", padding: "8px 10px", borderRadius: 8 }}>
+          {app.slots
+            .filter((s) => s.status === "scheduled" && new Date(s.startsAt).getTime() > Date.now() - 3 * 3_600_000)
+            .map((s) => (
+              <div key={`${s.round}-${s.startsAt}`} className="small">
+                <b>
+                  {s.round}: {new Date(s.startsAt).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                </b>
+                <div>
+                  {s.panel.name}
+                  {s.panel.room ? ` · ${s.panel.room}` : ""}
+                  {s.panel.interviewer ? ` · ${s.panel.interviewer}` : ""}
+                </div>
+              </div>
+            ))}
+          <div className="small muted">{t("Be there 10 minutes early with your resume and college ID.")}</div>
         </div>
       )}
       {app ? (

@@ -24,6 +24,7 @@ import { readinessFor } from "./analytics";
 import { appLink, enqueue } from "./notifications";
 import { descendants, studentIdsInUnits, studentUnitIdsWithAncestors, tenantUnits } from "./scope";
 import { getTenant, tenantToday } from "./tenant";
+import { mySlots } from "./drive-schedules";
 import { attendanceFor } from "./training";
 import { emitAndDeliver } from "./webhooks";
 
@@ -398,13 +399,14 @@ export async function updateApplications(db: Db, args: { tenantId: string; actor
 // ---------- Students ----------
 
 export async function studentPlacements(db: Db, ctx: { tenantId: string; userId: string; now: Date }) {
-  const [record, mine, units, offers, attendance, policy] = await Promise.all([
+  const [record, mine, units, offers, attendance, policy, slots] = await Promise.all([
     recordsFor(db, [ctx.userId]).then((m) => m.get(ctx.userId) ?? null),
     db.select().from(placementApplications).where(and(eq(placementApplications.tenantId, ctx.tenantId), eq(placementApplications.userId, ctx.userId))),
     studentUnitIdsWithAncestors(db, ctx.tenantId, ctx.userId),
     offersFor(db, ctx.tenantId, [ctx.userId]).then((m) => m.get(ctx.userId)),
     attendanceFor(db, ctx.tenantId, [ctx.userId], ctx.now).then((m) => m.get(ctx.userId)!),
     placementPolicy(db, ctx.tenantId),
+    mySlots(db, ctx.tenantId, ctx.userId),
   ]);
   const myUnits = new Set(units);
   const drives = await db.select().from(placementDrives).where(eq(placementDrives.tenantId, ctx.tenantId)).orderBy(placementDrives.driveDate);
@@ -437,7 +439,14 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
       eligibility,
       application:
         app && active(app.status)
-          ? { status: app.status, roundsCleared: app.roundsCleared, offerCtcRupees: app.offerCtcRupees, decision: app.status === "offered" ? (app.decision ?? null) : null, decideBy: app.status === "offered" ? app.decideBy : null }
+          ? {
+              status: app.status,
+              roundsCleared: app.roundsCleared,
+              offerCtcRupees: app.offerCtcRupees,
+              decision: app.status === "offered" ? (app.decision ?? null) : null,
+              decideBy: app.status === "offered" ? app.decideBy : null,
+              slots: slots.get(d.id) ?? [],
+            }
           : null,
     });
   }

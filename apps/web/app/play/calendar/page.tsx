@@ -12,7 +12,7 @@ interface Data {
   feed: { active: boolean; createdAt: string | null };
 }
 
-const TONE: Record<CalendarEvent["kind"], string> = { training: "accent", test: "warn", assignment: "", contest: "good", drive: "good", drive_deadline: "bad", interview: "accent" };
+const TONE: Record<CalendarEvent["kind"], string> = { training: "accent", test: "warn", assignment: "", contest: "good", drive: "good", drive_deadline: "bad", drive_round: "accent", interview: "accent" };
 
 function FeedCard({ feed, onChange }: { feed: Data["feed"]; onChange: () => void }) {
   const t = useT();

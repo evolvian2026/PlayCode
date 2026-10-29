@@ -2,7 +2,8 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, normalize } from "node:path";
 import { env } from "../env";
 
-// File storage for proctoring snapshots. This local-disk driver suits one
+// File storage for proctoring snapshots, logos and students' uploaded
+// documents. This local-disk driver suits one
 // server; production should implement the same two functions over S3 or
 // another object store (with server-side encryption and a lifecycle rule
 // that deletes snapshots after the review window).

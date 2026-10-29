@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -2001,4 +2001,78 @@ export const circularAcks = pgTable(
     at: timestamp("at", { withTimezone: true }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.circularId, t.userId] }), index("circular_acks_user_idx").on(t.userId)],
+);
+
+// ---------- Document collection ----------
+
+/** Documents the placement cell asks a batch for (marksheets, ID proof), by a date. */
+export const documentRequests = pgTable(
+  "document_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").notNull(),
+    title: text("title").notNull(),
+    instructions: text("instructions").notNull().default(""),
+    /** Batches or sections it is for; empty means every student. */
+    unitIds: jsonb("unit_ids").$type<string[]>().notNull(),
+    /** Last day to upload, "2026-11-05". */
+    dueOn: text("due_on").notNull(),
+    lastRemindedAt: timestamp("last_reminded_at", { withTimezone: true }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("document_requests_tenant_idx").on(t.tenantId, t.createdAt)],
+);
+
+/** One student's file for a request; uploading again replaces it until it's verified. */
+export const documentSubmissions = pgTable(
+  "document_submissions",
+  {
+    requestId: uuid("request_id").notNull().references(() => documentRequests.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    storageKey: text("storage_key").notNull(),
+    fileName: text("file_name").notNull(),
+    contentType: text("content_type").$type<DocumentType>().notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    status: text("status").$type<"pending" | "verified" | "rejected">().notNull().default("pending"),
+    reviewNote: text("review_note"),
+    reviewedBy: uuid("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.requestId, t.userId] }), index("document_submissions_user_idx").on(t.userId)],
+);
+
+// ---------- Drive-day interview schedules ----------
+
+/** The interview slots for one round of a drive: panels, and when each student goes in. */
+export const driveSchedules = pgTable(
+  "drive_schedules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    driveId: uuid("drive_id").notNull().references(() => placementDrives.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    /** Index into the drive's rounds. */
+    round: integer("round").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    slotMinutes: integer("slot_minutes").notNull(),
+    panels: jsonb("panels").$type<Panel[]>().notNull(),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("drive_schedules_round_idx").on(t.driveId, t.round)],
+);
+
+export const driveSlots = pgTable(
+  "drive_slots",
+  {
+    scheduleId: uuid("schedule_id").notNull().references(() => driveSchedules.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    panel: integer("panel").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    status: text("status").$type<"scheduled" | "done" | "no_show">().notNull().default("scheduled"),
+  },
+  (t) => [primaryKey({ columns: [t.scheduleId, t.userId] }), index("drive_slots_user_idx").on(t.userId)],
 );

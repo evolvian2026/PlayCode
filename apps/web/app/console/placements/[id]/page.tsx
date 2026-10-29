@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { COMPANY_TYPE_LABELS, formatLpa, type CompanyType } from "@playcode/core";
+import { DriveSchedules } from "@/components/DriveSchedules";
 import { ErrorBox, Loading, Stat } from "@/components/ui";
 import { api, errorMessage, fetchObjectUrl, useApi } from "@/lib/api";
 
@@ -146,6 +147,13 @@ export default function PlacementDrive() {
         ))}
         <Stat label="Offers" value={summary.offers} />
       </div>
+
+      <DriveSchedules
+        key={data.applicants.map((a) => `${a.userId}:${a.roundsCleared}:${a.status}`).join(",")}
+        driveId={drive.id}
+        rounds={drive.rounds}
+        waiting={drive.rounds.map((_, i) => data.applicants.filter((a) => (a.status === "registered" || a.status === "shortlisted") && a.roundsCleared === i).length)}
+      />
 
       <div className="card stack" style={{ padding: 0 }}>
         <div className="stack" style={{ padding: "12px 16px 0", gap: 8 }}>

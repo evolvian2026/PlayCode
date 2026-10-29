@@ -26,13 +26,14 @@ export interface CircularInput {
   ackBy: string | null;
 }
 
-/** Students a circular is for: those in its units and the units below, or everyone. */
-async function audienceOf(db: DbOrTx, c: Row) {
+/** Students a notice is for: those in its units and the units below, or everyone. Circulars and document requests share this. */
+export async function audienceOf(db: DbOrTx, c: { tenantId: string; unitIds: string[] }) {
   const units = await tenantUnits(db, c.tenantId);
   return studentIdsInUnits(db, c.tenantId, c.unitIds.length ? descendants(units, c.unitIds) : units.map((u) => u.id));
 }
 
-async function visible(db: DbOrTx, auth: AuthContext, c: Row) {
+/** Staff see what they posted, everything with institution scope, and anything that reaches their batches. */
+export async function visible(db: DbOrTx, auth: AuthContext, c: { tenantId: string; createdBy: string; unitIds: string[] }) {
   if (c.tenantId !== auth.tenantId) return false;
   if (hasInstitutionScope(auth.roles) || c.createdBy === auth.userId || !c.unitIds.length) return true;
   const mine = new Set(await scopedUnitIds(db, auth));
@@ -125,13 +126,13 @@ export async function withdrawCircular(db: Db, auth: AuthContext, id: string, no
 // ---------- Students ----------
 
 async function myCircularRows(db: Db, ctx: Ctx) {
-  const myUnits = new Set(await studentUnitIdsWithAncestors(db, ctx.tenantId, ctx.userId));
+  const reaches = await reachesStudent(db, ctx);
   const rows = await db
     .select()
     .from(circulars)
     .where(and(eq(circulars.tenantId, ctx.tenantId), isNull(circulars.withdrawnAt), gte(circulars.createdAt, new Date(ctx.now.getTime() - 180 * 86_400_000))))
     .orderBy(desc(circulars.createdAt));
-  return rows.filter((c) => !c.unitIds.length || c.unitIds.some((u) => myUnits.has(u)));
+  return rows.filter(reaches);
 }
 
 export async function myCirculars(db: Db, ctx: Ctx) {
@@ -147,6 +148,12 @@ export async function acknowledge(db: Db, ctx: Ctx, id: string) {
   if (!c.requireAck) throw badRequest("This circular doesn't need acknowledging");
   await db.insert(circularAcks).values({ circularId: c.id, userId: ctx.userId, at: ctx.now }).onConflictDoNothing();
   return myCirculars(db, ctx);
+}
+
+/** Notices a student's batches get (circulars, document requests): those for everyone, or for one of their units or a unit above. */
+export async function reachesStudent(db: DbOrTx, ctx: { tenantId: string; userId: string }) {
+  const myUnits = new Set(await studentUnitIdsWithAncestors(db, ctx.tenantId, ctx.userId));
+  return (c: { unitIds: string[] }) => !c.unitIds.length || c.unitIds.some((u) => myUnits.has(u));
 }
 
 /** Hourly: remind students who haven't acknowledged a circular due tomorrow (once each). */

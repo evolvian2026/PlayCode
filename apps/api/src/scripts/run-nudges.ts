@@ -12,6 +12,7 @@ import { sendDueReports } from "../services/reports";
 import { sendGuardianReports } from "../services/guardians";
 import { settleOffers } from "../services/placements";
 import { circularReminders } from "../services/circulars";
+import { documentReminders } from "../services/documents";
 import { reviewPendingSnapshots } from "../services/snapshot-review";
 
 // Hourly job: queue automatic nudges (streaks, due assignments, open tests)
@@ -21,7 +22,7 @@ import { reviewPendingSnapshots } from "../services/snapshot-review";
 // publish results, ratings and certificates of contests that have ended, and
 // send parents last month's progress email in the first week of a month,
 // settle placement offers whose time to answer has passed, and remind students
-// of circulars to acknowledge by tomorrow.
+// of circulars to acknowledge and documents to upload by tomorrow.
 // Usage: pnpm nudges:run
 const now = new Date();
 try {
@@ -40,6 +41,7 @@ try {
       guardianEmails: await sendGuardianReports(db, now),
       offers: await settleOffers(db, now),
       circularReminders: await circularReminders(db, now),
+      documentReminders: await documentReminders(db, now),
     })),
   );
 } catch (err) {

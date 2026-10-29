@@ -64,6 +64,11 @@ export async function calendarEvents(db: Db, ctx: Ctx, from: Date, to: Date): Pr
     if (!d.application && inRange(d.registerBy, null)) {
       events.push({ uid: `drive-deadline-${d.id}@playcode`, kind: "drive_deadline", title: `Register by: ${d.company}`, start: iso(d.registerBy), end: null, allDay: false, location: null, detail: `${d.roleTitle}. Registration closes.`, url: appLink("/play/placements") });
     }
+    // Their slot on the drive day, for each scheduled round.
+    for (const s of d.application?.slots ?? []) {
+      if (s.status !== "scheduled" || !inRange(s.startsAt, null)) continue;
+      events.push({ uid: `drive-slot-${d.id}-${s.round}@playcode`, kind: "drive_round", title: `${d.company}: ${s.round}`, start: iso(s.startsAt), end: null, allDay: false, location: [s.panel.name, s.panel.room].filter(Boolean).join(", "), detail: s.panel.interviewer ? `With ${s.panel.interviewer}.` : null, url: appLink("/play/placements") });
+    }
   }
 
   for (const s of (await studentSlots(db, ctx)).mine) {

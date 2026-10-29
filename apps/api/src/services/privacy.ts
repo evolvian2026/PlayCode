@@ -20,6 +20,8 @@ import {
   circularAcks,
   circulars,
   consents,
+  documentRequests,
+  documentSubmissions,
   driveCandidates,
   drives,
   duelPlayers,
@@ -209,6 +211,12 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .from(mentoringMeetings)
       .where(eq(mentoringMeetings.studentId, userId)),
     trainingFeedback: await db.select({ session: trainingSessions.title, content: trainingFeedback.content, delivery: trainingFeedback.delivery, relevance: trainingFeedback.relevance, comment: trainingFeedback.comment, at: trainingFeedback.createdAt }).from(trainingFeedback).innerJoin(trainingSessions, eq(trainingSessions.id, trainingFeedback.sessionId)).where(eq(trainingFeedback.userId, userId)),
+    // Uploaded files are listed; the student downloads each from the app.
+    documents: await db
+      .select({ request: documentRequests.title, fileName: documentSubmissions.fileName, contentType: documentSubmissions.contentType, sizeBytes: documentSubmissions.sizeBytes, status: documentSubmissions.status, reviewNote: documentSubmissions.reviewNote, submittedAt: documentSubmissions.submittedAt })
+      .from(documentSubmissions)
+      .innerJoin(documentRequests, eq(documentRequests.id, documentSubmissions.requestId))
+      .where(eq(documentSubmissions.userId, userId)),
     circularsAcknowledged: await db.select({ title: circulars.title, at: circularAcks.at }).from(circularAcks).innerJoin(circulars, eq(circulars.id, circularAcks.circularId)).where(eq(circularAcks.userId, userId)),
     outcomes: await db.select({ kind: studentOutcomes.kind, organisation: studentOutcomes.organisation, detail: studentOutcomes.detail, ctcRupees: studentOutcomes.ctcRupees, outcomeDate: studentOutcomes.outcomeDate, status: studentOutcomes.status, reviewNote: studentOutcomes.reviewNote, createdAt: studentOutcomes.createdAt }).from(studentOutcomes).where(eq(studentOutcomes.userId, userId)),
     guardian: (await db.select({ name: guardians.name, relation: guardians.relation, email: guardians.email, confirmedAt: guardians.confirmedAt, stoppedAt: guardians.stoppedAt, lastReportMonth: guardians.lastReportMonth }).from(guardians).where(eq(guardians.userId, userId)))[0] ?? null,
@@ -285,9 +293,11 @@ export async function resolveErasure(
     const [user] = await tx.select().from(users).where(eq(users.id, req.userId)).for("update");
     if (!user) throw notFound("User");
     const attemptIds = (await tx.select({ id: assessmentAttempts.id }).from(assessmentAttempts).where(eq(assessmentAttempts.userId, user.id))).map((a) => a.id);
-    const snapshotKeys = attemptIds.length
-      ? (await tx.select({ key: attemptSnapshots.storageKey }).from(attemptSnapshots).where(inArray(attemptSnapshots.attemptId, attemptIds))).map((s) => s.key)
-      : [];
+    const snapshotKeys = [
+      ...(attemptIds.length ? (await tx.select({ key: attemptSnapshots.storageKey }).from(attemptSnapshots).where(inArray(attemptSnapshots.attemptId, attemptIds))).map((s) => s.key) : []),
+      // Uploaded documents go too.
+      ...(await tx.select({ key: documentSubmissions.storageKey }).from(documentSubmissions).where(eq(documentSubmissions.userId, user.id))).map((d) => d.key),
+    ];
     // Attempts cascade to integrity events, snapshots and similarity pairs; sessions to responses.
     await tx.delete(assessmentAttempts).where(eq(assessmentAttempts.userId, user.id));
     await tx.delete(responses).where(eq(responses.userId, user.id));
@@ -315,6 +325,7 @@ export async function resolveErasure(
     await tx.delete(studentOutcomes).where(eq(studentOutcomes.userId, user.id));
     await tx.delete(guardians).where(eq(guardians.userId, user.id));
     await tx.delete(circularAcks).where(eq(circularAcks.userId, user.id));
+    await tx.delete(documentSubmissions).where(eq(documentSubmissions.userId, user.id));
     await tx.delete(mentorAssignments).where(or(eq(mentorAssignments.studentId, user.id), eq(mentorAssignments.mentorId, user.id)));
     await tx.delete(trainingAttendance).where(eq(trainingAttendance.userId, user.id));
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, user.id));

@@ -223,6 +223,7 @@ input:focus,
 select:focus,
 textarea:focus,
 .btn:focus-visible,
+.btn:has(input:focus-visible),
 .option:focus-visible {
   outline: 3px solid var(--accent-soft);
   outline-offset: 1px;
