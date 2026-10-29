@@ -1,6 +1,6 @@
 import PDFDocument from "pdfkit";
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
-import { attendancePct, formatLpa, localDate, median, TRAINING_KINDS, type TrainingKind } from "@playcode/core";
+import { attendancePct, formatLpa, localDate, median, MIN_FEEDBACK_RESPONSES, TRAINING_KINDS, type TrainingKind } from "@playcode/core";
 import type { Db } from "../db/client";
 import {
   groupDiscussions,
@@ -12,6 +12,7 @@ import {
   questionPapers,
   responses,
   trainingAttendance,
+  trainingFeedback,
   trainingSessions,
   writingAttempts,
 } from "../db/schema";
@@ -20,7 +21,7 @@ import { mentoringStats } from "./mentoring";
 import { pdfSafe } from "./papers";
 import { descendants, scopedUnitIds, studentIdsInUnits, tenantUnits, type AuthContext } from "./scope";
 import { getTenant } from "./tenant";
-import { invitedIds } from "./training";
+import { feedbackSummary, invitedIds } from "./training";
 
 // The training and placement activity report placement cells file for
 // accreditation (NAAC, NBA) and management reviews: for a period, usually an
@@ -62,15 +63,21 @@ export async function activityReport(db: Db, auth: AuthContext, period: ReportPe
     .filter((s) => within(s.startsAt) && s.startsAt <= now)
     .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   const present = held.length ? await db.select({ sessionId: trainingAttendance.sessionId, userId: trainingAttendance.userId }).from(trainingAttendance).where(inArray(trainingAttendance.sessionId, held.map((s) => s.id))) : [];
+  const ratings = held.length ? await db.select().from(trainingFeedback).where(inArray(trainingFeedback.sessionId, held.map((s) => s.id))) : [];
   const trained = new Set<string>();
-  const sessions: { id: string; date: string; title: string; kind: TrainingKind; trainer: string; location: string; hours: number; invited: number; attended: number; pct: number }[] = [];
+  const rated: typeof ratings = [];
+  const sessions: { id: string; date: string; title: string; kind: TrainingKind; trainer: string; location: string; hours: number; invited: number; attended: number; pct: number; rating: number | null }[] = [];
   for (const s of held) {
     const invited = (await invitedIds(db, s)).filter((id) => inScope.has(id));
     if (!invited.length) continue;
     const invitedSet = new Set(invited);
     const came = present.filter((p) => p.sessionId === s.id && invitedSet.has(p.userId));
     for (const p of came) trained.add(p.userId);
-    sessions.push({ id: s.id, date: localDate(s.startsAt, tz), title: s.title, kind: s.kind, trainer: s.trainer, location: s.location, hours: Math.round((s.durationMinutes / 60) * 10) / 10, invited: invited.length, attended: came.length, pct: pct(came.length, invited.length) });
+    // Ratings are the session's as a whole (from everyone who attended), shown once there are enough.
+    const mine = ratings.filter((f) => f.sessionId === s.id);
+    rated.push(...mine);
+    const fb = feedbackSummary(mine, { comments: false });
+    sessions.push({ id: s.id, date: localDate(s.startsAt, tz), title: s.title, kind: s.kind, trainer: s.trainer, location: s.location, hours: Math.round((s.durationMinutes / 60) * 10) / 10, invited: invited.length, attended: came.length, pct: pct(came.length, invited.length), rating: fb.shown ? fb.overall : null });
   }
   const byKind = (Object.keys(TRAINING_KINDS) as TrainingKind[])
     .map((kind) => {
@@ -133,7 +140,7 @@ export async function activityReport(db: Db, auth: AuthContext, period: ReportPe
     training: {
       sessions,
       byKind,
-      totals: { sessions: sessions.length, hours: Math.round(sessions.reduce((n, s) => n + s.hours, 0) * 10) / 10, studentsTrained: trained.size, studentsTrainedPct: pct(trained.size, students.length), attendancePct: attendancePct(totalAttended, totalInvited) },
+      totals: { sessions: sessions.length, hours: Math.round(sessions.reduce((n, s) => n + s.hours, 0) * 10) / 10, studentsTrained: trained.size, studentsTrainedPct: pct(trained.size, students.length), attendancePct: attendancePct(totalAttended, totalInvited), feedback: feedbackSummary(rated, { comments: false }) },
     },
     classTests,
     practice: { answers, mockTests: mocks, mockInterviews, groupDiscussions: gds, writing },
@@ -164,9 +171,9 @@ export function activityCsv(r: ActivityReport): string {
     ["Training and placement activity", r.institution, r.scope, `${r.from} to ${r.to}`],
     [],
     ["Training sessions"],
-    ["Date", "Title", "Kind", "Trainer", "Venue", "Hours", "Students invited", "Students attended", "Attendance %"],
-    ...r.training.sessions.map((s) => [s.date, s.title, TRAINING_KINDS[s.kind], s.trainer, s.location, s.hours, s.invited, s.attended, s.pct]),
-    ["Total", `${r.training.totals.sessions} sessions`, "", "", "", r.training.totals.hours, "", "", r.training.totals.attendancePct ?? ""],
+    ["Date", "Title", "Kind", "Trainer", "Venue", "Hours", "Students invited", "Students attended", "Attendance %", "Student rating (of 5)"],
+    ...r.training.sessions.map((s) => [s.date, s.title, TRAINING_KINDS[s.kind], s.trainer, s.location, s.hours, s.invited, s.attended, s.pct, s.rating ?? ""]),
+    ["Total", `${r.training.totals.sessions} sessions`, "", "", "", r.training.totals.hours, "", "", r.training.totals.attendancePct ?? "", r.training.totals.feedback.shown ? r.training.totals.feedback.overall : ""],
     [],
     ["Class tests"],
     ["Date", "Paper", "Students", "Average %"],
@@ -237,6 +244,7 @@ export function activityPdf(r: ActivityReport): Promise<Buffer> {
     ["Training sessions held", `${t.sessions} (${t.hours} hours)`],
     ["Students who attended at least one session", `${t.studentsTrained} of ${r.students} (${t.studentsTrainedPct}%)`],
     ["Average attendance", t.attendancePct === null ? "-" : `${t.attendancePct}%`],
+    ["Students' rating of training", t.feedback.shown ? `${t.feedback.overall} of 5 (${t.feedback.responses} responses)` : "-"],
     ["Class tests", String(r.classTests.length)],
     ["Students placed", `${r.placements.placed} (${r.placements.offers} offers)`],
     ["Highest and median package", `${money(r.placements.highest)} · ${money(r.placements.median)}`],
@@ -248,17 +256,19 @@ export function activityPdf(r: ActivityReport): Promise<Buffer> {
     table(
       [
         { label: "Date", w: 58 },
-        { label: "Session", w: 125 },
+        { label: "Session", w: 112 },
         { label: "Kind", w: 68 },
-        { label: "Trainer", w: 82 },
+        { label: "Trainer", w: 74 },
         { label: "Hours", w: 34, align: "right" },
         { label: "Invited", w: 40, align: "right" },
         { label: "Attended", w: 46, align: "right" },
-        { label: "Rate", w: width - 453, align: "right" },
+        { label: "Rate", w: 34, align: "right" },
+        { label: "Rating", w: width - 466, align: "right" },
       ],
-      r.training.sessions.map((s) => [s.date, s.title, TRAINING_KINDS[s.kind], s.trainer, s.hours, s.invited, s.attended, `${s.pct}%`]),
+      r.training.sessions.map((s) => [s.date, s.title, TRAINING_KINDS[s.kind], s.trainer, s.hours, s.invited, s.attended, `${s.pct}%`, s.rating === null ? "-" : String(s.rating)]),
     );
     doc.moveDown(0.3).font("Helvetica").fontSize(9).fillColor(muted).text(r.training.byKind.map((k) => `${k.label}: ${k.sessions} session${k.sessions === 1 ? "" : "s"}, ${k.hours} h`).join(" · "), 48);
+    doc.font("Helvetica").fontSize(9).fillColor(muted).text(`Rating: attendees' average out of 5, shown once ${MIN_FEEDBACK_RESPONSES} or more have rated the session.`, 48);
   }
 
   heading("Class tests");

@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
-import { attendanceReport, cancelSession, checkIn, createSession, currentCode, listSessions, markAttendance, myTraining, sessionDetail, setCheckIn } from "../services/training";
+import { attendanceReport, cancelSession, checkIn, createSession, currentCode, feedbackReport, listSessions, markAttendance, myTraining, sessionDetail, setCheckIn, submitFeedback } from "../services/training";
 
 const idParam = z.object({ id: z.string().uuid() });
 
@@ -35,6 +35,7 @@ export async function trainingConsoleRoutes(app: FastifyInstance) {
     return attendanceReport(db, auth(req), app.now(), unitId);
   });
 
+  app.get("/training/feedback", async (req) => feedbackReport(db, auth(req), app.now()));
   app.get("/training/:id", async (req) => sessionDetail(db, auth(req), parse(idParam, req.params).id, app.now()));
   app.post("/training/:id/check-in", async (req) => setCheckIn(db, auth(req), parse(idParam, req.params).id, parse(z.object({ open: z.boolean() }), req.body).open, app.now()));
   app.get("/training/:id/code", async (req) => currentCode(db, auth(req), parse(idParam, req.params).id, app.now()));
@@ -55,5 +56,10 @@ export async function trainingStudentRoutes(app: FastifyInstance) {
   app.post("/student/training/check-in", async (req) => {
     const { code } = parse(z.object({ code: z.string().trim().regex(/^\d{6}$/, "The code is six digits") }), req.body);
     return checkIn(db, ctx(req), code);
+  });
+  app.put("/student/training/:id/feedback", async (req) => {
+    const rating = z.number().int().min(1).max(5);
+    const input = parse(z.object({ content: rating, delivery: rating, relevance: rating, comment: z.string().max(1000).default("") }), req.body);
+    return submitFeedback(db, ctx(req), parse(idParam, req.params).id, input);
   });
 }

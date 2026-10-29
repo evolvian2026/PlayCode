@@ -197,6 +197,13 @@ export default function StudentPlacements() {
         </div>
         <span aria-hidden="true">→</span>
       </Link>
+      <Link href="/play/outcomes" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{t("Offers and admissions")}</b>
+          <div className="small muted">{t("Got an offer off campus, an admission or a GATE score? Tell your placement cell")}</div>
+        </div>
+        <span aria-hidden="true">→</span>
+      </Link>
       {mine.length > 0 && (
         <>
           <h2 style={{ margin: "8px 0 0" }}>{t("My applications")}</h2>

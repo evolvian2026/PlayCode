@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { ATTENDANCE_TARGET_PCT, type TrainingKind } from "@playcode/core";
+import { ATTENDANCE_TARGET_PCT, FEEDBACK_DIMENSIONS, type FeedbackDimension, type TrainingKind } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { useLocale, useT } from "@/lib/i18n";
@@ -19,6 +19,7 @@ interface Session {
   checkInOpen: boolean;
   attended: boolean;
   late: boolean;
+  feedback: "open" | "given" | null;
 }
 
 interface Mine {
@@ -80,6 +81,70 @@ function CheckIn({ sessions, onDone }: { sessions: Session[]; onDone: (message: 
   );
 }
 
+const SCALE = [1, 2, 3, 4, 5];
+
+function RateSession({ session, onDone }: { session: Session; onDone: () => void }) {
+  const t = useT();
+  const [ratings, setRatings] = useState<Partial<Record<FeedbackDimension, number>>>({});
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const dims = Object.keys(FEEDBACK_DIMENSIONS) as FeedbackDimension[];
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      await api(`/student/training/${session.id}/feedback`, { method: "PUT", body: { ...ratings, comment } });
+      onDone();
+    } catch (err) {
+      setMsg(errorMessage(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="stack" onSubmit={submit} style={{ gap: 10, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+      <div>
+        <b>{session.title}</b>
+        <div className="small muted">{session.trainer}</div>
+      </div>
+      {dims.map((d) => (
+        <div key={d} role="group" aria-label={t(FEEDBACK_DIMENSIONS[d])}>
+          <div className="small" style={{ marginBottom: 4 }}>
+            {t(FEEDBACK_DIMENSIONS[d])}
+          </div>
+          <div className="row" style={{ gap: 6 }}>
+            {SCALE.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`btn small ${ratings[d] === n ? "primary" : ""}`}
+                aria-pressed={ratings[d] === n}
+                aria-label={t("{n} of 5", { n })}
+                onClick={() => setRatings({ ...ratings, [d]: n })}
+                style={{ minWidth: 40 }}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="small muted">{t("1 is strongly disagree, 5 is strongly agree.")}</div>
+      <label className="stack" style={{ gap: 4 }}>
+        <span className="small">{t("Anything the trainer should know? (optional)")}</span>
+        <textarea className="prose" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} maxLength={1000} />
+      </label>
+      {msg && <ErrorBox message={msg} />}
+      <button className="btn primary small" style={{ alignSelf: "flex-start" }} disabled={busy || dims.some((d) => !ratings[d])}>
+        {busy ? t("Sending...") : t("Send feedback")}
+      </button>
+    </form>
+  );
+}
+
 export default function TrainingPage() {
   const t = useT();
   const locale = useLocale();
@@ -105,6 +170,26 @@ export default function TrainingPage() {
             void reload();
           }}
         />
+      )}
+      {[...data.upcoming, ...data.past].some((s) => s.feedback === "open") && (
+        <div className="card stack">
+          <div>
+            <h2 style={{ margin: 0 }}>{t("Rate your sessions")}</h2>
+            <div className="small muted">{t("Trainers see ratings only once three or more are in, and never who gave them.")}</div>
+          </div>
+          {[...data.upcoming, ...data.past]
+            .filter((s) => s.feedback === "open")
+            .map((s) => (
+              <RateSession
+                key={s.id}
+                session={s}
+                onDone={() => {
+                  setDone(t("Thanks: your feedback on {title} is in.", { title: s.title }));
+                  void reload();
+                }}
+              />
+            ))}
+        </div>
       )}
       <div className="card spread">
         <div>
@@ -151,7 +236,10 @@ export default function TrainingPage() {
               {s.status === "cancelled" ? (
                 <span className="pill">{t("Cancelled")}</span>
               ) : s.attended ? (
-                <span className={`pill ${s.late ? "warn" : "good"}`}>{t(s.late ? "Late" : "Attended")}</span>
+                <div className="row" style={{ gap: 6 }}>
+                  {s.feedback === "given" && <span className="small muted">{t("Rated")}</span>}
+                  <span className={`pill ${s.late ? "warn" : "good"}`}>{t(s.late ? "Late" : "Attended")}</span>
+                </div>
               ) : (
                 <span className="pill bad">{t("Missed")}</span>
               )}

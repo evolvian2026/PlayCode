@@ -30,3 +30,5 @@ export * from "./writing";
 export * from "./training";
 export * from "./calendar";
 export * from "./mentoring";
+export * from "./outcomes";
+export * from "./guardian";

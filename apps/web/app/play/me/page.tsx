@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { DIVISION_LABELS } from "@playcode/core";
 import { signOut, useMe } from "@/components/Auth";
 import { DisplayCard } from "@/components/DisplayCard";
+import { GuardianCard } from "@/components/GuardianCard";
 import { Icon } from "@/components/Icon";
 import { PrivacyCard } from "@/components/PrivacyCard";
 import { PushCard } from "@/components/PushCard";
@@ -268,6 +269,7 @@ export default function MePage() {
 
       <LanguageCard />
 
+      <GuardianCard />
       <DisplayCard />
 
       <PushCard />

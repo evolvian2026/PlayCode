@@ -173,6 +173,39 @@ function SecuritySettings() {
   );
 }
 
+function GuardianSettings() {
+  const { data, error, reload, setData } = useApi<{ enabled: boolean; active: number; waiting: number; emailConfigured: boolean }>("/console/guardian-reports");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  if (error) return <ErrorBox message={error.message} onRetry={reload} />;
+  if (!data) return null;
+  async function toggle(enabled: boolean) {
+    const before = data!;
+    setSaveError(null);
+    setData({ ...before, enabled });
+    try {
+      setData(await api("/console/guardian-reports", { method: "PUT", body: { enabled } }));
+    } catch (e) {
+      setData(before);
+      setSaveError(errorMessage(e));
+    }
+  }
+  return (
+    <div className="card stack">
+      <h2 style={{ margin: 0 }}>Progress emails to parents</h2>
+      <p className="small muted" style={{ margin: 0 }}>
+        Students can choose to send a parent a short email on the 1st of each month: days practised, placement readiness, training attendance, class tests, mentor meetings and drives. The parent confirms their address first, and either of them can stop it.
+        {data.enabled ? ` ${data.active} parents receive it; ${data.waiting} haven't confirmed yet.` : ""}
+      </p>
+      {!data.emailConfigured && <div className="small" style={{ color: "var(--bad-ink)" }}>Email isn't configured on this server (SMTP_URL), so nothing can be sent yet.</div>}
+      <label>
+        <input type="checkbox" checked={data.enabled} onChange={(e) => toggle(e.target.checked)} style={{ width: "auto", marginRight: 6 }} />
+        Let students send monthly progress emails to a parent
+      </label>
+      {saveError && <ErrorBox message={saveError} />}
+    </div>
+  );
+}
+
 function RetentionSettings() {
   const { data, error, reload, setData } = useApi<{ snapshotRetentionDays: number; fixed: { sessionsDays: number; notificationsDays: number; pushDays: number } }>("/console/retention");
   const [days, setDays] = useState("");
@@ -698,6 +731,7 @@ function readFile(file: File): Promise<string> {
 }
 
 export default function Settings() {
+  const me = useMe();
   const { data, error, loading, reload, setData } = useApi<BrandingResponse>("/console/branding");
   const [appName, setAppName] = useState("");
   const [color, setColor] = useState("#5b4bff");
@@ -801,6 +835,7 @@ export default function Settings() {
       </div>
       <SecuritySettings />
       <AiSettings />
+      {me?.tenant?.type === "institution" && <GuardianSettings />}
       <RetentionSettings />
       <SsoSettings />
       <SamlSettings />

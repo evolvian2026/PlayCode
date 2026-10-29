@@ -37,3 +37,27 @@ export function academicYearRange(label: string): { from: string; to: string } |
   if (!m || (Number(m[1]) + 1) % 100 !== Number(m[2])) return null;
   return { from: `${m[1]}-06-01`, to: `${Number(m[1]) + 1}-05-31` };
 }
+
+/** What students rate after a session, each from 1 to 5. */
+export type FeedbackDimension = "content" | "delivery" | "relevance";
+
+export const FEEDBACK_DIMENSIONS: Record<FeedbackDimension, string> = {
+  content: "The content was worth the time",
+  delivery: "The trainer explained clearly",
+  relevance: "It will help me in placements",
+};
+
+/** Attendees can rate a session from its start until this many days after it ends. */
+export const FEEDBACK_WINDOW_DAYS = 7;
+/** Averages and comments are shown only once this many attendees have responded, so no single response can be traced back. */
+export const MIN_FEEDBACK_RESPONSES = 3;
+
+export function feedbackOpen(session: { startsAt: Date; durationMinutes: number }, now: Date): boolean {
+  const end = session.startsAt.getTime() + session.durationMinutes * 60_000;
+  return now.getTime() >= session.startsAt.getTime() && now.getTime() <= end + FEEDBACK_WINDOW_DAYS * 86_400_000;
+}
+
+/** Mean of 1-5 ratings to one decimal place, or null with none. */
+export function meanRating(values: number[]): number | null {
+  return values.length ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10 : null;
+}

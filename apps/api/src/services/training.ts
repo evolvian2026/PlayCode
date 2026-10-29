@@ -1,8 +1,8 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, asc, eq, gt, gte, inArray, lte } from "drizzle-orm";
-import { attendancePct, CHECK_IN_CODE_SECONDS, CHECK_IN_GRACE_MINUTES, hasInstitutionScope, LATE_AFTER_MINUTES, TRAINING_KINDS, type TrainingKind } from "@playcode/core";
+import { attendancePct, CHECK_IN_CODE_SECONDS, CHECK_IN_GRACE_MINUTES, feedbackOpen, hasInstitutionScope, LATE_AFTER_MINUTES, meanRating, MIN_FEEDBACK_RESPONSES, TRAINING_KINDS, type FeedbackDimension, type TrainingKind } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
-import { tenants, trainingAttendance, trainingSessions, users } from "../db/schema";
+import { tenants, trainingAttendance, trainingFeedback, trainingSessions, users } from "../db/schema";
 import { audit } from "../lib/audit";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { rateLimit } from "../lib/rate-limit";
@@ -16,7 +16,9 @@ import { getTenant } from "./tenant";
 // code on the projector: it changes every 30 seconds, so a code forwarded to
 // a friend outside is stale by the time it's typed. Staff can also mark
 // students present by hand. Attendance below 75% is flagged, the threshold
-// most colleges apply for placement eligibility.
+// most colleges apply for placement eligibility. Attendees rate each session
+// afterwards; staff see the ratings only in aggregate, once enough are in that
+// no one response can be picked out.
 
 const MIN = 60_000;
 const REMIND_WITHIN_MS = 24 * 3_600_000;
@@ -155,7 +157,53 @@ export async function sessionDetail(db: Db, auth: AuthContext, id: string, now: 
     present: students.filter((x) => x.status === "present" || x.status === "late").length,
     late: students.filter((x) => x.status === "late").length,
     canOpenCheckIn: s.status === "scheduled" && now.getTime() >= s.startsAt.getTime() - CHECK_IN_GRACE_MINUTES * MIN && now.getTime() <= endOf(s).getTime() + CHECK_IN_GRACE_MINUTES * MIN,
+    feedback: feedbackSummary(await db.select().from(trainingFeedback).where(eq(trainingFeedback.sessionId, s.id)), { comments: true }),
     students,
+  };
+}
+
+// ---------- Feedback ----------
+
+type FeedbackRow = typeof trainingFeedback.$inferSelect;
+const DIMENSIONS: FeedbackDimension[] = ["content", "delivery", "relevance"];
+
+/**
+ * Ratings in aggregate: averages per question and overall, and comments in no
+ * particular order. Below the minimum number of responses only the count is
+ * shown, so a trainer can't work out who said what.
+ */
+export function feedbackSummary(rows: FeedbackRow[], opts: { comments: boolean }) {
+  if (rows.length < MIN_FEEDBACK_RESPONSES) return { responses: rows.length, shown: false as const };
+  const averages = Object.fromEntries(DIMENSIONS.map((d) => [d, meanRating(rows.map((r) => r[d]))])) as Record<FeedbackDimension, number>;
+  return {
+    responses: rows.length,
+    shown: true as const,
+    overall: meanRating(rows.flatMap((r) => DIMENSIONS.map((d) => r[d]))),
+    averages,
+    ...(opts.comments ? { comments: rows.map((r) => r.comment.trim()).filter(Boolean).sort((a, b) => a.localeCompare(b)) } : {}),
+  };
+}
+
+/** Ratings per trainer across the sessions this member of staff can see, best first. */
+export async function feedbackReport(db: Db, auth: AuthContext, now: Date) {
+  const { upcoming, past } = await listSessions(db, auth, now);
+  // Sessions that have started: attendees can rate from the start.
+  const held = [...upcoming.filter((s) => new Date(s.startsAt) <= now).reverse(), ...past].filter((s) => s.status === "scheduled");
+  const rows = held.length ? await db.select().from(trainingFeedback).where(inArray(trainingFeedback.sessionId, held.map((s) => s.id))) : [];
+  const bySession = new Map<string, FeedbackRow[]>();
+  for (const r of rows) (bySession.get(r.sessionId) ?? bySession.set(r.sessionId, []).get(r.sessionId)!).push(r);
+  const trainers = new Map<string, { sessions: number; attended: number; rows: FeedbackRow[] }>();
+  for (const s of held) {
+    const t = trainers.get(s.trainer) ?? trainers.set(s.trainer, { sessions: 0, attended: 0, rows: [] }).get(s.trainer)!;
+    t.sessions++;
+    t.attended += s.present;
+    t.rows.push(...(bySession.get(s.id) ?? []));
+  }
+  return {
+    trainers: [...trainers]
+      .map(([trainer, t]) => ({ trainer, sessions: t.sessions, attended: t.attended, ...feedbackSummary(t.rows, { comments: false }) }))
+      .sort((a, b) => (b.shown ? b.overall ?? 0 : -1) - (a.shown ? a.overall ?? 0 : -1) || a.trainer.localeCompare(b.trainer)),
+    sessions: held.map((s) => ({ id: s.id, title: s.title, trainer: s.trainer, startsAt: s.startsAt, present: s.present, ...feedbackSummary(bySession.get(s.id) ?? [], { comments: false }) })),
   };
 }
 
@@ -191,6 +239,8 @@ export async function markAttendance(db: Db, auth: AuthContext, id: string, user
       .onConflictDoNothing();
   } else {
     await db.delete(trainingAttendance).where(and(eq(trainingAttendance.sessionId, s.id), eq(trainingAttendance.userId, userId)));
+    // Ratings count only from people who were there.
+    await db.delete(trainingFeedback).where(and(eq(trainingFeedback.sessionId, s.id), eq(trainingFeedback.userId, userId)));
   }
   return { ok: true };
 }
@@ -262,9 +312,13 @@ export async function myTraining(db: Db, ctx: Ctx) {
   const mine = sessions.length
     ? new Map((await db.select().from(trainingAttendance).where(and(eq(trainingAttendance.userId, ctx.userId), inArray(trainingAttendance.sessionId, sessions.map((s) => s.id))))).map((a) => [a.sessionId, a]))
     : new Map();
+  const rated = sessions.length
+    ? new Set((await db.select({ id: trainingFeedback.sessionId }).from(trainingFeedback).where(and(eq(trainingFeedback.userId, ctx.userId), inArray(trainingFeedback.sessionId, sessions.map((s) => s.id))))).map((r) => r.id))
+    : new Set<string>();
   const view = (s: Session) => {
     const a = mine.get(s.id);
-    return { ...summary(s, ctx.now), attended: Boolean(a), late: a?.late ?? false };
+    const feedback = rated.has(s.id) ? "given" : a && s.status === "scheduled" && feedbackOpen(s, ctx.now) ? "open" : null;
+    return { ...summary(s, ctx.now), attended: Boolean(a), late: a?.late ?? false, feedback };
   };
   const held = sessions.filter((s) => s.status === "scheduled" && s.startsAt <= ctx.now);
   return {
@@ -292,7 +346,29 @@ export async function checkIn(db: Db, ctx: Ctx, code: string) {
   return { session: { id: s.id, title: s.title }, late };
 }
 
-/** Hourly: remind invited students of a session in the next day (once each). */
+export interface FeedbackInput {
+  content: number;
+  delivery: number;
+  relevance: number;
+  comment: string;
+}
+
+/** An attendee rates a session, from its start until a week after it ends; rating again replaces the earlier answers. */
+export async function submitFeedback(db: Db, ctx: Ctx, sessionId: string, input: FeedbackInput) {
+  const [s] = await db.select().from(trainingSessions).where(and(eq(trainingSessions.id, sessionId), eq(trainingSessions.tenantId, ctx.tenantId)));
+  if (!s) throw notFound("Session");
+  const [attended] = await db.select().from(trainingAttendance).where(and(eq(trainingAttendance.sessionId, s.id), eq(trainingAttendance.userId, ctx.userId)));
+  if (!attended) throw forbidden("Only students who attended can rate a session");
+  if (s.status !== "scheduled" || !feedbackOpen(s, ctx.now)) throw badRequest("Feedback for this session is closed");
+  const values = { content: input.content, delivery: input.delivery, relevance: input.relevance, comment: input.comment.trim() };
+  await db
+    .insert(trainingFeedback)
+    .values({ sessionId: s.id, userId: ctx.userId, tenantId: ctx.tenantId, ...values, createdAt: ctx.now })
+    .onConflictDoUpdate({ target: [trainingFeedback.sessionId, trainingFeedback.userId], set: { ...values, createdAt: ctx.now } });
+  return { ok: true };
+}
+
+/** Hourly: remind invited students of a session in the next day, and ask attendees of a session that just ended to rate it (once each). */
 export async function trainingReminders(db: Db, now: Date) {
   const soon = await db
     .select({ s: trainingSessions, timeZone: tenants.timeZone })
@@ -303,5 +379,25 @@ export async function trainingReminders(db: Db, now: Date) {
   for (const { s, timeZone } of soon) {
     sent += await tell(db, s, await invitedIds(db, s), (uid) => ({ title: `Tomorrow: ${s.title}`, body: `${when(s.startsAt, timeZone)} · ${s.location}. Check in with the code shown in the room.`, dedupeKey: `training-remind:${s.id}:${uid}` }));
   }
+  // Sessions that ended in the last day: ask those who attended and haven't rated it.
+  const recent = await db
+    .select()
+    .from(trainingSessions)
+    .where(and(eq(trainingSessions.status, "scheduled"), gt(trainingSessions.startsAt, new Date(now.getTime() - REMIND_WITHIN_MS - 8 * 3_600_000)), lte(trainingSessions.startsAt, now)));
+  for (const s of recent.filter((x) => endOf(x) <= now && now.getTime() - endOf(x).getTime() <= REMIND_WITHIN_MS)) {
+    const [present, rated] = await Promise.all([
+      db.select({ id: trainingAttendance.userId }).from(trainingAttendance).where(eq(trainingAttendance.sessionId, s.id)),
+      db.select({ id: trainingFeedback.userId }).from(trainingFeedback).where(eq(trainingFeedback.sessionId, s.id)),
+    ]);
+    const done = new Set(rated.map((r) => r.id));
+    sent += await tell(db, s, present.map((p) => p.id).filter((id) => !done.has(id)), (uid) => ({ title: `How was ${s.title}?`, body: "Rate it in under a minute. Trainers see the ratings only in aggregate, never who gave them.", dedupeKey: `training-feedback:${s.id}:${uid}` }));
+  }
   return sent;
+}
+
+/** Sessions held for one student between two instants, and how many they attended (for the monthly email to parents). */
+export async function trainingBetween(db: Db, ctx: Ctx, from: Date, to: Date) {
+  const held = (await myInvitedSessions(db, ctx, from, to)).filter((s) => s.status === "scheduled" && s.startsAt <= ctx.now);
+  const came = held.length ? await db.select({ id: trainingAttendance.sessionId }).from(trainingAttendance).where(and(eq(trainingAttendance.userId, ctx.userId), inArray(trainingAttendance.sessionId, held.map((s) => s.id)))) : [];
+  return { held: held.length, attended: came.length, titles: held.filter((s) => came.some((c) => c.id === s.id)).map((s) => s.title) };
 }

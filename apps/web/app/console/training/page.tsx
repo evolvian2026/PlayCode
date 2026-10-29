@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
-import { ATTENDANCE_TARGET_PCT, TRAINING_KINDS, type TrainingKind } from "@playcode/core";
+import { ATTENDANCE_TARGET_PCT, FEEDBACK_DIMENSIONS, MIN_FEEDBACK_RESPONSES, TRAINING_KINDS, type FeedbackDimension, type TrainingKind } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { UnitPicker, useUnits } from "@/components/UnitPicker";
 import { api, errorMessage, useApi } from "@/lib/api";
@@ -22,7 +22,10 @@ interface Session {
   present?: number;
 }
 
+type Feedback = { responses: number; shown: false } | { responses: number; shown: true; overall: number; averages: Record<FeedbackDimension, number>; comments?: string[] };
+
 interface Detail extends Session {
+  feedback: Feedback;
   invited: number;
   present: number;
   late: number;
@@ -172,6 +175,99 @@ function CodeDisplay({ id }: { id: string }) {
   );
 }
 
+function FeedbackCard({ feedback, attended }: { feedback: Feedback; attended: number }) {
+  return (
+    <div className="card stack">
+      <div className="spread wrap">
+        <h2 style={{ margin: 0 }}>Student feedback</h2>
+        <span className="small">
+          {feedback.responses} of {attended} attendees rated it
+        </span>
+      </div>
+      {!feedback.shown ? (
+        <div className="small muted">Ratings show once {MIN_FEEDBACK_RESPONSES} or more attendees have responded, so no one's answers can be picked out. Attendees can rate a session for a week after it ends, and are reminded once.</div>
+      ) : (
+        <>
+          <div className="row wrap" style={{ gap: 24 }}>
+            <div>
+              <div className="small muted">Overall</div>
+              <span className="kpi">{feedback.overall}</span>
+              <span className="small muted"> of 5</span>
+            </div>
+            {(Object.keys(FEEDBACK_DIMENSIONS) as FeedbackDimension[]).map((d) => (
+              <div key={d}>
+                <div className="small muted">{FEEDBACK_DIMENSIONS[d]}</div>
+                <b>{feedback.averages[d]}</b>
+              </div>
+            ))}
+          </div>
+          {feedback.comments?.length ? (
+            <div className="stack" style={{ gap: 6 }}>
+              <div className="small muted">Comments, in no particular order</div>
+              {feedback.comments.map((c, i) => (
+                <blockquote key={i} className="small" style={{ margin: 0, padding: "6px 10px", background: "var(--surface-2)", borderRadius: 8 }}>
+                  {c}
+                </blockquote>
+              ))}
+            </div>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+type TrainerRow = { trainer: string; sessions: number; attended: number } & Feedback;
+
+function FeedbackReport() {
+  const { data, error, loading, reload } = useApi<{ trainers: TrainerRow[]; sessions: ({ id: string; title: string; trainer: string; startsAt: string; present: number } & Feedback)[] }>("/console/training/feedback");
+  if (loading && !data) return <Loading />;
+  if (error || !data) return <ErrorBox message={error?.message ?? "Could not load"} onRetry={reload} />;
+  if (!data.sessions.length) return <div className="card muted">No sessions held yet.</div>;
+  const score = (f: Feedback) => (f.shown ? `${f.overall} of 5` : f.responses ? `${f.responses} rating${f.responses === 1 ? "" : "s"} so far` : "-");
+  return (
+    <div className="stack" style={{ gap: 12 }}>
+      <p className="muted" style={{ margin: 0 }}>
+        What attendees thought of each trainer over the last four months. A rating shows once {MIN_FEEDBACK_RESPONSES} or more have responded.
+      </p>
+      <div className="card" style={{ padding: 0 }}>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Trainer</th>
+                <th>Sessions</th>
+                <th>Attendees</th>
+                <th>Responses</th>
+                <th>Rating</th>
+                {(Object.keys(FEEDBACK_DIMENSIONS) as FeedbackDimension[]).map((d) => (
+                  <th key={d}>{FEEDBACK_DIMENSIONS[d]}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.trainers.map((r) => (
+                <tr key={r.trainer}>
+                  <td>{r.trainer}</td>
+                  <td>{r.sessions}</td>
+                  <td>{r.attended}</td>
+                  <td>{r.responses}</td>
+                  <td>
+                    <b>{score(r)}</b>
+                  </td>
+                  {(Object.keys(FEEDBACK_DIMENSIONS) as FeedbackDimension[]).map((d) => (
+                    <td key={d}>{r.shown ? r.averages[d] : "-"}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SessionView({ id, onBack }: { id: string; onBack: () => void }) {
   const { data, error, loading, reload } = useApi<Detail>(`/console/training/${id}`);
   const [busy, setBusy] = useState(false);
@@ -251,6 +347,7 @@ function SessionView({ id, onBack }: { id: string; onBack: () => void }) {
         </div>
       )}
       {msg && <ErrorBox message={msg} />}
+      {data.status === "scheduled" && new Date(data.startsAt).getTime() <= Date.now() && <FeedbackCard feedback={data.feedback} attended={data.present} />}
       <div className="card" style={{ padding: 0 }}>
         <div className="spread" style={{ padding: "12px 16px" }}>
           <h2 style={{ margin: 0 }}>Attendance</h2>
@@ -412,7 +509,7 @@ function Training() {
   const params = useSearchParams();
   const id = params.get("id");
   const view = params.get("view");
-  const list = useApi<{ upcoming: Session[]; past: Session[] }>(id || view === "new" ? null : "/console/training");
+  const list = useApi<{ upcoming: Session[]; past: Session[] }>(id || view ? null : "/console/training");
   const go = (q: string) => router.push(`/console/training${q}`);
   if (id) return <SessionView id={id} onBack={() => go("")} />;
   if (view === "new") return <NewSession onDone={(sid) => router.replace(`/console/training?id=${sid}`)} onCancel={() => go("")} />;
@@ -430,15 +527,20 @@ function Training() {
         </button>
       </div>
       <div className="row" role="group" aria-label="Show">
-        <button className={`btn small ${view !== "attendance" ? "primary" : ""}`} aria-pressed={view !== "attendance"} onClick={() => go("")}>
+        <button className={`btn small ${!view ? "primary" : ""}`} aria-pressed={!view} onClick={() => go("")}>
           Sessions
         </button>
         <button className={`btn small ${view === "attendance" ? "primary" : ""}`} aria-pressed={view === "attendance"} onClick={() => go("?view=attendance")}>
           Attendance by student
         </button>
+        <button className={`btn small ${view === "feedback" ? "primary" : ""}`} aria-pressed={view === "feedback"} onClick={() => go("?view=feedback")}>
+          Feedback by trainer
+        </button>
       </div>
       {view === "attendance" ? (
         <AttendanceReport />
+      ) : view === "feedback" ? (
+        <FeedbackReport />
       ) : list.error ? (
         <ErrorBox message={list.error.message} onRetry={list.reload} />
       ) : list.loading && !list.data ? (

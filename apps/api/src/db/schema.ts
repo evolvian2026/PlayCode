@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -48,6 +48,8 @@ export interface TenantSettings {
   snapshotRetentionDays?: number;
   /** Students may join the talent pool, where companies on PlayCode can find and invite them. */
   talentPool?: boolean;
+  /** Students may have a monthly progress email sent to a parent or guardian. */
+  guardianReports?: boolean;
 }
 
 export interface TenantBranding {
@@ -976,7 +978,7 @@ export const ssoConnections = pgTable("sso_connections", {
 
 // ---------- Privacy ----------
 
-export const CONSENT_PURPOSES = ["privacy_notice", "whatsapp", "public_profile", "talent_pool"] as const;
+export const CONSENT_PURPOSES = ["privacy_notice", "whatsapp", "public_profile", "talent_pool", "guardian_reports"] as const;
 export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
 
 /** Append-only ledger: every grant and withdrawal, with the notice version shown at the time. */
@@ -1890,3 +1892,74 @@ export const mentoringMeetings = pgTable(
   },
   (t) => [index("mentoring_meetings_student_idx").on(t.studentId, t.meetingDate), index("mentoring_meetings_tenant_idx").on(t.tenantId, t.meetingDate)],
 );
+
+// ---------- Training feedback ----------
+
+/** An attendee's ratings of a training session, 1-5 each. Staff see them only in aggregate. */
+export const trainingFeedback = pgTable(
+  "training_feedback",
+  {
+    sessionId: uuid("session_id").notNull().references(() => trainingSessions.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    content: integer("content").notNull(),
+    delivery: integer("delivery").notNull(),
+    relevance: integer("relevance").notNull(),
+    comment: text("comment").notNull().default(""),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.userId] }), index("training_feedback_user_idx").on(t.userId)],
+);
+
+// ---------- Graduate outcomes ----------
+
+/** An outcome a student reports beyond campus drives, counted once the placement cell verifies it. */
+export const studentOutcomes = pgTable(
+  "student_outcomes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<OutcomeKind>().notNull(),
+    /** Company, university, exam or startup name. */
+    organisation: text("organisation").notNull(),
+    /** Role, programme, score or what the startup does. */
+    detail: text("detail").notNull().default(""),
+    /** Annual CTC in rupees, for job offers. */
+    ctcRupees: integer("ctc_rupees"),
+    /** Date of the offer, admission, result or founding, "2026-10-12". */
+    outcomeDate: text("outcome_date").notNull(),
+    status: text("status").$type<"pending" | "verified" | "rejected">().notNull().default("pending"),
+    reviewNote: text("review_note"),
+    reviewedBy: uuid("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("student_outcomes_user_idx").on(t.userId), index("student_outcomes_tenant_idx").on(t.tenantId, t.status)],
+);
+
+// ---------- Progress emails to parents ----------
+
+/** The parent or guardian a student sends a monthly progress email to. A new address is a new row, so old links stop working. */
+export const guardians = pgTable("guardians", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  relation: text("relation").$type<GuardianRelation>().notNull(),
+  email: text("email").notNull(),
+  /** Set when the guardian opens the link in the first email; nothing else is sent before. */
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  /** Set when the guardian (or the student) stops the emails. */
+  stoppedAt: timestamp("stopped_at", { withTimezone: true }),
+  stoppedBy: text("stopped_by").$type<"guardian" | "student">(),
+  confirmationSentAt: timestamp("confirmation_sent_at", { withTimezone: true }),
+  /** The last month reported, "2026-10". */
+  lastReportMonth: text("last_report_month"),
+  lastError: text("last_error"),
+  createdAt: createdAt(),
+});

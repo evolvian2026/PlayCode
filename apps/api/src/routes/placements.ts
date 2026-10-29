@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "../db/client";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
 import { requireFeature } from "../services/plan";
+import { batchCsv, batchReport, deleteOutcome, graduationYears, myOutcomes, outcomeQueue, reportOutcome, reviewOutcome, updateOutcome } from "../services/graduate-outcomes";
 import { experienceCounts, experienceOptions, pendingCount, readExperiences, reviewExperience, reviewQueue, submitExperience } from "../services/experiences";
 import {
   createDrive,
@@ -121,6 +122,38 @@ export async function placementRoutes(app: FastifyInstance) {
   app.post("/console/experiences/:id/review", { preHandler: manage }, async (req) => {
     const decision = parse(z.object({ publish: z.boolean(), note: z.string().max(1000).nullable().default(null) }), req.body);
     return reviewExperience(db, { tenantId: tenantOf(req), userId: req.auth.userId }, parse(idParam, req.params).id, decision, app.now());
+  });
+
+  // ---------- Graduate outcomes (off-campus offers, higher studies, exams, startups) ----------
+  const outcomeBody = z.object({
+    kind: z.enum(["job", "higher_studies", "exam", "startup"]),
+    organisation: z.string().trim().min(2, "Name the company, institute or exam").max(160),
+    detail: z.string().max(300).default(""),
+    ctcRupees: z.number().int().min(10_000).max(100_000_000).nullable().default(null),
+    outcomeDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-10-12"),
+  });
+  const staffAuth = (req: FastifyRequest) => ({ ...req.auth, tenantId: tenantOf(req) });
+  const reporting = [requireAny("placements.manage", "analytics.institution", "analytics.department"), requireFeature("placements")];
+  app.get("/student/outcomes", { preHandler: play }, async (req) => myOutcomes(db, studentCtx(req)));
+  app.post("/student/outcomes", { preHandler: play }, async (req) => reportOutcome(db, studentCtx(req), parse(outcomeBody, req.body)));
+  app.put("/student/outcomes/:id", { preHandler: play }, async (req) => updateOutcome(db, studentCtx(req), parse(idParam, req.params).id, parse(outcomeBody, req.body)));
+  app.delete("/student/outcomes/:id", { preHandler: play }, async (req) => deleteOutcome(db, studentCtx(req), parse(idParam, req.params).id));
+  app.get("/console/outcomes", { preHandler: manage }, async (req) => outcomeQueue(db, staffAuth(req), parse(z.object({ status: z.enum(["pending", "verified", "rejected"]).default("pending") }), req.query).status));
+  app.post("/console/outcomes/:id/review", { preHandler: manage }, async (req) => {
+    const decision = parse(z.object({ verify: z.boolean(), note: z.string().max(1000).nullable().default(null) }), req.body);
+    return reviewOutcome(db, staffAuth(req), parse(idParam, req.params).id, decision, app.now());
+  });
+  const yearQuery = z.object({ year: z.coerce.number().int().min(2000).max(2100).optional() });
+  app.get("/console/outcomes/batch", { preHandler: reporting }, async (req) => {
+    const years = await graduationYears(db, tenantOf(req));
+    const year = parse(yearQuery, req.query).year ?? years[0];
+    return { years, report: year ? await batchReport(db, staffAuth(req), year) : null };
+  });
+  app.get("/console/outcomes/batch/export", { preHandler: [requirePermission("reports.export"), ...reporting] }, async (req, reply) => {
+    const year = parse(yearQuery, req.query).year ?? (await graduationYears(db, tenantOf(req)))[0];
+    if (!year) throw badRequest("No graduating year is on record yet");
+    reply.header("content-type", "text/csv; charset=utf-8").header("content-disposition", `attachment; filename="graduate-outcomes-${year}.csv"`);
+    return batchCsv(await batchReport(db, staffAuth(req), year));
   });
 
   app.get("/student/placements", { preHandler: requirePermission("practice.play") }, async (req) => studentPlacements(db, { tenantId: tenantOf(req), userId: req.auth.userId, now: app.now() }));
