@@ -229,6 +229,11 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - The official score as a credential: a student's latest score from a sitting in the last year shows on their resume page, the resume PDF, the public profile and the talent pool, and on the Aptitude scores list beside the latest practice score. Students see it on the aptitude page, with official results marked.
 - A minimum aptitude score for drives (drive form, Min aptitude score): checked against the official score like any other rule, for registration, the eligible counts and openings. A student without an official score is told to take one at a sitting; one below the bar sees the score needed and their own.
 
+**Phase 40 additions**
+- Aptitude homework (console Aptitude scores, Homework; student app Aptitude): a teacher picks topics, a level and how many questions of each (up to 40), the sections or batches, and a due date; the students are told and reminded a day before if they haven't finished. Every student gets their own numbers from the generators, so copying a classmate's answers doesn't help, and sees whether each answer was right with the working before the next. Teachers see who has done it, who has started, each student's score (late ones marked) and the group's accuracy topic by topic.
+- Where the batch struggles (console Aptitude scores): the share of answers right by topic over the last 90 days, from adaptive tests and homework, for the students in scope, lowest first, each with a button that sets homework on that topic at the level they were answering.
+- Graduated batches are no longer offered when opening a sitting or setting homework.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -452,6 +457,7 @@ Other operations:
 - **The adaptive test scores with a Rasch model and a posterior mean**, not a running percentage: ability and question difficulty share one scale, and the estimate starts from a standard normal prior, so a lucky first answer can't send a score to 900. Template levels stand in for calibrated item difficulties; once enough students have answered, levels could be recalibrated from the answers, as item analysis already does for the question bank.
 - **The adaptive test and drills don't change mastery or XP**, like mock tests: the questions aren't in the question bank, and a score that measures shouldn't also be farmed.
 - **Only a sitting's score counts**: practice is unlimited, so a best-of score would reward retakes, not ability. A sitting gives one attempt in a window the placement cell chooses, which is what lets a drive set a minimum on it. Sittings aren't proctored by PlayCode; colleges run them in a lab, as they do online drive tests.
+- **Homework draws each student's questions once, on first opening**, and keeps them: reopening shows the same questions, and a student can't skip one to fish for an easier draw. Answers are checked on the server from the stored seed, so the right option never reaches the browser before the student answers.
 - **The SAML key pair is one per server**, from the environment, rather than one per institution: IdPs only need PlayCode's certificate, and rotating it is a deploy, not a per-college task.
 
 Not built yet: screen-reader testing by people who use them (the automated check covers WCAG rules it can test), PostgreSQL row-level security, Tamil for the placement pages and languages beyond English, Hindi and Tamil, and native mobile apps (the web app is an installable PWA).
