@@ -54,3 +54,15 @@ describe("adaptive scoring", () => {
     expect(new Set(asked).size).toBe(8);
   });
 });
+
+describe("aptitude in drive eligibility", () => {
+  it("needs an official score at or above the drive's minimum", async () => {
+    const { checkEligibility } = await import("../src");
+    const record = { cgpa: 8, backlogs: 0, tenthPct: 90, twelfthPct: 88, graduationYear: 2027 };
+    const criteria = { unitIds: [], minAptitude: 550 };
+    expect(checkEligibility(criteria, record, { inUnits: true, placed: false }).reasons).toEqual(["Needs a PlayCode aptitude score from an official sitting at your college"]);
+    expect(checkEligibility(criteria, record, { inUnits: true, placed: false, aptitude: 520 }).reasons).toEqual(["Needs an aptitude score of 550 or more (yours is 520)"]);
+    expect(checkEligibility(criteria, record, { inUnits: true, placed: false, aptitude: 600 }).eligible).toBe(true);
+    expect(checkEligibility({ unitIds: [] }, record, { inUnits: true, placed: false }).eligible).toBe(true);
+  });
+});

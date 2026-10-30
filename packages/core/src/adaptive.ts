@@ -72,3 +72,6 @@ export const SCORE_BANDS: Record<ReturnType<typeof scoreBand>, string> = {
   developing: "Developing",
   needs_work: "Needs work",
 };
+
+/** An official score counts for this long: after a year it no longer reflects the student. */
+export const OFFICIAL_SCORE_MONTHS = 12;

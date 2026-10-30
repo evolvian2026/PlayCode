@@ -26,7 +26,7 @@ interface Detail {
     rounds: string[];
     status: "open" | "closed" | "completed";
     offerDetails: OfferDetails | null;
-    criteria: { units: { id: string; name: string }[]; minCgpa?: number | null; maxBacklogs?: number | null; min10th?: number | null; min12th?: number | null; graduationYears?: number[] | null; minAttendancePct?: number | null; allowPlaced?: boolean };
+    criteria: { units: { id: string; name: string }[]; minCgpa?: number | null; maxBacklogs?: number | null; min10th?: number | null; min12th?: number | null; graduationYears?: number[] | null; minAttendancePct?: number | null; minAptitude?: number | null; allowPlaced?: boolean };
   };
   readinessProfile: string;
   summary: { eligible: number; registered: number; notRegistered: number; perRound: { name: string; cleared: number }[]; offers: number };
@@ -57,6 +57,7 @@ function criteriaText(c: Detail["drive"]["criteria"]): string {
     c.min10th != null ? `class 10 ${c.min10th}%+` : null,
     c.min12th != null ? `class 12 ${c.min12th}%+` : null,
     c.minAttendancePct != null ? `training attendance ${c.minAttendancePct}%+` : null,
+    c.minAptitude != null ? `aptitude score ${c.minAptitude}+` : null,
     c.allowPlaced ? "open to placed students" : "students without an offer",
   ];
   return parts.filter(Boolean).join(" · ");

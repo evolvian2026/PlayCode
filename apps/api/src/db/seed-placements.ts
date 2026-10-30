@@ -3,7 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { sha256 } from "../lib/crypto";
 import { createDrive } from "../services/placements";
 import { db } from "./client";
-import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, peerFeedback, peerRequests, peerSessions, onDutyRequests, resumeEntries, batchGraduations, graduateResponses, memberships, adaptiveAttempts, type AdaptiveSectionState, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
+import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, peerFeedback, peerRequests, peerSessions, onDutyRequests, resumeEntries, batchGraduations, graduateResponses, memberships, adaptiveAttempts, aptitudeSittings, type AdaptiveSectionState, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
 
 const DAY_MS = 86_400_000;
 
@@ -518,16 +518,23 @@ export async function seedGraduates(args: { tenantId: string; unitId: string; ad
 /**
  * Adaptive aptitude tests taken over the last fortnight by most of the batch
  * (not the demo student), simulated from each student's practice skill so the
- * scores spread the way a real batch's would.
+ * scores spread the way a real batch's would. A third took theirs in an
+ * official sitting ten days ago, so they have scores that count.
  */
-export async function seedAptitude(args: { tenantId: string; students: { id: string; skill: number }[]; now: Date }) {
+export async function seedAptitude(args: { tenantId: string; tpoId: string; students: { id: string; skill: number }[]; now: Date }) {
+  const opensAt = new Date(args.now.getTime() - 10 * DAY_MS);
+  const [sitting] = await db
+    .insert(aptitudeSittings)
+    .values({ tenantId: args.tenantId, title: "October aptitude sitting", unitIds: [], opensAt, closesAt: new Date(opensAt.getTime() + 4 * 3_600_000), createdBy: args.tpoId, createdAt: new Date(opensAt.getTime() - 2 * DAY_MS) })
+    .returning();
   const rows = [];
   for (const [i, s] of args.students.entries()) {
     if (i === 0 || i % 3 === 2) continue;
     const r = seededRandom(500 + i);
     // Practice skill (about 0.35 to 0.9) to ability around the middle of the scale.
     const ability = (s.skill - 0.6) * 5 + (r() - 0.5);
-    const finishedAt = new Date(args.now.getTime() - (1 + (i % 14)) * DAY_MS);
+    const official = i % 3 === 0;
+    const finishedAt = official ? new Date(opensAt.getTime() + (1 + (i % 3)) * 3_600_000) : new Date(args.now.getTime() - (1 + (i % 14)) * DAY_MS);
     const sections: AdaptiveSectionState[] = ADAPTIVE_SECTIONS.map((sec, k) => {
       const state: AdaptiveSectionState = { key: sec.key, items: [], theta: 0, se: 1, startedAt: finishedAt.toISOString(), deadline: finishedAt.toISOString(), done: true };
       const own = ability + (k === 0 ? 0.3 : -0.3) * (r() - 0.5) * 2;
@@ -542,7 +549,7 @@ export async function seedAptitude(args: { tenantId: string; students: { id: str
     });
     const scores = Object.fromEntries(sections.map((x) => [x.key, scaledScore(x.theta)]));
     const values = Object.values(scores);
-    rows.push({ tenantId: args.tenantId, userId: s.id, sections, status: "finished" as const, scores, score: Math.round(values.reduce((a, b) => a + b, 0) / values.length / 5) * 5, startedAt: new Date(finishedAt.getTime() - 30 * 60_000), finishedAt });
+    rows.push({ tenantId: args.tenantId, userId: s.id, sittingId: official ? sitting!.id : null, sections, status: "finished" as const, scores, score: Math.round(values.reduce((a, b) => a + b, 0) / values.length / 5) * 5, startedAt: new Date(finishedAt.getTime() - 30 * 60_000), finishedAt });
   }
   if (rows.length) await db.insert(adaptiveAttempts).values(rows);
   return rows.length;

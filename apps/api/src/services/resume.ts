@@ -6,6 +6,7 @@ import { academicRecords, certificates, interviews, memberships, orgUnits, playe
 import { audit } from "../lib/audit";
 import { notFound } from "../lib/errors";
 import { readinessFor } from "./analytics";
+import { officialAptitude } from "./adaptive";
 import { effectiveBranding } from "./branding";
 import { certificateCode } from "./certificates";
 import { appLink } from "./notifications";
@@ -61,7 +62,7 @@ export async function resumeData(db: Db, userId: string, now: Date) {
   if (!user?.tenantId || user.status !== "active") throw notFound("Student");
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, user.tenantId));
   const today = tenantToday(tenant!, now);
-  const [own, record, units, readiness, ratings, certs, profile, solved, interview, entries] = await Promise.all([
+  const [own, record, units, readiness, ratings, certs, profile, solved, interview, entries, aptitude] = await Promise.all([
     getOwnProfile(db, userId),
     db.select().from(academicRecords).where(eq(academicRecords.userId, userId)),
     db.select({ name: orgUnits.name, kind: orgUnits.kind }).from(memberships).innerJoin(orgUnits, eq(orgUnits.id, memberships.orgUnitId)).where(and(eq(memberships.userId, userId), eq(memberships.role, "student"))),
@@ -78,6 +79,7 @@ export async function resumeData(db: Db, userId: string, now: Date) {
     // The resume shows the latest technical round; the HR round is practice for the student alone.
     db.select().from(interviews).where(and(eq(interviews.userId, userId), eq(interviews.status, "finished"), ne(interviews.track, "hr"))).orderBy(desc(interviews.finishedAt)).limit(1),
     myEntries(db, userId),
+    officialAptitude(db, user.tenantId, [userId], now).then((m) => m.get(userId) ?? null),
   ]);
   const branding = await effectiveBranding(db, tenant!);
   const [activeDays] = await db
@@ -124,6 +126,8 @@ export async function resumeData(db: Db, userId: string, now: Date) {
     projects: entries.entries.filter((e) => e.kind === "project").map(({ title, organisation, period, description, link }) => ({ title, organisation, period, description, link })),
     /** Coding contests: the rating once at least one contest is rated. */
     contests: profile[0]?.contestsRated ? { rating: profile[0].contestRating, rated: profile[0].contestsRated } : null,
+    /** The official adaptive aptitude score, from a sitting at the college in the last year. */
+    aptitude: aptitude ? { score: aptitude.score, quant: aptitude.scores.quant ?? null, reasoning: aptitude.scores.reasoning ?? null, takenAt: aptitude.at } : null,
     generatedAt: now,
   };
 }
@@ -154,6 +158,7 @@ export function shareableProfile(d: ResumeData, now: Date) {
     practice: d.practice,
     mockInterview: d.mockInterview && !d.hide.interview ? { track: d.mockInterview.track, overall: d.mockInterview.overall } : null,
     contests: d.contests,
+    aptitude: d.aptitude,
     internships: d.internships,
     certifications: d.certifications,
     projects: d.projects,
@@ -238,6 +243,7 @@ export function drawResume(doc: PDFKit.PDFDocument, d: ResumeData) {
       { width },
     );
   }
+  if (d.aptitude) doc.text(`${d.appName} aptitude score ${d.aptitude.score} of 900 (quantitative ${d.aptitude.quant}, reasoning ${d.aptitude.reasoning}), adaptive test taken at ${d.institution} on ${date(d.aptitude.takenAt)}.`, { width });
   if (d.contests) doc.text(`Coding contest rating ${d.contests.rating} over ${d.contests.rated} rated contest${d.contests.rated === 1 ? "" : "s"}.`, { width });
 
   const entry = (e: { title: string; organisation: string; period: string; description: string; link: string | null }, mark: string | null) => {

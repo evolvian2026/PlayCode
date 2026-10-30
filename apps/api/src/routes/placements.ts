@@ -59,6 +59,7 @@ export async function placementRoutes(app: FastifyInstance) {
           min12th: percent,
           graduationYears: z.array(z.number().int().min(2000).max(2100)).max(5).nullable().optional(),
           minAttendancePct: percent,
+          minAptitude: z.number().int().min(100).max(900).nullable().optional(),
           allowPlaced: z.boolean().optional(),
         }),
         rounds: z.array(z.string().trim().min(1).max(80)).min(1).max(8),

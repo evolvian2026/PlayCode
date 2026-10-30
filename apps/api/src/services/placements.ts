@@ -23,6 +23,7 @@ import { badRequest, conflict, notFound } from "../lib/errors";
 import { readinessFor } from "./analytics";
 import { appLink, enqueue } from "./notifications";
 import { descendants, studentIdsInUnits, studentUnitIdsWithAncestors, tenantUnits } from "./scope";
+import { officialAptitude } from "./adaptive";
 import { getTenant, tenantToday } from "./tenant";
 import { mySlots } from "./drive-schedules";
 import { updatesFor } from "./drive-day";
@@ -206,33 +207,35 @@ export async function studentsEligible(db: DbOrTx, tenantId: string, criteria: P
   const units = await tenantUnits(db, tenantId);
   const pool = await studentIdsInUnits(db, tenantId, criteria.unitIds.length ? descendants(units, criteria.unitIds) : units.map((u) => u.id));
   const policy = await placementPolicy(db, tenantId);
-  const [records, offers, attendance, noShows] = await Promise.all([
+  const [records, offers, attendance, noShows, aptitude] = await Promise.all([
     recordsFor(db, pool),
     offersFor(db, tenantId, pool),
     criteria.minAttendancePct != null ? attendanceFor(db, tenantId, pool, opts.now) : new Map<string, { pct: number | null }>(),
     policy.maxNoShows != null ? noShowsFor(db, tenantId, pool) : new Map<string, number>(),
+    criteria.minAptitude != null ? officialAptitude(db, tenantId, pool, opts.now) : new Map<string, { score: number }>(),
   ]);
   return pool.filter((id) => {
     const held = tiersOf(offers.get(id), policy, opts.driveId ?? "");
-    return checkEligibility(criteria, records.get(id) ?? null, { inUnits: true, placed: held.length > 0, attendancePct: attendance.get(id)?.pct ?? null, policy, offers: held, driveCtcRupees: opts.ctcRupees ?? undefined, noShows: noShows.get(id) ?? 0 }).eligible;
+    return checkEligibility(criteria, records.get(id) ?? null, { inUnits: true, placed: held.length > 0, attendancePct: attendance.get(id)?.pct ?? null, aptitude: aptitude.get(id)?.score ?? null, policy, offers: held, driveCtcRupees: opts.ctcRupees ?? undefined, noShows: noShows.get(id) ?? 0 }).eligible;
   });
 }
 
 /** One student's standing, to check any number of drives or openings against. */
 export async function eligibilityChecker(db: DbOrTx, tenantId: string, userId: string, now: Date) {
-  const [record, units, offers, attendance, policy, noShows] = await Promise.all([
+  const [record, units, offers, attendance, policy, noShows, aptitude] = await Promise.all([
     recordsFor(db, [userId]).then((m) => m.get(userId) ?? null),
     studentUnitIdsWithAncestors(db, tenantId, userId),
     offersFor(db, tenantId, [userId]).then((m) => m.get(userId)),
     attendanceFor(db, tenantId, [userId], now).then((m) => m.get(userId)),
     placementPolicy(db, tenantId),
     noShowsFor(db, tenantId, [userId]).then((m) => m.get(userId) ?? 0),
+    officialAptitude(db, tenantId, [userId], now).then((m) => m.get(userId)?.score ?? null),
   ]);
   const mine = new Set(units);
   return (criteria: PlacementCriteria, ctcRupees: number | null) => {
     const held = tiersOf(offers, policy, "");
     const inUnits = criteria.unitIds.length === 0 || criteria.unitIds.some((u) => mine.has(u));
-    return checkEligibility(criteria, record, { inUnits, placed: held.length > 0, attendancePct: attendance?.pct ?? null, policy, offers: held, driveCtcRupees: ctcRupees ?? undefined, noShows });
+    return checkEligibility(criteria, record, { inUnits, placed: held.length > 0, attendancePct: attendance?.pct ?? null, aptitude, policy, offers: held, driveCtcRupees: ctcRupees ?? undefined, noShows });
   };
 }
 
@@ -441,7 +444,7 @@ export async function updateApplications(db: Db, args: { tenantId: string; actor
 // ---------- Students ----------
 
 export async function studentPlacements(db: Db, ctx: { tenantId: string; userId: string; now: Date }) {
-  const [record, mine, units, offers, attendance, policy, slots, noShows, tests, updates] = await Promise.all([
+  const [record, mine, units, offers, attendance, policy, slots, noShows, tests, updates, aptitude] = await Promise.all([
     recordsFor(db, [ctx.userId]).then((m) => m.get(ctx.userId) ?? null),
     db.select().from(placementApplications).where(and(eq(placementApplications.tenantId, ctx.tenantId), eq(placementApplications.userId, ctx.userId))),
     studentUnitIdsWithAncestors(db, ctx.tenantId, ctx.userId),
@@ -457,6 +460,7 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
       .innerJoin(assessments, eq(assessments.id, driveRoundTests.assessmentId))
       .where(eq(driveRoundTests.tenantId, ctx.tenantId)),
     updatesFor(db, ctx.tenantId, ctx.userId),
+    officialAptitude(db, ctx.tenantId, [ctx.userId], ctx.now).then((m) => m.get(ctx.userId)?.score ?? null),
   ]);
   const myUnits = new Set(units);
   const drives = await db.select().from(placementDrives).where(eq(placementDrives.tenantId, ctx.tenantId)).orderBy(placementDrives.driveDate);
@@ -470,7 +474,7 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
     const inUnits = d.criteria.unitIds.length === 0 || d.criteria.unitIds.some((u) => myUnits.has(u));
     // Their own offer doesn't count against a drive they're already in.
     const held = tiersOf(offers, policy, d.id);
-    const eligibility = checkEligibility(d.criteria, record, { inUnits, placed: held.length > 0, attendancePct: attendance.pct, policy, offers: held, driveCtcRupees: d.ctcRupees, noShows });
+    const eligibility = checkEligibility(d.criteria, record, { inUnits, placed: held.length > 0, attendancePct: attendance.pct, aptitude, policy, offers: held, driveCtcRupees: d.ctcRupees, noShows });
     out.push({
       id: d.id,
       company: d.company,

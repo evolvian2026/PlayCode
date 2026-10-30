@@ -26,6 +26,7 @@ interface Resume {
   certificates: { title: string; code: string; scorePct: number; verifyUrl: string }[];
   practice: { questionsSolved: number; codingProblemsSolved: number; sqlProblemsSolved: number; activeDays90: number; longestStreak: number };
   mockInterview: { track: string; overall: number } | null;
+  aptitude: { score: number; quant: number | null; reasoning: number | null; takenAt: string } | null;
 }
 
 export default function ResumePage() {
@@ -149,6 +150,7 @@ export default function ResumePage() {
           {t("{q} questions, {c} coding and {s} SQL problems solved · {d} practice days in 90", { q: r.practice.questionsSolved, c: r.practice.codingProblemsSolved, s: r.practice.sqlProblemsSolved, d: r.practice.activeDays90 })}
         </div>
         {r.mockInterview && <div className="small">{t("Mock interview: {n}/5", { n: r.mockInterview.overall })}</div>}
+        {r.aptitude && <div className="small">{t("Aptitude score: {n} of 900, from an official sitting", { n: r.aptitude.score })}</div>}
         <div className="row wrap">
           {r.skills.length === 0 ? (
             <span className="small muted">{t("Skills appear here once you reach 60% mastery with at least 5 answers.")}</span>

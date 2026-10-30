@@ -11,7 +11,9 @@ import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface Hub {
   inProgress: string | null;
-  attempts: { id: string; score: number; scores: Record<string, number>; band: string; bandLabel: string; finishedAt: string }[];
+  sittings: { id: string; title: string; closesAt: string; attempt: { id: string; status: "in_progress" | "finished" } | null }[];
+  official: { score: number; scores: Record<string, number>; at: string; band: string; bandLabel: string } | null;
+  attempts: { id: string; official: boolean; score: number; scores: Record<string, number>; band: string; bandLabel: string; finishedAt: string }[];
   sections: { key: string; title: string; items: number; minutes: number }[];
   templates: { id: string; topic: "quant" | "reasoning"; label: string }[];
 }
@@ -25,11 +27,11 @@ export default function AptitudeHub() {
   const [msg, setMsg] = useState<string | null>(null);
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
-  async function start() {
+  async function start(sittingId: string | null = null) {
     setBusy(true);
     setMsg(null);
     try {
-      router.push(`/play/aptitude/test/${(await api<{ id: string }>("/student/aptitude/tests", { body: {} })).id}`);
+      router.push(`/play/aptitude/test/${(await api<{ id: string }>("/student/aptitude/tests", { body: { sittingId } })).id}`);
     } catch (e) {
       setMsg(errorMessage(e));
       setBusy(false);
@@ -49,6 +51,46 @@ export default function AptitudeHub() {
         </p>
       </div>
 
+      {data.sittings.map((s) => (
+        <section key={s.id} className="card stack" style={{ borderColor: "var(--accent)", borderWidth: 2 }} aria-labelledby={`h-s-${s.id}`}>
+          <div>
+            <span className="pill accent">{t("Official")}</span>
+            <h2 id={`h-s-${s.id}`} style={{ margin: "4px 0 0" }}>
+              {s.title}
+            </h2>
+            <div className="small muted">
+              {t("Open until {when}", { when: new Date(s.closesAt).toLocaleString(intlLocale(locale), { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) })}
+            </div>
+          </div>
+          <p className="small" style={{ margin: 0 }}>
+            {t("One attempt, in one go. Your score goes on your resume and counts for drives that ask for a minimum score.")}
+          </p>
+          {s.attempt?.status === "finished" ? (
+            <Link href={`/play/aptitude/test/${s.attempt.id}`} className="small">
+              {t("Done: see your result")}
+            </Link>
+          ) : (
+            <div>
+              <button className="btn primary" disabled={busy} onClick={() => start(s.id)}>
+                {t(s.attempt ? "Continue the official test" : "Start the official test")}
+              </button>
+            </div>
+          )}
+        </section>
+      ))}
+
+      {data.official && (
+        <div className="card spread wrap" style={{ gap: 8 }}>
+          <div>
+            <div className="small muted">{t("Your official score")}</div>
+            <b style={{ fontSize: 24 }}>{data.official.score}</b> <span className={`pill ${BAND_TONE[data.official.band]}`}>{t(data.official.bandLabel)}</span>
+          </div>
+          <div className="small muted" style={{ maxWidth: 260 }}>
+            {t("On your resume since {date}. Practice tests don't change it.", { date: date(data.official.at) })}
+          </div>
+        </div>
+      )}
+
       <section className="card accent stack" aria-labelledby="h-adaptive">
         <h2 id="h-adaptive" style={{ margin: 0 }}>
           {t("Adaptive aptitude test")}
@@ -63,8 +105,8 @@ export default function AptitudeHub() {
           <li>{t("You can't skip or go back, and questions you don't reach in time count as wrong.")}</li>
         </ul>
         <div>
-          <button className="btn big" style={{ color: "var(--accent)" }} disabled={busy} onClick={start}>
-            {t(data.inProgress ? "Resume the test" : "Start the test")}
+          <button className="btn big" style={{ color: "var(--accent)" }} disabled={busy} onClick={() => start()}>
+            {t(data.inProgress ? "Resume the test" : "Start a practice test")}
           </button>
         </div>
         {msg && <ErrorBox message={msg} />}
@@ -78,7 +120,7 @@ export default function AptitudeHub() {
           {data.attempts.map((a) => (
             <Link key={a.id} href={`/play/aptitude/test/${a.id}`} className="spread" style={{ color: "inherit", borderTop: "1px solid var(--border)", paddingTop: 8 }}>
               <div>
-                <b style={{ fontSize: 20 }}>{a.score}</b> <span className={`pill ${BAND_TONE[a.band]}`}>{t(a.bandLabel)}</span>
+                <b style={{ fontSize: 20 }}>{a.score}</b> <span className={`pill ${BAND_TONE[a.band]}`}>{t(a.bandLabel)}</span> {a.official && <span className="pill accent">{t("Official")}</span>}
                 <div className="small muted">
                   {date(a.finishedAt)} ·{" "}
                   {Object.entries(a.scores)

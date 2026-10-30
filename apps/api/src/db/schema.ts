@@ -2605,12 +2605,30 @@ export interface AdaptiveSectionState {
   done: boolean;
 }
 
+/** A window the placement cell opens for batches to take the adaptive test once, for a score that counts. */
+export const aptitudeSittings = pgTable(
+  "aptitude_sittings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    unitIds: jsonb("unit_ids").$type<string[]>().notNull(),
+    opensAt: timestamp("opens_at", { withTimezone: true }).notNull(),
+    closesAt: timestamp("closes_at", { withTimezone: true }).notNull(),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("aptitude_sittings_tenant_idx").on(t.tenantId, t.closesAt)],
+);
+
 export const adaptiveAttempts = pgTable(
   "adaptive_attempts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    /** Set for an official attempt, taken in a sitting; practice attempts have none. */
+    sittingId: uuid("sitting_id").references(() => aptitudeSittings.id, { onDelete: "cascade" }),
     sections: jsonb("sections").$type<AdaptiveSectionState[]>().notNull(),
     status: text("status").$type<"in_progress" | "finished">().notNull().default("in_progress"),
     /** Section scores on the 100 to 900 scale, and their average. */
@@ -2619,5 +2637,10 @@ export const adaptiveAttempts = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
-  (t) => [index("adaptive_attempts_user_idx").on(t.userId, t.startedAt), index("adaptive_attempts_tenant_idx").on(t.tenantId, t.status)],
+  (t) => [
+    index("adaptive_attempts_user_idx").on(t.userId, t.startedAt),
+    index("adaptive_attempts_tenant_idx").on(t.tenantId, t.status),
+    // One attempt per student per sitting.
+    uniqueIndex("adaptive_attempts_sitting_uq").on(t.sittingId, t.userId),
+  ],
 );

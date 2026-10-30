@@ -11,6 +11,7 @@ import { useT } from "@/lib/i18n";
 interface Running {
   id: string;
   status: "in_progress";
+  official: boolean;
   section: { index: number; total: number; key: string; title: string; items: number; minutes: number; deadline: string };
   question: { number: number; prompt: string; options: string[] };
 }
@@ -27,6 +28,7 @@ interface Item {
 interface Finished {
   id: string;
   status: "finished";
+  official: boolean;
   score: number;
   band: string;
   bandLabel: string;
@@ -78,7 +80,7 @@ function Question({ v, onNext }: { v: Running; onNext: (v: View) => void }) {
     <div className="stack">
       <div className="spread">
         <div className="small muted">
-          {t("Section {n} of {total}", { n: v.section.index + 1, total: v.section.total })} · {t(v.section.title)}
+          {v.official && <span className="pill accent">{t("Official")}</span>} {t("Section {n} of {total}", { n: v.section.index + 1, total: v.section.total })} · {t(v.section.title)}
         </div>
         <Clock deadline={v.section.deadline} onEnd={() => api<View>(`/student/aptitude/tests/${v.id}`).then(onNext, () => {})} />
       </div>
@@ -113,7 +115,7 @@ function Result({ v }: { v: Finished }) {
         ← {t("Aptitude")}
       </Link>
       <div className="card accent stack" style={{ gap: 4 }}>
-        <div className="small">{t("Your score")}</div>
+        <div className="small">{t(v.official ? "Your official score" : "Your score")}</div>
         <div>
           <b style={{ fontSize: 40 }}>{v.score}</b> <span className="small">/ 900</span>
         </div>

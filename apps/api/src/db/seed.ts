@@ -261,7 +261,7 @@ export async function seedDemo(now = new Date()): Promise<void> {
   await seedAlumni({ tenantId, studentId: students[5]!.id, now });
   await seedPeer({ tenantId, students: students.map((s) => s.id), now });
   await seedCertificationsAndOnDuty({ tenantId, tpoId: tpoUser.id, students: students.map((s) => s.id), now });
-  await seedAptitude({ tenantId, students: students.map((s, i) => ({ id: s.id, skill: sims[i]!.skill })), now });
+  await seedAptitude({ tenantId, tpoId: tpoUser.id, students: students.map((s, i) => ({ id: s.id, skill: sims[i]!.skill })), now });
   // Last year's batch, graduated in June: read-only accounts, exit survey answers, a few on the alumni list.
   const cse26 = await unit("CSE 2026", "batch", cse.id);
   const graduates = [];

@@ -20,6 +20,8 @@ export interface PlacementCriteria {
   graduationYears?: number[] | null;
   /** Minimum attendance in placement training sessions, in percent. */
   minAttendancePct?: number | null;
+  /** Minimum PlayCode aptitude score (100 to 900) from an official sitting. */
+  minAptitude?: number | null;
   /** Students who already hold an offer may register too (dream-company drives). */
   allowPlaced?: boolean;
 }
@@ -87,7 +89,7 @@ export function higherTier(a: OfferTier, b: OfferTier): boolean {
 export function checkEligibility(
   criteria: PlacementCriteria,
   record: AcademicRecord | null,
-  ctx: { inUnits: boolean; placed: boolean; attendancePct?: number | null; policy?: PlacementPolicy; offers?: OfferTier[]; driveCtcRupees?: number; noShows?: number },
+  ctx: { inUnits: boolean; placed: boolean; attendancePct?: number | null; aptitude?: number | null; policy?: PlacementPolicy; offers?: OfferTier[]; driveCtcRupees?: number; noShows?: number },
 ): Eligibility {
   const reasons: string[] = [];
   const r: AcademicRecord = record ?? { cgpa: null, backlogs: null, tenthPct: null, twelfthPct: null, graduationYear: null };
@@ -114,6 +116,10 @@ export function checkEligibility(
   }
   if (criteria.minAttendancePct != null && ctx.attendancePct != null && ctx.attendancePct < criteria.minAttendancePct) {
     reasons.push(`Needs ${criteria.minAttendancePct}% attendance in placement training (yours is ${ctx.attendancePct}%)`);
+  }
+  if (criteria.minAptitude != null) {
+    if (ctx.aptitude == null) reasons.push("Needs a PlayCode aptitude score from an official sitting at your college");
+    else if (ctx.aptitude < criteria.minAptitude) reasons.push(`Needs an aptitude score of ${criteria.minAptitude} or more (yours is ${ctx.aptitude})`);
   }
   if (ctx.policy?.maxNoShows != null && (ctx.noShows ?? 0) >= ctx.policy.maxNoShows) {
     reasons.push(`You missed ${ctx.noShows} drive${ctx.noShows === 1 ? "" : "s"} you registered for. Talk to your placement cell.`);

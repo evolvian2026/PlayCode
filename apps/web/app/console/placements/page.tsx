@@ -44,6 +44,7 @@ function NewDrive({ onCreated }: { onCreated: (notified: number) => void }) {
     min10th: "",
     min12th: "",
     minAttendance: "",
+    minAptitude: "",
     years: "",
     allowPlaced: false,
     packId: "",
@@ -78,6 +79,7 @@ function NewDrive({ onCreated }: { onCreated: (notified: number) => void }) {
             min10th: num(f.min10th),
             min12th: num(f.min12th),
             minAttendancePct: num(f.minAttendance),
+            minAptitude: num(f.minAptitude),
             graduationYears: f.years.trim() ? f.years.split(/[,\s]+/).filter(Boolean).map(Number) : null,
             allowPlaced: f.allowPlaced,
           },
@@ -171,6 +173,13 @@ function NewDrive({ onCreated }: { onCreated: (notified: number) => void }) {
         <div style={{ width: 150 }}>
           <label htmlFor="d-att">Min training attendance %</label>
           <input id="d-att" type="number" min={0} max={100} value={f.minAttendance} onChange={(e) => set({ minAttendance: e.target.value })} placeholder="any" />
+        </div>
+        <div style={{ width: 150 }}>
+          <label htmlFor="d-apt">Min aptitude score</label>
+          <input id="d-apt" type="number" min={100} max={900} step={5} value={f.minAptitude} onChange={(e) => set({ minAptitude: e.target.value })} placeholder="any" aria-describedby="d-apt-help" />
+          <div id="d-apt-help" className="small muted">
+            100 to 900, from an official sitting
+          </div>
         </div>
         <div style={{ width: 150 }}>
           <label htmlFor="d-years">Graduating in</label>

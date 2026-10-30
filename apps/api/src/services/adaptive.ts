@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNotNull, lte } from "drizzle-orm";
 import {
   ADAPTIVE_SECTIONS,
   APTITUDE_TEMPLATES,
@@ -7,16 +7,22 @@ import {
   generateQuestion,
   nextLevel,
   nextTemplate,
+  OFFICIAL_SCORE_MONTHS,
   scaledScore,
   SCORE_BANDS,
   scoreBand,
 } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
-import { adaptiveAttempts, memberships, users, type AdaptiveItem, type AdaptiveSectionState } from "../db/schema";
+import { adaptiveAttempts, aptitudeSittings, memberships, users, type AdaptiveItem, type AdaptiveSectionState } from "../db/schema";
 import { badRequest, conflict, notFound } from "../lib/errors";
-import { scopedUnitIds, studentIdsInUnits, tenantUnits, type AuthContext } from "./scope";
+import { audit } from "../lib/audit";
+import { appLink, enqueue, processOutbox } from "./notifications";
+import { descendants, scopedUnitIds, studentIdsInUnits, studentUnitIdsWithAncestors, tenantUnits, type AuthContext } from "./scope";
 
 // The adaptive aptitude test, and drills on the same generated questions.
+// Practice attempts are unlimited; an official attempt is taken once, in a
+// sitting the placement cell opens, and its score is the one that goes on
+// the resume and that drives can ask for.
 // Each section pitches the next question at the current estimate of
 // ability; the score is that estimate on a 100 to 900 scale. Questions a
 // student doesn't reach before time runs out count as wrong, so leaving a
@@ -99,29 +105,72 @@ async function save(db: DbOrTx, row: Row) {
 
 // ---------- Students ----------
 
+/** Sittings open now that this student is invited to, with whether they've taken each. */
+async function openSittings(db: Db, ctx: Ctx) {
+  const [units, rows] = await Promise.all([
+    studentUnitIdsWithAncestors(db, ctx.tenantId, ctx.userId),
+    db.select().from(aptitudeSittings).where(and(eq(aptitudeSittings.tenantId, ctx.tenantId), lte(aptitudeSittings.opensAt, ctx.now), gt(aptitudeSittings.closesAt, ctx.now))),
+  ]);
+  const mine = rows.filter((s) => s.unitIds.length === 0 || s.unitIds.some((u) => units.includes(u)));
+  const taken = mine.length
+    ? await db.select({ sittingId: adaptiveAttempts.sittingId, id: adaptiveAttempts.id, status: adaptiveAttempts.status }).from(adaptiveAttempts).where(and(eq(adaptiveAttempts.userId, ctx.userId), inArray(adaptiveAttempts.sittingId, mine.map((s) => s.id))))
+    : [];
+  return mine.map((s) => {
+    const a = taken.find((x) => x.sittingId === s.id);
+    return { id: s.id, title: s.title, closesAt: s.closesAt, attempt: a ? { id: a.id, status: a.status } : null };
+  });
+}
+
+/** Each student's official score: their latest finished sitting attempt in the last year. */
+export async function officialAptitude(db: DbOrTx, tenantId: string, userIds: string[], now: Date) {
+  if (!userIds.length) return new Map<string, { score: number; scores: Record<string, number>; at: Date }>();
+  const since = new Date(now.getTime() - OFFICIAL_SCORE_MONTHS * 30.5 * 86_400_000);
+  const rows = await db
+    .selectDistinctOn([adaptiveAttempts.userId], { userId: adaptiveAttempts.userId, score: adaptiveAttempts.score, scores: adaptiveAttempts.scores, at: adaptiveAttempts.finishedAt })
+    .from(adaptiveAttempts)
+    .where(and(eq(adaptiveAttempts.tenantId, tenantId), inArray(adaptiveAttempts.userId, userIds), isNotNull(adaptiveAttempts.sittingId), eq(adaptiveAttempts.status, "finished"), gte(adaptiveAttempts.finishedAt, since)))
+    .orderBy(adaptiveAttempts.userId, desc(adaptiveAttempts.finishedAt));
+  return new Map(rows.map((r) => [r.userId, { score: r.score!, scores: r.scores!, at: r.at! }]));
+}
+
 export async function myAdaptive(db: Db, ctx: Ctx) {
   const rows = await db.select().from(adaptiveAttempts).where(eq(adaptiveAttempts.userId, ctx.userId)).orderBy(desc(adaptiveAttempts.startedAt)).limit(20);
   for (const r of rows) if (settle(r, ctx.now)) await save(db, r);
+  const [sittings, official] = await Promise.all([openSittings(db, ctx), officialAptitude(db, ctx.tenantId, [ctx.userId], ctx.now)]);
+  const mine = official.get(ctx.userId);
   return {
     inProgress: rows.find((r) => r.status === "in_progress")?.id ?? null,
+    sittings,
+    official: mine ? { ...mine, band: scoreBand(mine.score), bandLabel: SCORE_BANDS[scoreBand(mine.score)] } : null,
     attempts: rows
       .filter((r) => r.status === "finished")
+      .sort((a, b) => b.finishedAt!.getTime() - a.finishedAt!.getTime())
       .slice(0, 10)
-      .map((r) => ({ id: r.id, score: r.score!, scores: r.scores!, band: scoreBand(r.score!), bandLabel: SCORE_BANDS[scoreBand(r.score!)], finishedAt: r.finishedAt })),
+      .map((r) => ({ id: r.id, official: Boolean(r.sittingId), score: r.score!, scores: r.scores!, band: scoreBand(r.score!), bandLabel: SCORE_BANDS[scoreBand(r.score!)], finishedAt: r.finishedAt })),
     sections: ADAPTIVE_SECTIONS,
     templates: APTITUDE_TEMPLATES,
   };
 }
 
-export async function startAdaptive(db: Db, ctx: Ctx) {
+export async function startAdaptive(db: Db, ctx: Ctx, sittingId: string | null = null) {
   const [open] = await db.select().from(adaptiveAttempts).where(and(eq(adaptiveAttempts.userId, ctx.userId), eq(adaptiveAttempts.status, "in_progress")));
-  if (open) {
-    if (settle(open, ctx.now)) await save(db, open);
-    if (open.status === "in_progress") return { id: open.id };
-  }
+  if (open && settle(open, ctx.now)) await save(db, open);
+  const stillOpen = open?.status === "in_progress" ? open : null;
+  if (sittingId) {
+    const sitting = (await openSittings(db, ctx)).find((s) => s.id === sittingId);
+    if (!sitting) throw notFound("Open sitting");
+    if (sitting.attempt?.status === "in_progress") return { id: sitting.attempt.id };
+    if (sitting.attempt) throw conflict("taken", "You've taken this sitting; your score is in");
+    if (stillOpen?.sittingId) throw conflict("other_official", "Finish the official test you've started first");
+    // The official test takes over from a practice test left open.
+    if (stillOpen) {
+      settle(stillOpen, ctx.now, { abandon: true });
+      await save(db, stillOpen);
+    }
+  } else if (stillOpen) return { id: stillOpen.id };
   const sections: AdaptiveSectionState[] = ADAPTIVE_SECTIONS.map((s) => ({ key: s.key, items: [], theta: 0, se: 1, startedAt: null, deadline: null, done: false }));
   begin(sections[0]!, ctx.now);
-  const [row] = await db.insert(adaptiveAttempts).values({ tenantId: ctx.tenantId, userId: ctx.userId, sections, startedAt: ctx.now }).returning();
+  const [row] = await db.insert(adaptiveAttempts).values({ tenantId: ctx.tenantId, userId: ctx.userId, sittingId, sections, startedAt: ctx.now }).returning();
   return { id: row!.id };
 }
 
@@ -148,6 +197,7 @@ export async function adaptiveView(db: Db, ctx: Ctx, id: string) {
     return {
       id: row.id,
       status: row.status,
+      official: Boolean(row.sittingId),
       section: { index, total: row.sections.length, key: s.key, title: s.title, items: s.items, minutes: s.minutes, deadline: section.deadline },
       question: { number: section.items.length, prompt: item.prompt, options: item.options },
     };
@@ -155,6 +205,7 @@ export async function adaptiveView(db: Db, ctx: Ctx, id: string) {
   return {
     id: row.id,
     status: row.status,
+    official: Boolean(row.sittingId),
     score: row.score!,
     band: scoreBand(row.score!),
     bandLabel: SCORE_BANDS[scoreBand(row.score!)],
@@ -246,7 +297,7 @@ export async function aptitudeScores(db: Db, auth: AuthContext) {
   const tenantId = auth.tenantId!;
   const [units, ids] = await Promise.all([tenantUnits(db, tenantId), scopedUnitIds(db, auth).then((u) => studentIdsInUnits(db, tenantId, u))]);
   if (!ids.length) return { students: [], summary: { students: 0, tested: 0, average: null, bands: { strong: 0, good: 0, developing: 0, needs_work: 0 } } };
-  const [people, unitRows, latest] = await Promise.all([
+  const [people, unitRows, latest, official] = await Promise.all([
     db.select({ id: users.id, name: users.name, rollNo: users.rollNo }).from(users).where(inArray(users.id, ids)),
     db.select({ userId: memberships.userId, unitId: memberships.orgUnitId }).from(memberships).where(and(eq(memberships.tenantId, tenantId), eq(memberships.role, "student"), inArray(memberships.userId, ids))),
     db
@@ -254,6 +305,7 @@ export async function aptitudeScores(db: Db, auth: AuthContext) {
       .from(adaptiveAttempts)
       .where(and(eq(adaptiveAttempts.tenantId, tenantId), eq(adaptiveAttempts.status, "finished"), inArray(adaptiveAttempts.userId, ids)))
       .orderBy(adaptiveAttempts.userId, desc(adaptiveAttempts.finishedAt)),
+    officialAptitude(db, tenantId, ids, new Date()),
   ]);
   const unitName = new Map(units.map((u) => [u.id, u.name]));
   const byUser = new Map(latest.map((a) => [a.userId, a]));
@@ -261,7 +313,8 @@ export async function aptitudeScores(db: Db, auth: AuthContext) {
     .map((p) => {
       const a = byUser.get(p.id);
       const unit = unitRows.find((u) => u.userId === p.id)?.unitId;
-      return { id: p.id, name: p.name, rollNo: p.rollNo, unit: unit ? (unitName.get(unit) ?? null) : null, score: a?.score ?? null, scores: a?.scores ?? null, band: a ? scoreBand(a.score!) : null, at: a?.finishedAt ?? null };
+      const o = official.get(p.id);
+      return { id: p.id, name: p.name, rollNo: p.rollNo, unit: unit ? (unitName.get(unit) ?? null) : null, score: a?.score ?? null, scores: a?.scores ?? null, band: a ? scoreBand(a.score!) : null, at: a?.finishedAt ?? null, official: o ? { score: o.score, at: o.at } : null };
     })
     .sort((x, y) => (y.score ?? -1) - (x.score ?? -1) || x.name.localeCompare(y.name));
   const tested = students.filter((s) => s.score !== null);
@@ -271,4 +324,120 @@ export async function aptitudeScores(db: Db, auth: AuthContext) {
     students,
     summary: { students: students.length, tested: tested.length, average: tested.length ? Math.round(tested.reduce((n, s) => n + s.score!, 0) / tested.length) : null, bands },
   };
+}
+
+// ---------- Sittings ----------
+
+export interface SittingInput {
+  title: string;
+  unitIds: string[];
+  opensAt: Date;
+  closesAt: Date;
+}
+
+const MAX_SITTING_DAYS = 14;
+
+async function invited(db: Db, tenantId: string, unitIds: string[]) {
+  const units = await tenantUnits(db, tenantId);
+  return studentIdsInUnits(db, tenantId, unitIds.length ? descendants(units, unitIds) : units.map((u) => u.id));
+}
+
+export async function createSitting(db: Db, auth: AuthContext, input: SittingInput, now: Date) {
+  const tenantId = auth.tenantId!;
+  if (input.closesAt <= input.opensAt) throw badRequest("It has to close after it opens");
+  if (input.closesAt <= now) throw badRequest("It has to close in the future");
+  if (input.closesAt.getTime() - input.opensAt.getTime() > MAX_SITTING_DAYS * 86_400_000) throw badRequest(`Keep a sitting to ${MAX_SITTING_DAYS} days or less`);
+  const scoped = new Set(await scopedUnitIds(db, auth));
+  if (input.unitIds.some((u) => !scoped.has(u))) throw badRequest("Choose batches in your scope");
+  const [row] = await db.insert(aptitudeSittings).values({ tenantId, title: input.title.trim(), unitIds: input.unitIds, opensAt: input.opensAt, closesAt: input.closesAt, createdBy: auth.userId, createdAt: now }).returning();
+  const students = await invited(db, tenantId, input.unitIds);
+  const when = input.opensAt <= now ? "now" : input.opensAt.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  await enqueue(
+    db,
+    students.map((userId) => ({
+      tenantId,
+      userId,
+      template: "placement" as const,
+      title: `Official aptitude test: ${row!.title}`,
+      body: `Opens ${when}, closes ${row!.closesAt.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" })}. You get one attempt; the score goes on your resume and counts for drives that ask for it.`,
+      link: appLink("/play/aptitude"),
+      dedupeKey: `sitting:${row!.id}:${userId}`,
+      sentBy: auth.userId,
+    })),
+  );
+  void processOutbox(db, now).catch(() => {});
+  await audit(db, { tenantId, actorId: auth.userId, action: "aptitude.sitting.create", target: row!.id, data: { students: students.length } });
+  return { id: row!.id, invited: students.length };
+}
+
+async function loadSitting(db: Db, auth: AuthContext, id: string) {
+  const [row] = await db.select().from(aptitudeSittings).where(and(eq(aptitudeSittings.id, id), eq(aptitudeSittings.tenantId, auth.tenantId!)));
+  if (!row) throw notFound("Sitting");
+  return row;
+}
+
+/** Every sitting, newest first, with how many have taken it and how they did. */
+export async function listSittings(db: Db, auth: AuthContext, now: Date) {
+  const tenantId = auth.tenantId!;
+  const rows = await db.select().from(aptitudeSittings).where(eq(aptitudeSittings.tenantId, tenantId)).orderBy(desc(aptitudeSittings.opensAt));
+  const attempts = rows.length ? await db.select({ sittingId: adaptiveAttempts.sittingId, status: adaptiveAttempts.status, score: adaptiveAttempts.score }).from(adaptiveAttempts).where(inArray(adaptiveAttempts.sittingId, rows.map((r) => r.id))) : [];
+  const units = await tenantUnits(db, tenantId);
+  const unitName = new Map(units.map((u) => [u.id, u.name]));
+  const out = [];
+  for (const r of rows) {
+    const mine = attempts.filter((a) => a.sittingId === r.id);
+    const done = mine.filter((a) => a.status === "finished");
+    out.push({
+      id: r.id,
+      title: r.title,
+      units: r.unitIds.map((u) => unitName.get(u) ?? "").filter(Boolean),
+      opensAt: r.opensAt,
+      closesAt: r.closesAt,
+      state: r.opensAt > now ? "upcoming" : r.closesAt > now ? "open" : "closed",
+      invited: (await invited(db, tenantId, r.unitIds)).length,
+      started: mine.length,
+      finished: done.length,
+      average: done.length ? Math.round(done.reduce((n, a) => n + a.score!, 0) / done.length) : null,
+    });
+  }
+  return { sittings: out };
+}
+
+/** Everyone invited to a sitting, with their score or where they stand. */
+export async function sittingResults(db: Db, auth: AuthContext, id: string) {
+  const sitting = await loadSitting(db, auth, id);
+  const ids = await invited(db, auth.tenantId!, sitting.unitIds);
+  const scoped = new Set(await studentIdsInUnits(db, auth.tenantId!, await scopedUnitIds(db, auth)));
+  const inScope = ids.filter((u) => scoped.has(u));
+  const [people, attempts] = await Promise.all([
+    inScope.length ? db.select({ id: users.id, name: users.name, rollNo: users.rollNo }).from(users).where(inArray(users.id, inScope)) : [],
+    db.select().from(adaptiveAttempts).where(eq(adaptiveAttempts.sittingId, id)),
+  ]);
+  const students = people
+    .map((p) => {
+      const a = attempts.find((x) => x.userId === p.id);
+      return { id: p.id, name: p.name, rollNo: p.rollNo, status: a ? a.status : ("not_started" as const), score: a?.score ?? null, scores: a?.scores ?? null, band: a?.score != null ? scoreBand(a.score) : null };
+    })
+    .sort((x, y) => (y.score ?? -1) - (x.score ?? -1) || (x.rollNo ?? x.name).localeCompare(y.rollNo ?? y.name, "en", { numeric: true }));
+  return { sitting: { id: sitting.id, title: sitting.title, opensAt: sitting.opensAt, closesAt: sitting.closesAt }, students };
+}
+
+export function sittingCsv(r: Awaited<ReturnType<typeof sittingResults>>): string {
+  const cell = (v: unknown) => {
+    const t = String(v ?? "");
+    return `"${(/^[=+\-@\t\r]/.test(t) ? `'${t}` : t).replace(/"/g, '""')}"`;
+  };
+  return [
+    ["roll_no", "name", "status", "score", "quantitative", "reasoning", "band"].join(","),
+    ...r.students.map((s) => [s.rollNo, s.name, s.status, s.score, s.scores?.quant, s.scores?.reasoning, s.band].map(cell).join(",")),
+  ].join("\n");
+}
+
+/** Close a sitting now; attempts already started run to the end of their sections. */
+export async function closeSitting(db: Db, auth: AuthContext, id: string, now: Date) {
+  const sitting = await loadSitting(db, auth, id);
+  if (sitting.closesAt <= now) throw conflict("closed", "It has already closed");
+  await db.update(aptitudeSittings).set({ closesAt: now, opensAt: sitting.opensAt > now ? now : sitting.opensAt }).where(eq(aptitudeSittings.id, id));
+  await audit(db, { tenantId: auth.tenantId!, actorId: auth.userId, action: "aptitude.sitting.close", target: id });
+  return { ok: true };
 }

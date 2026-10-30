@@ -20,6 +20,7 @@ interface PublicProfile {
   practice: { questionsSolved: number; codingProblemsSolved: number; sqlProblemsSolved: number; activeDays90: number; longestStreak: number };
   mockInterview: { track: string; overall: number } | null;
   contests: { rating: number; rated: number } | null;
+  aptitude?: { score: number; quant: number | null; reasoning: number | null; takenAt: string } | null;
   internships: { title: string; organisation: string; period: string; description: string; link: string | null; verified: boolean }[];
   projects: { title: string; organisation: string; period: string; description: string; link: string | null }[];
   certifications?: { title: string; organisation: string; period: string; description: string; link: string | null; verified: boolean }[];
@@ -90,6 +91,12 @@ export default function PublicProfilePage() {
           {data.practice.questionsSolved} practice questions, {data.practice.codingProblemsSolved} coding and {data.practice.sqlProblemsSolved} SQL problems solved · {data.practice.activeDays90} practice days in the last 90 · longest
           streak {data.practice.longestStreak} days
         </div>
+        {data.aptitude && (
+          <div className="small">
+            Aptitude score {data.aptitude.score} of 900 (quantitative {data.aptitude.quant}, reasoning {data.aptitude.reasoning}), adaptive test taken at {data.institution} on{" "}
+            {new Date(data.aptitude.takenAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+          </div>
+        )}
         {data.contests && (
           <div className="small">
             Coding contest rating {data.contests.rating} over {data.contests.rated} rated contest{data.contests.rated === 1 ? "" : "s"}
