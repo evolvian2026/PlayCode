@@ -1,9 +1,9 @@
-import { checkEligibility, localDate, seededRandom, type AcademicRecord, type CompanyStage, type InteractionKind, type PlacementCriteria } from "@playcode/core";
+import { ADAPTIVE_SECTIONS, estimateAbility, generateQuestion, levelDifficulty, nextLevel, nextTemplate, scaledScore, checkEligibility, localDate, seededRandom, type AcademicRecord, type CompanyStage, type InteractionKind, type PlacementCriteria } from "@playcode/core";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { sha256 } from "../lib/crypto";
 import { createDrive } from "../services/placements";
 import { db } from "./client";
-import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, peerFeedback, peerRequests, peerSessions, onDutyRequests, resumeEntries, batchGraduations, graduateResponses, memberships, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
+import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, peerFeedback, peerRequests, peerSessions, onDutyRequests, resumeEntries, batchGraduations, graduateResponses, memberships, adaptiveAttempts, type AdaptiveSectionState, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
 
 const DAY_MS = 86_400_000;
 
@@ -513,4 +513,37 @@ export async function seedGraduates(args: { tenantId: string; unitId: string; ad
   await db.insert(alumni).values(
     joined.map((j) => ({ tenantId, userId: graduates[j.i]!, name: j.name, email: `${j.name.toLowerCase().replace(/ /g, ".")}@gmail.example`, graduationYear: at.getUTCFullYear(), department: "Computer Science", company: j.company, role: j.role, city: j.city, openToReferrals: j.referrals, openToAdvice: true, createdAt: new Date(at.getTime() + (j.i + 1) * DAY_MS) })),
   );
+}
+
+/**
+ * Adaptive aptitude tests taken over the last fortnight by most of the batch
+ * (not the demo student), simulated from each student's practice skill so the
+ * scores spread the way a real batch's would.
+ */
+export async function seedAptitude(args: { tenantId: string; students: { id: string; skill: number }[]; now: Date }) {
+  const rows = [];
+  for (const [i, s] of args.students.entries()) {
+    if (i === 0 || i % 3 === 2) continue;
+    const r = seededRandom(500 + i);
+    // Practice skill (about 0.35 to 0.9) to ability around the middle of the scale.
+    const ability = (s.skill - 0.6) * 5 + (r() - 0.5);
+    const finishedAt = new Date(args.now.getTime() - (1 + (i % 14)) * DAY_MS);
+    const sections: AdaptiveSectionState[] = ADAPTIVE_SECTIONS.map((sec, k) => {
+      const state: AdaptiveSectionState = { key: sec.key, items: [], theta: 0, se: 1, startedAt: finishedAt.toISOString(), deadline: finishedAt.toISOString(), done: true };
+      const own = ability + (k === 0 ? 0.3 : -0.3) * (r() - 0.5) * 2;
+      for (let n = 0; n < sec.items; n++) {
+        const q = generateQuestion(nextTemplate(sec.key, state.items.map((x) => x.template), r), nextLevel(state.theta), Math.floor(r() * 2 ** 30));
+        const correct = r() < 1 / (1 + Math.exp(-(own - levelDifficulty(q.level))));
+        const chosen = correct ? q.answer : (q.answer + 1 + Math.floor(r() * 3)) % 4;
+        state.items.push({ ...q, chosen, correct, askedAt: finishedAt.toISOString(), answeredAt: finishedAt.toISOString() });
+        Object.assign(state, estimateAbility(state.items.map((x) => ({ level: x.level, correct: x.correct! }))));
+      }
+      return state;
+    });
+    const scores = Object.fromEntries(sections.map((x) => [x.key, scaledScore(x.theta)]));
+    const values = Object.values(scores);
+    rows.push({ tenantId: args.tenantId, userId: s.id, sections, status: "finished" as const, scores, score: Math.round(values.reduce((a, b) => a + b, 0) / values.length / 5) * 5, startedAt: new Date(finishedAt.getTime() - 30 * 60_000), finishedAt });
+  }
+  if (rows.length) await db.insert(adaptiveAttempts).values(rows);
+  return rows.length;
 }

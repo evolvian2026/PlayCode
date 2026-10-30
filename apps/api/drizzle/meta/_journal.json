@@ -456,6 +456,13 @@
       "when": 1793347845127,
       "tag": "0064_graduation",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1793362074529,
+      "tag": "0065_adaptive_aptitude",
+      "breakpoints": true
     }
   ]
 }

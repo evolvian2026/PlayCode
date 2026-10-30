@@ -33,6 +33,7 @@ const NAV: NavItem[] = [
   { href: "/console/alumni", label: "Alumni", icon: "users", perm: "placements.manage", feature: "placements", noCompany: true },
   { href: "/console/experiences", label: "Interview experiences", icon: "book", perm: "placements.manage", feature: "placements" },
   { href: "/console/help", label: "Helpdesk", icon: "chat", perm: "placements.manage", feature: "placements" },
+  { href: "/console/aptitude", label: "Aptitude scores", icon: "chart", perm: ["placements.manage", "assignments.manage"], noCompany: true },
   { href: "/console/on-duty", label: "On duty", icon: "calendar", perm: ["placements.manage", "assignments.manage"], feature: "placements", noCompany: true },
   { href: "/console/internships", label: "Internships & certs", icon: "briefcase", perm: ["placements.manage", "assignments.manage"], noCompany: true },
   { href: "/console/outcomes", label: "Graduate outcomes", icon: "award", perm: "placements.manage", feature: "placements" },

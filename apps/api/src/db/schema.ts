@@ -2577,3 +2577,47 @@ export const graduateResponses = pgTable("graduate_responses", {
   surveyAt: timestamp("survey_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 });
+
+// ---------- Adaptive aptitude test ----------
+
+/** One question of an adaptive test, as asked: rebuilt from its template, level and seed, and kept so the review never changes. */
+export interface AdaptiveItem {
+  template: string;
+  level: number;
+  seed: number;
+  prompt: string;
+  options: string[];
+  answer: number;
+  explanation: string;
+  chosen: number | null;
+  correct: boolean | null;
+  askedAt: string;
+  answeredAt: string | null;
+}
+
+export interface AdaptiveSectionState {
+  key: "quant" | "reasoning";
+  items: AdaptiveItem[];
+  theta: number;
+  se: number;
+  startedAt: string | null;
+  deadline: string | null;
+  done: boolean;
+}
+
+export const adaptiveAttempts = pgTable(
+  "adaptive_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    sections: jsonb("sections").$type<AdaptiveSectionState[]>().notNull(),
+    status: text("status").$type<"in_progress" | "finished">().notNull().default("in_progress"),
+    /** Section scores on the 100 to 900 scale, and their average. */
+    scores: jsonb("scores").$type<Record<string, number>>(),
+    score: integer("score"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [index("adaptive_attempts_user_idx").on(t.userId, t.startedAt), index("adaptive_attempts_tenant_idx").on(t.tenantId, t.status)],
+);

@@ -48,6 +48,14 @@ export default function MockTests() {
         </p>
       </div>
 
+      <Link href="/play/aptitude" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{t("Adaptive aptitude test and drills")}</b>
+          <div className="small muted">{t("A 100 to 900 score that adapts to you, and unlimited aptitude practice with the working shown")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
       {open && (
         <Link href={`/play/mocks/${open.id}`} className="card spread" style={{ color: "inherit", borderColor: "var(--accent)" }}>
           <div>

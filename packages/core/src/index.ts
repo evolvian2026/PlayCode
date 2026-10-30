@@ -42,3 +42,5 @@ export * from "./resume-checks";
 export * from "./peer-interview";
 export * from "./on-duty";
 export * from "./graduation";
+export * from "./aptitude-gen";
+export * from "./adaptive";
