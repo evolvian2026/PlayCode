@@ -36,3 +36,4 @@ export * from "./documents";
 export * from "./helpdesk";
 export * from "./recruiters";
 export * from "./openings";
+export * from "./drive-day";

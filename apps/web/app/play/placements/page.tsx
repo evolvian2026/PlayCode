@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { formatLpa, INTERVIEW_FEEDBACK_DIMENSIONS, JOINING_STATUSES, OFFER_TIERS, STUDENT_JOINING_STATUSES, type CompanyType, type InterviewFeedbackDimension, type JoiningStatus, type OfferTier } from "@playcode/core";
+import { fixedShare, formatLpa, INTERVIEW_FEEDBACK_DIMENSIONS, JOINING_STATUSES, OFFER_TIERS, STUDENT_JOINING_STATUSES, type CompanyType, type InterviewFeedbackDimension, type JoiningStatus, type OfferDetails, type OfferTier } from "@playcode/core";
 import { Icon } from "@/components/Icon";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
@@ -21,11 +21,12 @@ interface Drive {
   driveDate: string;
   registerBy: string;
   rounds: string[];
+  offerDetails: OfferDetails | null;
   pack: { id: string; title: string } | null;
   open: boolean;
   tier: OfferTier | null;
   eligibility: { eligible: boolean; reasons: string[] };
-  application: { status: "registered" | "shortlisted" | "rejected" | "offered"; roundsCleared: number; offerCtcRupees: number | null; decision: "accepted" | "declined" | null; decideBy: string | null; joining: { status: JoiningStatus | null; joiningDate: string | null; note: string } | null; slots: Slot[]; test: { id: string; title: string; openAt: string; closeAt: string; round: string } | null } | null;
+  application: { status: "registered" | "shortlisted" | "rejected" | "offered"; roundsCleared: number; offerCtcRupees: number | null; decision: "accepted" | "declined" | null; decideBy: string | null; joining: { status: JoiningStatus | null; joiningDate: string | null; note: string } | null; updates: { body: string; at: string }[]; slots: Slot[]; test: { id: string; title: string; openAt: string; closeAt: string; round: string } | null } | null;
 }
 
 interface Slot {
@@ -137,6 +138,113 @@ function Joining({ drive, joining, onChange }: { drive: Drive; joining: NonNulla
         </div>
       )}
     </div>
+  );
+}
+
+const rupees = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+
+/** What the offer is made of, in a line or two. */
+function OfferFacts({ d, ctcRupees }: { d: OfferDetails; ctcRupees: number }) {
+  const t = useT();
+  const parts = [
+    d.fixedRupees ? t("{amount} fixed ({pct}% of CTC)", { amount: formatLpa(d.fixedRupees), pct: fixedShare(d, ctcRupees) ?? 0 }) : null,
+    d.variableRupees ? t("{amount} variable", { amount: formatLpa(d.variableRupees) }) : null,
+    d.joiningBonusRupees ? t("{amount} joining bonus", { amount: rupees(d.joiningBonusRupees) }) : null,
+    d.probationMonths ? t("{n} months probation", { n: d.probationMonths }) : null,
+  ].filter(Boolean);
+  return (
+    <div className="small stack" style={{ gap: 2 }}>
+      {parts.length > 0 && <div>{parts.join(" · ")}</div>}
+      {d.bondMonths ? (
+        <div style={{ color: "var(--bad-ink)" }}>
+          {d.bondAmountRupees
+            ? t("Service agreement: {n} months; leaving early costs {amount}", { n: d.bondMonths, amount: rupees(d.bondAmountRupees) })
+            : t("Service agreement: {n} months", { n: d.bondMonths })}
+        </div>
+      ) : null}
+      {d.notes && <div className="muted">{d.notes}</div>}
+    </div>
+  );
+}
+
+/** Updates the placement cell sent about this drive, newest first. */
+function Updates({ updates }: { updates: { body: string; at: string }[] }) {
+  const t = useT();
+  const locale = useLocale();
+  const [all, setAll] = useState(false);
+  if (!updates.length) return null;
+  const shown = all ? updates : updates.slice(0, 2);
+  return (
+    <div className="stack" style={{ gap: 6, borderLeft: "3px solid var(--accent)", paddingLeft: 10 }}>
+      <div className="small" style={{ fontWeight: 600 }}>
+        {t("Updates from the placement cell")}
+      </div>
+      {shown.map((u) => (
+        <div key={u.at + u.body} className="small">
+          <span className="muted">{new Date(u.at).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</span>
+          <div style={{ whiteSpace: "pre-wrap" }}>{u.body}</div>
+        </div>
+      ))}
+      {updates.length > 2 && !all && (
+        <button className="btn ghost small" style={{ alignSelf: "flex-start" }} onClick={() => setAll(true)}>
+          {t("Show all {n}", { n: updates.length })}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Offers side by side, for a student deciding between them. */
+function CompareOffers({ drives }: { drives: Drive[] }) {
+  const t = useT();
+  const val = (d: Drive, f: (o: OfferDetails) => number | null | undefined, fmt: (n: number) => string) => {
+    const v = d.offerDetails ? f(d.offerDetails) : null;
+    return v ? fmt(v) : "-";
+  };
+  const rows: [string, (d: Drive) => string][] = [
+    [t("CTC"), (d) => formatLpa(d.application!.offerCtcRupees ?? d.ctcRupees)],
+    [t("Fixed"), (d) => val(d, (o) => o.fixedRupees, formatLpa)],
+    [t("Variable"), (d) => val(d, (o) => o.variableRupees, formatLpa)],
+    [t("Joining bonus"), (d) => val(d, (o) => o.joiningBonusRupees, rupees)],
+    [t("Service agreement"), (d) => (d.offerDetails?.bondMonths ? `${t("{n} months", { n: d.offerDetails.bondMonths })}${d.offerDetails.bondAmountRupees ? `, ${rupees(d.offerDetails.bondAmountRupees)}` : ""}` : t("None stated"))],
+    [t("Probation"), (d) => val(d, (o) => o.probationMonths, (n) => t("{n} months", { n }))],
+    [t("Location"), (d) => d.location || "-"],
+  ];
+  return (
+    <section className="card stack" aria-labelledby="h-compare">
+      <h2 id="h-compare" style={{ margin: 0 }}>
+        {t("Compare your offers")}
+      </h2>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>
+                <span className="sr-only">{t("Offer")}</span>
+              </th>
+              {drives.map((d) => (
+                <th key={d.id}>{d.company}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([label, f]) => (
+              <tr key={label}>
+                <th scope="row" className="small" style={{ textAlign: "left" }}>
+                  {label}
+                </th>
+                {drives.map((d) => (
+                  <td key={d.id} className="small">
+                    {f(d)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="small muted">{t("As the companies stated them. Ask your placement cell if something is missing.")}</div>
+    </section>
   );
 }
 
@@ -283,6 +391,8 @@ function DriveCard({ drive, experiences, onChange }: { drive: Drive; experiences
             )}
           </div>
         ))}
+      {drive.offerDetails && (!app || app.status === "offered") && <OfferFacts d={drive.offerDetails} ctcRupees={app?.offerCtcRupees ?? drive.ctcRupees} />}
+      {app && <Updates updates={app.updates} />}
       {app ? (
         <Rounds drive={drive} />
       ) : drive.eligibility.eligible ? (
@@ -341,14 +451,26 @@ export default function StudentPlacements() {
   const t = useT();
   const { data, error, loading, reload, setData } = useApi<Placements>("/student/placements");
   const counts = useApi<{ counts: Record<string, number> }>("/student/experiences/counts").data?.counts ?? {};
+  const desks = useApi<{ desks: { id: string; company: string; open: boolean }[] }>("/student/desks").data?.desks ?? [];
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
   const open = data.drives.filter((d) => !d.application);
   const mine = data.drives.filter((d) => d.application);
+  // Offers still in play: waiting for an answer, or accepted.
+  const offers = mine.filter((d) => d.application!.status === "offered" && d.application!.decision !== "declined" && d.application!.joining?.status !== "revoked");
   const r = data.record;
   return (
     <div className="stack">
       <h1 style={{ margin: 0 }}>{t("Placements")}</h1>
+      {desks.length > 0 && (
+        <Link href={desks.length === 1 && desks[0]!.open ? `/play/desk?drive=${desks[0]!.id}` : "/play/desk"} className="card spread" style={{ color: "inherit", borderColor: "var(--accent)" }}>
+          <div>
+            <b>{t("You're coordinating: {companies}", { companies: desks.map((d) => d.company).join(", ") })}</b>
+            <div className="small muted">{desks.some((d) => d.open) ? t("The reporting desk is open. Check students in as they arrive.") : t("The reporting desk opens the day before the drive.")}</div>
+          </div>
+          <span aria-hidden="true">→</span>
+        </Link>
+      )}
       <div className="card tight small">
         {r ? (
           <span>
@@ -419,6 +541,7 @@ export default function StudentPlacements() {
         </div>
         <span aria-hidden="true">→</span>
       </Link>
+      {offers.length > 1 && <CompareOffers drives={offers} />}
       {mine.length > 0 && (
         <>
           <h2 style={{ margin: "8px 0 0" }}>{t("My applications")}</h2>

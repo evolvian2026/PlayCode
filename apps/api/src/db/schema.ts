@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -1429,6 +1429,8 @@ export const placementDrives = pgTable(
     driveDate: text("drive_date").notNull(),
     registerBy: timestamp("register_by", { withTimezone: true }).notNull(),
     criteria: jsonb("criteria").$type<PlacementCriteria>().notNull(),
+    /** Fixed and variable pay, joining bonus, service agreement and probation, as the company states them. */
+    offerDetails: jsonb("offer_details").$type<OfferDetails>(),
     /** Selection rounds in order, e.g. online test, technical interview, HR. */
     rounds: jsonb("rounds").$type<string[]>().notNull(),
     /** Mission pack students can practise to prepare. */
@@ -2289,4 +2291,51 @@ export const openingResponses = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.openingId, t.userId] }), index("opening_responses_user_idx").on(t.userId)],
+);
+
+// ---------- Drive days ----------
+
+/** A message from the placement cell to some of a drive's applicants. */
+export const driveUpdates = pgTable(
+  "drive_updates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    driveId: uuid("drive_id").notNull().references(() => placementDrives.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    audience: text("audience").$type<DriveAudience>().notNull(),
+    /** For audience "round": the round they're waiting for. */
+    round: integer("round"),
+    body: text("body").notNull(),
+    /** Who it was sent to, fixed when it was sent. */
+    recipients: jsonb("recipients").$type<string[]>().notNull(),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("drive_updates_drive_idx").on(t.driveId, t.createdAt)],
+);
+
+/** Students the placement cell asked to help on a drive day, at the reporting desk. */
+export const driveCoordinators = pgTable(
+  "drive_coordinators",
+  {
+    driveId: uuid("drive_id").notNull().references(() => placementDrives.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    addedBy: uuid("added_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.driveId, t.userId] }), index("drive_coordinators_user_idx").on(t.userId)],
+);
+
+/** A student who reported at the venue on the drive day. */
+export const driveCheckIns = pgTable(
+  "drive_check_ins",
+  {
+    driveId: uuid("drive_id").notNull().references(() => placementDrives.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    reportedAt: timestamp("reported_at", { withTimezone: true }).notNull(),
+    byId: uuid("by_id").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.driveId, t.userId] })],
 );

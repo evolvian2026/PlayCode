@@ -25,6 +25,7 @@ import { appLink, enqueue } from "./notifications";
 import { descendants, studentIdsInUnits, studentUnitIdsWithAncestors, tenantUnits } from "./scope";
 import { getTenant, tenantToday } from "./tenant";
 import { mySlots } from "./drive-schedules";
+import { updatesFor } from "./drive-day";
 import { attendanceFor } from "./training";
 import { emitAndDeliver } from "./webhooks";
 
@@ -440,7 +441,7 @@ export async function updateApplications(db: Db, args: { tenantId: string; actor
 // ---------- Students ----------
 
 export async function studentPlacements(db: Db, ctx: { tenantId: string; userId: string; now: Date }) {
-  const [record, mine, units, offers, attendance, policy, slots, noShows, tests] = await Promise.all([
+  const [record, mine, units, offers, attendance, policy, slots, noShows, tests, updates] = await Promise.all([
     recordsFor(db, [ctx.userId]).then((m) => m.get(ctx.userId) ?? null),
     db.select().from(placementApplications).where(and(eq(placementApplications.tenantId, ctx.tenantId), eq(placementApplications.userId, ctx.userId))),
     studentUnitIdsWithAncestors(db, ctx.tenantId, ctx.userId),
@@ -455,6 +456,7 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
       .from(driveRoundTests)
       .innerJoin(assessments, eq(assessments.id, driveRoundTests.assessmentId))
       .where(eq(driveRoundTests.tenantId, ctx.tenantId)),
+    updatesFor(db, ctx.tenantId, ctx.userId),
   ]);
   const myUnits = new Set(units);
   const drives = await db.select().from(placementDrives).where(eq(placementDrives.tenantId, ctx.tenantId)).orderBy(placementDrives.driveDate);
@@ -480,6 +482,7 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
       driveDate: d.driveDate,
       registerBy: d.registerBy,
       rounds: d.rounds,
+      offerDetails: d.offerDetails,
       pack: d.packId ? { id: d.packId, title: packTitles.get(d.packId) ?? d.packId } : null,
       readinessProfile: profileFor(d.companyType),
       open,
@@ -495,6 +498,7 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
               decideBy: app.status === "offered" ? app.decideBy : null,
               joining: app.status === "offered" && app.decision === "accepted" ? { status: app.joiningStatus, joiningDate: app.joiningDate, note: app.joiningNote } : null,
               slots: slots.get(d.id) ?? [],
+              updates: updates.get(d.id) ?? [],
               // The test for the round they're waiting for, if it's taken on PlayCode.
               test:
                 app.status === "registered" || app.status === "shortlisted"

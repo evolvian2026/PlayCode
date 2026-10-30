@@ -326,6 +326,9 @@ export async function seedJoiningAndOpenings(args: { tenantId: string; tpoId: st
       },
     ])
     .returning();
+  // What the two open drives' offers are made of.
+  await db.update(placementDrives).set({ offerDetails: { fixedRupees: 1_050_000, variableRupees: 150_000, probationMonths: 6, notes: "Variable pay is paid yearly on company and individual performance." } }).where(and(eq(placementDrives.tenantId, tenantId), eq(placementDrives.company, "Freshworks")));
+  await db.update(placementDrives).set({ offerDetails: { fixedRupees: 450_000, probationMonths: 6 } }).where(and(eq(placementDrives.tenantId, tenantId), eq(placementDrives.company, "Accenture")));
   // A few students who fit have already answered: two applied to Amazon, one passed on the pool drive.
   const records = await db.select().from(academicRecords).where(eq(academicRecords.tenantId, tenantId));
   const holding = new Set(offered.map((o) => o.userId));

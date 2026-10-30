@@ -55,6 +55,9 @@ import {
   orgUnits,
   placementApplications,
   openingResponses,
+  driveCheckIns,
+  driveCoordinators,
+  driveUpdates,
   placementDrives,
   playerProfiles,
   pushSubscriptions,
@@ -73,6 +76,7 @@ import {
 } from "../db/schema";
 import { ticketsForExport } from "./helpdesk";
 import { openingResponsesForExport } from "./openings";
+import { driveDayForExport } from "./drive-day";
 import { audit } from "../lib/audit";
 import { conflict, forbidden, notFound } from "../lib/errors";
 import { deleteObject } from "../lib/storage";
@@ -226,6 +230,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .where(eq(documentSubmissions.userId, userId)),
     helpdesk: await ticketsForExport(db, userId),
     openings: await openingResponsesForExport(db, userId),
+    driveDay: await driveDayForExport(db, userId),
     driveInterviews: await db
       .select({ company: placementDrives.company, rounds: placementDrives.rounds, round: driveSchedules.round, startsAt: driveSlots.startsAt, status: driveSlots.status, feedback: driveSlots.feedback })
       .from(driveSlots)
@@ -344,6 +349,9 @@ export async function resolveErasure(
     await tx.delete(documentSubmissions).where(eq(documentSubmissions.userId, user.id));
     await tx.delete(helpTickets).where(eq(helpTickets.userId, user.id));
     await tx.delete(openingResponses).where(eq(openingResponses.userId, user.id));
+    await tx.delete(driveCheckIns).where(eq(driveCheckIns.userId, user.id));
+    await tx.delete(driveCoordinators).where(eq(driveCoordinators.userId, user.id));
+    await tx.update(driveUpdates).set({ recipients: sql`${driveUpdates.recipients} - ${user.id}::text` }).where(sql`${driveUpdates.recipients} @> ${JSON.stringify([user.id])}::jsonb`);
     await tx.delete(driveSlots).where(eq(driveSlots.userId, user.id));
     await tx.delete(resumeEntries).where(eq(resumeEntries.userId, user.id));
     await tx.delete(mentorAssignments).where(or(eq(mentorAssignments.studentId, user.id), eq(mentorAssignments.mentorId, user.id)));

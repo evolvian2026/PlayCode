@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { COMPANY_TYPE_LABELS, formatLpa, type CompanyType } from "@playcode/core";
+import { COMPANY_TYPE_LABELS, formatLpa, type CompanyType, type OfferDetails } from "@playcode/core";
+import { DriveUpdates, OfferDetailsEditor, ReportingDesk } from "@/components/DriveDay";
 import { DriveSchedules } from "@/components/DriveSchedules";
 import { RoundTests } from "@/components/RoundTests";
 import { ErrorBox, Loading, Stat } from "@/components/ui";
@@ -24,6 +25,7 @@ interface Detail {
     registerBy: string;
     rounds: string[];
     status: "open" | "closed" | "completed";
+    offerDetails: OfferDetails | null;
     criteria: { units: { id: string; name: string }[]; minCgpa?: number | null; maxBacklogs?: number | null; min10th?: number | null; min12th?: number | null; graduationYears?: number[] | null; minAttendancePct?: number | null; allowPlaced?: boolean };
   };
   readinessProfile: string;
@@ -176,6 +178,8 @@ export default function PlacementDrive() {
         <Stat label="Offers" value={summary.offers} />
       </div>
 
+      <DriveUpdates driveId={drive.id} rounds={drive.rounds} />
+
       <RoundTests driveId={drive.id} rounds={drive.rounds} onApplied={() => void reload()} />
 
       <DriveSchedules
@@ -184,6 +188,8 @@ export default function PlacementDrive() {
         rounds={drive.rounds}
         waiting={drive.rounds.map((_, i) => data.applicants.filter((a) => (a.status === "registered" || a.status === "shortlisted") && a.roundsCleared === i).length)}
       />
+
+      <ReportingDesk key={`desk-${data.applicants.map((a) => `${a.userId}:${a.status}`).join(",")}`} driveId={drive.id} />
 
       <div className="card stack" style={{ padding: 0 }}>
         <div className="stack" style={{ padding: "12px 16px 0", gap: 8 }}>
@@ -278,6 +284,7 @@ export default function PlacementDrive() {
           </div>
         )}
       </div>
+      <OfferDetailsEditor driveId={drive.id} ctcRupees={drive.ctcRupees} initial={drive.offerDetails} />
       {drive.description && (
         <div className="card">
           <h2>Details shared with students</h2>
