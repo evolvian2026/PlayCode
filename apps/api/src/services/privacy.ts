@@ -13,6 +13,7 @@ import {
   mockAttempts,
   adaptiveAttempts,
   aptitudeHomeworkWork,
+  aptitudeDrillAnswers,
   squadMembers,
   doubts,
   codeReviews,
@@ -246,6 +247,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
     driveDay: await driveDayForExport(db, userId),
     resumeReviews: await reviewsForExport(db, userId),
     peerInterviews: await peerForExport(db, userId),
+    aptitudeDrills: await db.select({ template: aptitudeDrillAnswers.template, level: aptitudeDrillAnswers.level, correct: aptitudeDrillAnswers.correct, answeredAt: aptitudeDrillAnswers.answeredAt }).from(aptitudeDrillAnswers).where(eq(aptitudeDrillAnswers.userId, userId)),
     aptitudeHomework: await db.select({ homeworkId: aptitudeHomeworkWork.homeworkId, questions: aptitudeHomeworkWork.questions, correct: aptitudeHomeworkWork.correct, startedAt: aptitudeHomeworkWork.startedAt, finishedAt: aptitudeHomeworkWork.finishedAt }).from(aptitudeHomeworkWork).where(eq(aptitudeHomeworkWork.userId, userId)),
     adaptiveTests: await db.select({ status: adaptiveAttempts.status, scores: adaptiveAttempts.scores, score: adaptiveAttempts.score, sections: adaptiveAttempts.sections, startedAt: adaptiveAttempts.startedAt, finishedAt: adaptiveAttempts.finishedAt }).from(adaptiveAttempts).where(eq(adaptiveAttempts.userId, userId)),
     alumniIntroductions: user.tenantId ? (await myIntros(db, { tenantId: user.tenantId, userId, now })).intros : [],
@@ -395,6 +397,7 @@ export async function resolveErasure(
     await tx.delete(mockAttempts).where(eq(mockAttempts.userId, user.id));
     await tx.delete(adaptiveAttempts).where(eq(adaptiveAttempts.userId, user.id));
     await tx.delete(aptitudeHomeworkWork).where(eq(aptitudeHomeworkWork.userId, user.id));
+    await tx.delete(aptitudeDrillAnswers).where(eq(aptitudeDrillAnswers.userId, user.id));
     await leaveSquad(tx, user.id);
     await tx.delete(doubts).where(eq(doubts.userId, user.id));
     await tx.delete(codeReviews).where(eq(codeReviews.userId, user.id));

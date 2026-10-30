@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import type { DataTable } from "@playcode/core";
+import { QuestionTable } from "@/components/QuestionTable";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, ApiError, errorMessage, useApi } from "@/lib/api";
 import { BAND_TONE } from "@/lib/aptitude";
@@ -13,10 +15,11 @@ interface Running {
   status: "in_progress";
   official: boolean;
   section: { index: number; total: number; key: string; title: string; items: number; minutes: number; deadline: string };
-  question: { number: number; prompt: string; options: string[] };
+  question: { number: number; prompt: string; options: string[]; table: DataTable | null };
 }
 interface Item {
   prompt: string;
+  table: DataTable | null;
   options: string[];
   answer: number;
   chosen: number | null;
@@ -88,7 +91,8 @@ function Question({ v, onNext }: { v: Running; onNext: (v: View) => void }) {
         <legend className="small muted" style={{ padding: 0 }}>
           {t("Question {n} of {total}", { n: v.question.number, total: v.section.items })}
         </legend>
-        <p style={{ margin: 0, fontWeight: 600 }}>{v.question.prompt}</p>
+        <p style={{ margin: 0, fontWeight: 600, whiteSpace: "pre-line" }}>{v.question.prompt}</p>
+        <QuestionTable table={v.question.table} />
         {v.question.options.map((o, i) => (
           <label key={i} className="card tight row" style={{ gap: 8, cursor: "pointer", borderColor: chosen === i ? "var(--accent)" : undefined }}>
             <input type="radio" name="option" style={{ width: "auto" }} checked={chosen === i} onChange={() => setChosen(i)} />
@@ -146,7 +150,8 @@ function Result({ v }: { v: Finished }) {
             <ol className="stack" style={{ paddingLeft: 18, marginTop: 8, gap: 10 }}>
               {s.items.map((i, n) => (
                 <li key={n} className="small">
-                  <div>{i.prompt}</div>
+                  <div style={{ whiteSpace: "pre-line" }}>{i.prompt}</div>
+                  <QuestionTable table={i.table} />
                   <div style={{ color: i.correct ? "var(--good-ink)" : "var(--bad-ink)" }}>
                     {i.chosen === null ? t("Not answered") : i.correct ? `✓ ${i.options[i.chosen]}` : `✗ ${i.options[i.chosen]}`}
                     {!i.correct && ` · ${t("Correct answer:")} ${i.options[i.answer]}`}

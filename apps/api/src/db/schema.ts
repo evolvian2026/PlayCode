@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, ExitItem, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, OnDutyPart, OnDutyReason, OnDutyStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, DataTable, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, ExitItem, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, OnDutyPart, OnDutyReason, OnDutyStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -2589,6 +2589,8 @@ export interface AdaptiveItem {
   options: string[];
   answer: number;
   explanation: string;
+  /** For data interpretation: the table the question is about. */
+  table?: DataTable;
   chosen: number | null;
   correct: boolean | null;
   askedAt: string;
@@ -2696,4 +2698,20 @@ export const aptitudeHomeworkWork = pgTable(
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (t) => [primaryKey({ columns: [t.homeworkId, t.userId] }), index("aptitude_homework_work_user_idx").on(t.userId)],
+);
+
+/** A drill answer, kept so a student can see how they do topic by topic. Once per question: checking the same seed again doesn't count twice. */
+export const aptitudeDrillAnswers = pgTable(
+  "aptitude_drill_answers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    template: text("template").notNull(),
+    level: integer("level").notNull(),
+    seed: integer("seed").notNull(),
+    correct: boolean("correct").notNull(),
+    answeredAt: timestamp("answered_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex("aptitude_drill_answers_question_uq").on(t.userId, t.template, t.level, t.seed), index("aptitude_drill_answers_user_idx").on(t.userId, t.answeredAt)],
 );

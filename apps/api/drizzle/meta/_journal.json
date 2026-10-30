@@ -477,6 +477,13 @@
       "when": 1793364794513,
       "tag": "0067_aptitude_homework",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1793371720946,
+      "tag": "0068_aptitude_drill_answers",
+      "breakpoints": true
     }
   ]
 }

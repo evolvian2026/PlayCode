@@ -73,5 +73,15 @@ export const SCORE_BANDS: Record<ReturnType<typeof scoreBand>, string> = {
   needs_work: "Needs work",
 };
 
+/**
+ * The level to drill a topic at, from how a student has done on it: the
+ * level they've been answering, one easier if they get most wrong, one
+ * harder if they get most right.
+ */
+export function suggestedDrillLevel(accuracyPct: number, averageLevel: number): number {
+  const step = accuracyPct < 50 ? -1 : accuracyPct >= 80 ? 1 : 0;
+  return Math.min(5, Math.max(1, Math.round(averageLevel) + step));
+}
+
 /** An official score counts for this long: after a year it no longer reflects the student. */
 export const OFFICIAL_SCORE_MONTHS = 12;

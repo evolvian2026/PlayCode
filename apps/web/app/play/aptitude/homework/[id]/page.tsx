@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
+import type { DataTable } from "@playcode/core";
+import { QuestionTable } from "@/components/QuestionTable";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { intlLocale, useLocale, useT } from "@/lib/i18n";
@@ -11,6 +13,7 @@ interface Answered {
   index: number;
   topic: string;
   prompt: string;
+  table: DataTable | null;
   options: string[];
   chosen: number;
   answer: number;
@@ -26,7 +29,7 @@ interface Homework {
   correct: number;
   done: boolean;
   answered: Answered[];
-  next: { index: number; topic: string; level: number; prompt: string; options: string[] } | null;
+  next: { index: number; topic: string; level: number; prompt: string; table: DataTable | null; options: string[] } | null;
   topics: { label: string; answered: number; correct: number }[];
 }
 
@@ -86,7 +89,8 @@ export default function HomeworkPage() {
           <legend className="small muted" style={{ padding: 0 }}>
             {t("Question {n} of {total}", { n: h.next.index + 1, total: h.total })} · {t(h.next.topic)}
           </legend>
-          <p style={{ margin: 0, fontWeight: 600 }}>{h.next.prompt}</p>
+          <p style={{ margin: 0, fontWeight: 600, whiteSpace: "pre-line" }}>{h.next.prompt}</p>
+          <QuestionTable table={h.next.table} />
           {h.next.options.map((o, i) => (
             <label key={i} className="card tight row" style={{ gap: 8, cursor: "pointer", borderColor: chosen === i ? "var(--accent)" : undefined }}>
               <input
@@ -135,7 +139,8 @@ export default function HomeworkPage() {
           <ol className="stack" style={{ paddingLeft: 18, marginTop: 8, gap: 10 }}>
             {h.answered.map((a) => (
               <li key={a.index} className="small">
-                <div>{a.prompt}</div>
+                <div style={{ whiteSpace: "pre-line" }}>{a.prompt}</div>
+                <QuestionTable table={a.table} />
                 <div style={{ color: a.correct ? "var(--good-ink)" : "var(--bad-ink)" }}>
                   {a.correct ? "✓" : "✗"} {a.options[a.chosen]}
                   {!a.correct && ` · ${t("Correct answer:")} ${a.options[a.answer]}`}

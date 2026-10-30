@@ -13,7 +13,7 @@ import {
   scoreBand,
 } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
-import { adaptiveAttempts, aptitudeSittings, memberships, users, type AdaptiveItem, type AdaptiveSectionState } from "../db/schema";
+import { adaptiveAttempts, aptitudeDrillAnswers, aptitudeSittings, memberships, users, type AdaptiveItem, type AdaptiveSectionState } from "../db/schema";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { audit } from "../lib/audit";
 import { appLink, enqueue, processOutbox } from "./notifications";
@@ -199,7 +199,7 @@ export async function adaptiveView(db: Db, ctx: Ctx, id: string) {
       status: row.status,
       official: Boolean(row.sittingId),
       section: { index, total: row.sections.length, key: s.key, title: s.title, items: s.items, minutes: s.minutes, deadline: section.deadline },
-      question: { number: section.items.length, prompt: item.prompt, options: item.options },
+      question: { number: section.items.length, prompt: item.prompt, options: item.options, table: item.table ?? null },
     };
   }
   return {
@@ -227,7 +227,7 @@ export async function adaptiveView(db: Db, ctx: Ctx, id: string) {
         correct: answered.filter((i) => i.correct).length,
         notReached: s.items - answered.length,
         highestLevel: Math.max(0, ...answered.filter((i) => i.correct).map((i) => i.level)),
-        items: sec.items.map((i) => ({ prompt: i.prompt, options: i.options, answer: i.answer, chosen: i.chosen, correct: i.correct, level: i.level, template: i.template, explanation: i.explanation })),
+        items: sec.items.map((i) => ({ prompt: i.prompt, table: i.table ?? null, options: i.options, answer: i.answer, chosen: i.chosen, correct: i.correct, level: i.level, template: i.template, explanation: i.explanation })),
       };
     }),
   };
@@ -280,14 +280,19 @@ export async function finalizeAbandonedAdaptive(db: Db, now: Date) {
 export function drillQuestion(template: string, level: number) {
   if (!APTITUDE_TEMPLATES.some((t) => t.id === template)) throw notFound("Topic");
   const q = generateQuestion(template, level, newSeed());
-  return { template: q.template, level: q.level, seed: q.seed, prompt: q.prompt, options: q.options };
+  return { template: q.template, level: q.level, seed: q.seed, prompt: q.prompt, table: q.table ?? null, options: q.options };
 }
 
-/** Check a drill answer by rebuilding the question from its seed. */
-export function checkDrill(input: { template: string; level: number; seed: number; chosen: number }) {
+/** Check a drill answer by rebuilding the question from its seed, and keep it for the student's topic accuracy (once per question). */
+export async function checkDrill(db: Db, ctx: Ctx, input: { template: string; level: number; seed: number; chosen: number }) {
   if (!APTITUDE_TEMPLATES.some((t) => t.id === input.template)) throw notFound("Topic");
   const q = generateQuestion(input.template, input.level, input.seed);
-  return { correct: input.chosen === q.answer, answer: q.answer, explanation: q.explanation };
+  const correct = input.chosen === q.answer;
+  await db
+    .insert(aptitudeDrillAnswers)
+    .values({ tenantId: ctx.tenantId, userId: ctx.userId, template: q.template, level: q.level, seed: input.seed, correct, answeredAt: ctx.now })
+    .onConflictDoNothing();
+  return { correct, answer: q.answer, explanation: q.explanation };
 }
 
 // ---------- Staff ----------

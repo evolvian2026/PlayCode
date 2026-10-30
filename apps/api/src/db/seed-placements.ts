@@ -3,7 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { sha256 } from "../lib/crypto";
 import { createDrive } from "../services/placements";
 import { db } from "./client";
-import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, peerFeedback, peerRequests, peerSessions, onDutyRequests, resumeEntries, batchGraduations, graduateResponses, memberships, adaptiveAttempts, aptitudeSittings, aptitudeHomework, aptitudeHomeworkWork, type AdaptiveSectionState, type HomeworkPart, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
+import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, peerFeedback, peerRequests, peerSessions, onDutyRequests, resumeEntries, batchGraduations, graduateResponses, memberships, adaptiveAttempts, aptitudeSittings, aptitudeHomework, aptitudeHomeworkWork, aptitudeDrillAnswers, type AdaptiveSectionState, type HomeworkPart, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
 
 const DAY_MS = 86_400_000;
 
@@ -558,6 +558,7 @@ export async function seedAptitude(args: { tenantId: string; tpoId: string; stud
 /**
  * Aptitude homework for CSE 2027 - A: last week's, done by most (the demo
  * student included), and this week's, due in three days, started by a few.
+ * And some drill answers, so students' own topic views have something in them.
  */
 export async function seedAptitudeHomework(args: { tenantId: string; facultyId: string; sectionId: string; students: { id: string; skill: number }[]; now: Date }) {
   const sets: { title: string; parts: HomeworkPart[]; due: number; doneBy: (i: number) => boolean }[] = [
@@ -584,4 +585,16 @@ export async function seedAptitudeHomework(args: { tenantId: string; facultyId: 
     }
     if (rows.length) await db.insert(aptitudeHomeworkWork).values(rows);
   }
+  // Drills: the demo student has had a go at probability (not going well),
+  // data interpretation and syllogisms; a few classmates at other topics.
+  const plan: [number, string, number, number, number][] = [
+    [0, "probability", 2, 6, 2],
+    [0, "data-interpretation", 3, 5, 3],
+    [0, "syllogisms", 2, 4, 3],
+    ...args.students.slice(1, 9).map((_, i): [number, string, number, number, number] => [i + 1, ["boats", "pipes", "blood-relations", "ages"][i % 4]!, 2, 4 + (i % 3), 1 + (i % 4)]),
+  ];
+  const drills = plan.flatMap(([i, template, level, n, right]) =>
+    Array.from({ length: n }, (_, k) => ({ tenantId: args.tenantId, userId: args.students[i]!.id, template, level, seed: 7000 + i * 100 + k, correct: k < right, answeredAt: new Date(args.now.getTime() - (2 + k) * DAY_MS) })),
+  );
+  if (drills.length) await db.insert(aptitudeDrillAnswers).values(drills);
 }

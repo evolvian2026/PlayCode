@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
-import { ErrorBox, Loading } from "@/components/ui";
+import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { BAND_TONE } from "@/lib/aptitude";
 import { intlLocale, useLocale, useT } from "@/lib/i18n";
@@ -16,6 +16,83 @@ interface Hub {
   attempts: { id: string; official: boolean; score: number; scores: Record<string, number>; band: string; bandLabel: string; finishedAt: string }[];
   sections: { key: string; title: string; items: number; minutes: number }[];
   templates: { id: string; topic: "quant" | "reasoning"; label: string }[];
+}
+
+interface MyTopic {
+  template: string;
+  label: string;
+  answered: number;
+  correct: number;
+  accuracyPct: number;
+  drillLevel: number;
+}
+
+function TopicRow({ x }: { x: MyTopic }) {
+  const t = useT();
+  return (
+    <div className="stack" style={{ gap: 4, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+      <div className="spread wrap" style={{ gap: 8 }}>
+        <div>
+          <b>{t(x.label)}</b>
+          <div className="small muted">{t("{right} of {n} right", { right: x.correct, n: x.answered })}</div>
+        </div>
+        <Link href={`/play/aptitude/drill?t=${x.template}&l=${x.drillLevel}`} className="btn small">
+          {t("Drill at level {n}", { n: x.drillLevel })}
+        </Link>
+      </div>
+      <Bar value={x.accuracyPct} tone={x.accuracyPct < 50 ? "bad" : x.accuracyPct < 70 ? "warn" : "good"} label={t("{label}: {pct}% right", { label: t(x.label), pct: x.accuracyPct })} />
+    </div>
+  );
+}
+
+/** How the student has done topic by topic, weakest first, with a drill pitched at each. */
+function YourTopics() {
+  const t = useT();
+  const { data } = useApi<{ topics: MyTopic[]; untried: { id: string; label: string }[] }>("/student/aptitude/topics");
+  if (!data?.topics.length) return null;
+  // Enough answers to say something, and not going well.
+  const weak = data.topics.filter((x) => x.answered >= 3 && x.accuracyPct < 70).slice(0, 3);
+  return (
+    <section className="card stack" aria-labelledby="h-topics">
+      <div>
+        <h2 id="h-topics" style={{ margin: 0 }}>
+          {t("Your topics")}
+        </h2>
+        <p className="small muted" style={{ margin: 0 }}>
+          {t("How you've done on each topic in the last 90 days, from tests, homework and drills.")}
+        </p>
+      </div>
+      {weak.length > 0 && (
+        <div className="stack" style={{ gap: 6 }}>
+          <b className="small">{t("Work on these")}</b>
+          {weak.map((x) => (
+            <TopicRow key={x.template} x={x} />
+          ))}
+        </div>
+      )}
+      <details>
+        <summary className="small" style={{ cursor: "pointer" }}>
+          {t("All topics you've tried ({n})", { n: data.topics.length })}
+        </summary>
+        <div className="stack" style={{ gap: 6, marginTop: 6 }}>
+          {data.topics.map((x) => (
+            <TopicRow key={x.template} x={x} />
+          ))}
+        </div>
+      </details>
+      {data.untried.length > 0 && (
+        <p className="small" style={{ margin: 0 }}>
+          <span className="muted">{t("Not tried yet:")}</span>{" "}
+          {data.untried.map((x, i) => (
+            <span key={x.id}>
+              {i > 0 && ", "}
+              <Link href={`/play/aptitude/drill?t=${x.id}`}>{t(x.label)}</Link>
+            </span>
+          ))}
+        </p>
+      )}
+    </section>
+  );
 }
 
 export default function AptitudeHub() {
@@ -159,6 +236,8 @@ export default function AptitudeHub() {
           ))}
         </section>
       )}
+
+      <YourTopics />
 
       <section className="card stack" aria-labelledby="h-drills">
         <div>

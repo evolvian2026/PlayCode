@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { APTITUDE_TEMPLATES } from "@playcode/core";
+import { APTITUDE_TEMPLATES, type DataTable } from "@playcode/core";
+import { QuestionTable } from "@/components/QuestionTable";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { useT } from "@/lib/i18n";
@@ -13,6 +14,7 @@ interface Drill {
   level: number;
   seed: number;
   prompt: string;
+  table: DataTable | null;
   options: string[];
 }
 interface Checked {
@@ -24,9 +26,12 @@ interface Checked {
 function DrillPage() {
   const t = useT();
   const router = useRouter();
-  const template = useSearchParams().get("t") ?? APTITUDE_TEMPLATES[0]!.id;
+  const params = useSearchParams();
+  const template = params.get("t") ?? APTITUDE_TEMPLATES[0]!.id;
+  // A link from "Your topics" says which level to start at.
+  const start = Math.min(5, Math.max(1, Number(params.get("l")) || 2));
   const meta = APTITUDE_TEMPLATES.find((x) => x.id === template) ?? APTITUDE_TEMPLATES[0]!;
-  const [level, setLevel] = useState(2);
+  const [level, setLevel] = useState(start);
   const [q, setQ] = useState<Drill | null>(null);
   const [chosen, setChosen] = useState<number | null>(null);
   const [checked, setChecked] = useState<Checked | null>(null);
@@ -45,10 +50,10 @@ function DrillPage() {
     }
   }
   useEffect(() => {
-    setLevel(2);
+    setLevel(start);
     setRun(0);
     setScore({ right: 0, total: 0 });
-    void load(2);
+    void load(start);
   }, [meta.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function check() {
@@ -99,7 +104,8 @@ function DrillPage() {
       ) : (
         <fieldset className="card stack" style={{ margin: 0 }}>
           <legend className="sr-only">{t("Question")}</legend>
-          <p style={{ margin: 0, fontWeight: 600 }}>{q.prompt}</p>
+          <p style={{ margin: 0, fontWeight: 600, whiteSpace: "pre-line" }}>{q.prompt}</p>
+          <QuestionTable table={q.table} />
           {q.options.map((o, i) => {
             const mark = checked ? (i === checked.answer ? "var(--good)" : i === chosen ? "var(--bad)" : undefined) : chosen === i ? "var(--accent)" : undefined;
             return (

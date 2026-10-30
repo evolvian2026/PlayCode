@@ -101,6 +101,7 @@ const PAGES = [
   { as: "admin@demo.edu", path: "/console/graduation", mobile: false },
   { as: "student@demo.edu", path: "/play/aptitude", mobile: true },
   { as: "student@demo.edu", path: "/play/aptitude/drill?t=trains", mobile: true },
+  { as: "student@demo.edu", path: "/play/aptitude/drill?t=data-interpretation&l=3", mobile: true },
   { as: "tpo@demo.edu", path: "/console/aptitude", mobile: false },
   { as: "faculty@demo.edu", path: "/console/aptitude", mobile: false },
   { as: "tpo@demo.edu", path: "/console/internships", mobile: false },
