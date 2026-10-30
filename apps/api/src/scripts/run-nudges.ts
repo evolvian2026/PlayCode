@@ -12,6 +12,8 @@ import { sendDueReports } from "../services/reports";
 import { sendGuardianReports } from "../services/guardians";
 import { settleOffers } from "../services/placements";
 import { joiningCheckIns } from "../services/joining";
+import { peerJob } from "../services/peer";
+import { weeklyDigests } from "../services/digest";
 import { circularReminders } from "../services/circulars";
 import { documentReminders } from "../services/documents";
 import { reviewPendingSnapshots } from "../services/snapshot-review";
@@ -42,6 +44,8 @@ try {
       guardianEmails: await sendGuardianReports(db, now),
       offers: await settleOffers(db, now),
       joiningCheckIns: await joiningCheckIns(db, now),
+      peer: await peerJob(db, now),
+      weeklyDigests: await weeklyDigests(db, now),
       circularReminders: await circularReminders(db, now),
       documentReminders: await documentReminders(db, now),
     })),

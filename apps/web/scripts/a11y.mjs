@@ -90,6 +90,8 @@ const PAGES = [
   { as: "tpo@demo.edu", path: "/console/resume-reviews", mobile: false },
   { as: "tpo@demo.edu", path: "/console/alumni", mobile: false },
   { as: "student@demo.edu", path: "/play/alumni", mobile: true },
+  { as: "student@demo.edu", path: "/play/peer", mobile: true },
+  { as: "tpo@demo.edu", path: "/console/week", mobile: false },
   { as: "tpo@demo.edu", path: "/console/internships", mobile: false },
   { as: "student@demo.edu", path: "/play/class-tests", mobile: true },
   { as: "tpo@demo.edu", path: "/console/training", mobile: false },

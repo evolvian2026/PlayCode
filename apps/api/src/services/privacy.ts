@@ -58,6 +58,9 @@ import {
   driveCheckIns,
   resumeReviews,
   alumniIntros,
+  peerRequests,
+  peerSessions,
+  staffDigests,
   driveCoordinators,
   driveUpdates,
   placementDrives,
@@ -81,6 +84,7 @@ import { openingResponsesForExport } from "./openings";
 import { driveDayForExport } from "./drive-day";
 import { reviewsForExport } from "./resume-review";
 import { myIntros } from "./alumni";
+import { peerForExport } from "./peer";
 import { audit } from "../lib/audit";
 import { conflict, forbidden, notFound } from "../lib/errors";
 import { deleteObject } from "../lib/storage";
@@ -236,6 +240,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
     openings: await openingResponsesForExport(db, userId),
     driveDay: await driveDayForExport(db, userId),
     resumeReviews: await reviewsForExport(db, userId),
+    peerInterviews: await peerForExport(db, userId),
     alumniIntroductions: user.tenantId ? (await myIntros(db, { tenantId: user.tenantId, userId, now })).intros : [],
     driveInterviews: await db
       .select({ company: placementDrives.company, rounds: placementDrives.rounds, round: driveSchedules.round, startsAt: driveSlots.startsAt, status: driveSlots.status, feedback: driveSlots.feedback })
@@ -358,6 +363,10 @@ export async function resolveErasure(
     await tx.delete(driveCheckIns).where(eq(driveCheckIns.userId, user.id));
     await tx.delete(resumeReviews).where(eq(resumeReviews.userId, user.id));
     await tx.delete(alumniIntros).where(eq(alumniIntros.userId, user.id));
+    await tx.delete(peerRequests).where(eq(peerRequests.userId, user.id));
+    // Sessions go with either partner; the other keeps nothing that names them.
+    await tx.delete(peerSessions).where(or(eq(peerSessions.aId, user.id), eq(peerSessions.bId, user.id)));
+    await tx.delete(staffDigests).where(eq(staffDigests.userId, user.id));
     await tx.delete(driveCoordinators).where(eq(driveCoordinators.userId, user.id));
     await tx.update(driveUpdates).set({ recipients: sql`${driveUpdates.recipients} - ${user.id}::text` }).where(sql`${driveUpdates.recipients} @> ${JSON.stringify([user.id])}::jsonb`);
     await tx.delete(driveSlots).where(eq(driveSlots.userId, user.id));

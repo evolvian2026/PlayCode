@@ -564,6 +564,13 @@ export default function StudentPlacements() {
         </div>
         <span aria-hidden="true">→</span>
       </Link>
+      <Link href="/play/peer" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{t("Practice with a classmate")}</b>
+          <div className="small muted">{t("Interview each other, with the questions and what a good answer covers")}</div>
+        </div>
+        <span aria-hidden="true">→</span>
+      </Link>
       <Link href="/play/alumni" className="card spread" style={{ color: "inherit" }}>
         <div>
           <b>{t("Alumni")}</b>

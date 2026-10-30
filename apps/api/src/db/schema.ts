@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, IntroPurpose, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -2443,3 +2443,72 @@ export const alumniIntros = pgTable(
   },
   (t) => [index("alumni_intros_tenant_idx").on(t.tenantId, t.status), index("alumni_intros_user_idx").on(t.userId)],
 );
+
+// ---------- Peer mock interviews ----------
+
+/** A student asking for a practice partner, with the times that suit them. */
+export const peerRequests = pgTable(
+  "peer_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    track: text("track").$type<PeerTrack>().notNull(),
+    mode: text("mode").$type<PeerMode>().notNull(),
+    windows: jsonb("windows").$type<PeerWindow[]>().notNull(),
+    status: text("status").$type<"waiting" | "matched" | "expired" | "cancelled">().notNull().default("waiting"),
+    sessionId: uuid("session_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("peer_requests_tenant_idx").on(t.tenantId, t.status, t.track)],
+);
+
+/** Two students paired for an hour: each interviews the other for half of it. */
+export const peerSessions = pgTable(
+  "peer_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    track: text("track").$type<PeerTrack>().notNull(),
+    mode: text("mode").$type<"online" | "in_person">().notNull(),
+    /** A video-call link, or where on campus to meet. */
+    place: text("place").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    aId: uuid("a_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    bId: uuid("b_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    seed: integer("seed").notNull(),
+    status: text("status").$type<"scheduled" | "cancelled">().notNull().default("scheduled"),
+    cancelledBy: uuid("cancelled_by"),
+    remindedAt: timestamp("reminded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("peer_sessions_a_idx").on(t.aId), index("peer_sessions_b_idx").on(t.bId), index("peer_sessions_tenant_idx").on(t.tenantId, t.startsAt)],
+);
+
+/** What one partner says about the other after the session. */
+export const peerFeedback = pgTable(
+  "peer_feedback",
+  {
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => peerSessions.id, { onDelete: "cascade" }),
+    fromId: uuid("from_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    toId: uuid("to_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    partnerAbsent: boolean("partner_absent").notNull().default(false),
+    ratings: jsonb("ratings").$type<Record<PeerRating, number>>(),
+    comment: text("comment").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.fromId] }), index("peer_feedback_to_idx").on(t.toId)],
+);
+
+// ---------- Weekly digest ----------
+
+/** Staff who switched the Monday digest off, and the week it was last sent to each. */
+export const staffDigests = pgTable("staff_digests", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(true),
+  lastWeek: text("last_week"),
+});

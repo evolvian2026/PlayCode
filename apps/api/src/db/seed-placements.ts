@@ -3,7 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { sha256 } from "../lib/crypto";
 import { createDrive } from "../services/placements";
 import { db } from "./client";
-import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
+import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, peerFeedback, peerRequests, peerSessions, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
 
 const DAY_MS = 86_400_000;
 
@@ -399,5 +399,32 @@ export async function seedAlumni(args: { tenantId: string; studentId: string; no
     purpose: "advice",
     message: "I'm a final-year CSE student preparing for the Freshworks drive next month. Could you tell me what the hiring-manager round looks for, and how you prepared for it?",
     createdAt: new Date(now.getTime() - 2 * DAY_MS),
+  });
+}
+
+/** Peer practice: one past session with feedback both ways, and a student waiting for a technical partner. */
+export async function seedPeer(args: { tenantId: string; students: string[]; now: Date }) {
+  const { tenantId, now } = args;
+  const [a, b, waiting] = [args.students[6]!, args.students[7]!, args.students[9]!];
+  const day = (offset: number) => localDate(new Date(now.getTime() + offset * DAY_MS), "Asia/Kolkata");
+  const [past] = await db
+    .insert(peerSessions)
+    .values({ tenantId, track: "hr", mode: "in_person", place: "On campus: meet at the library entrance, or agree another spot", startsAt: new Date(now.getTime() - 3 * DAY_MS), aId: a, bId: b, seed: 7, createdAt: new Date(now.getTime() - 4 * DAY_MS) })
+    .returning();
+  await db.insert(peerFeedback).values([
+    { sessionId: past!.id, fromId: a, toId: b, ratings: { clarity: 4, content: 3, confidence: 3 }, comment: "Good examples. Slow down a little on the project question.", createdAt: new Date(now.getTime() - 3 * DAY_MS + 3_600_000) },
+    { sessionId: past!.id, fromId: b, toId: a, ratings: { clarity: 3, content: 4, confidence: 4 }, comment: "Strong answer on teamwork; the weakness answer sounded rehearsed.", createdAt: new Date(now.getTime() - 3 * DAY_MS + 7_200_000) },
+  ]);
+  await db.insert(peerRequests).values({
+    tenantId,
+    userId: waiting,
+    track: "technical",
+    mode: "either",
+    windows: [
+      { date: day(1), slot: "evening" as const },
+      { date: day(2), slot: "afternoon" as const },
+      { date: day(2), slot: "evening" as const },
+    ],
+    createdAt: new Date(now.getTime() - 3_600_000),
   });
 }

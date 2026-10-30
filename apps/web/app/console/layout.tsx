@@ -21,6 +21,7 @@ const NAV: NavItem[] = [
   { href: "/console/paths", label: "Learning paths", icon: "map", perm: "assignments.manage", feature: "learning_paths" },
   { href: "/console/tests", label: "Tests", icon: "flag", perm: "assessments.proctor" },
   { href: "/console/doubts", label: "Doubts", icon: "chat", perm: "doubts.answer", noCompany: true },
+  { href: "/console/week", label: "This week", icon: "calendar", perm: "placements.manage", feature: "placements", noCompany: true },
   { href: "/console/placements", label: "Placements", icon: "briefcase", perm: "placements.manage", feature: "placements" },
   { href: "/console/season", label: "Placement season", icon: "chart", perm: ["placements.manage", "analytics.institution", "analytics.department"], feature: "placements", noCompany: true },
   { href: "/console/recruiters", label: "Companies", icon: "briefcase", perm: "placements.manage", feature: "placements", noCompany: true },
