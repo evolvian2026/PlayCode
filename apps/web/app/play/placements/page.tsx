@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { formatLpa, INTERVIEW_FEEDBACK_DIMENSIONS, OFFER_TIERS, type CompanyType, type InterviewFeedbackDimension, type OfferTier } from "@playcode/core";
+import { formatLpa, INTERVIEW_FEEDBACK_DIMENSIONS, JOINING_STATUSES, OFFER_TIERS, STUDENT_JOINING_STATUSES, type CompanyType, type InterviewFeedbackDimension, type JoiningStatus, type OfferTier } from "@playcode/core";
 import { Icon } from "@/components/Icon";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
@@ -25,7 +25,7 @@ interface Drive {
   open: boolean;
   tier: OfferTier | null;
   eligibility: { eligible: boolean; reasons: string[] };
-  application: { status: "registered" | "shortlisted" | "rejected" | "offered"; roundsCleared: number; offerCtcRupees: number | null; decision: "accepted" | "declined" | null; decideBy: string | null; slots: Slot[]; test: { id: string; title: string; openAt: string; closeAt: string; round: string } | null } | null;
+  application: { status: "registered" | "shortlisted" | "rejected" | "offered"; roundsCleared: number; offerCtcRupees: number | null; decision: "accepted" | "declined" | null; decideBy: string | null; joining: { status: JoiningStatus | null; joiningDate: string | null; note: string } | null; slots: Slot[]; test: { id: string; title: string; openAt: string; closeAt: string; round: string } | null } | null;
 }
 
 interface Slot {
@@ -63,6 +63,79 @@ function Rounds({ drive }: { drive: Drive }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** Where an accepted offer stands: offer letter, joining date, joined. */
+function Joining({ drive, joining, onChange }: { drive: Drive; joining: NonNullable<NonNullable<Drive["application"]>["joining"]>; onChange: (p: Placements) => void }) {
+  const t = useT();
+  const locale = useLocale();
+  const [status, setStatus] = useState<JoiningStatus>(joining.status ?? "awaiting_letter");
+  const [date, setDate] = useState(joining.joiningDate ?? "");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  if (joining.status === "revoked") {
+    return (
+      <div className="small" style={{ background: "var(--surface-2)", padding: "8px 10px", borderRadius: 8 }}>
+        <b>{t(JOINING_STATUSES.revoked)}</b>
+        <div>{t("It no longer counts as an offer you hold, so you can register for drives again.")}</div>
+        {joining.note && <div className="muted">{joining.note}</div>}
+      </div>
+    );
+  }
+  const needsDate = status === "date_given" || status === "joined";
+  async function save() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await api(`/student/placements/${drive.id}/joining`, { method: "PUT", body: { status, joiningDate: needsDate ? date || null : null } });
+      onChange(await api<Placements>("/student/placements"));
+      setMsg(t("Saved. Thank you!"));
+    } catch (e) {
+      setMsg(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const id = `j-${drive.id}`;
+  return (
+    <div className="stack" style={{ gap: 6, background: "var(--surface-2)", padding: "8px 10px", borderRadius: 8 }}>
+      <div className="small" style={{ fontWeight: 600 }}>
+        {joining.status === "joined"
+          ? t("Joined on {date}", { date: new Date(`${joining.joiningDate}T00:00:00`).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short", year: "numeric" }) })
+          : t("Where does your offer stand?")}
+      </div>
+      <div className="row wrap" style={{ gap: 6, alignItems: "flex-end" }}>
+        <div>
+          <label htmlFor={`${id}-s`} className="small">
+            {t("Status")}
+          </label>
+          <select id={`${id}-s`} value={status} onChange={(e) => setStatus(e.target.value as JoiningStatus)}>
+            {STUDENT_JOINING_STATUSES.map((k) => (
+              <option key={k} value={k}>
+                {t(JOINING_STATUSES[k])}
+              </option>
+            ))}
+          </select>
+        </div>
+        {needsDate && (
+          <div>
+            <label htmlFor={`${id}-d`} className="small">
+              {t("Joining date")}
+            </label>
+            <input id={`${id}-d`} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+        )}
+        <button className="btn small" disabled={busy || (needsDate && !date)} onClick={save}>
+          {t("Update")}
+        </button>
+      </div>
+      {msg && (
+        <div className="small" role="status">
+          {msg}
+        </div>
+      )}
     </div>
   );
 }
@@ -129,9 +202,12 @@ function DriveCard({ drive, experiences, onChange }: { drive: Drive; experiences
             {t("Congratulations! Offer of {ctc}.", { ctc: formatLpa(app.offerCtcRupees ?? drive.ctcRupees) })}
           </div>
           {app.decision ? (
-            <span className={`pill ${app.decision === "accepted" ? "good" : ""}`} style={{ alignSelf: "flex-start" }}>
-              {t(app.decision === "accepted" ? "You accepted this offer" : "You declined this offer")}
-            </span>
+            <>
+              <span className={`pill ${app.decision === "accepted" ? "good" : ""}`} style={{ alignSelf: "flex-start" }}>
+                {t(app.decision === "accepted" ? "You accepted this offer" : "You declined this offer")}
+              </span>
+              {app.joining && <Joining drive={drive} joining={app.joining} onChange={onChange} />}
+            </>
           ) : app.decideBy && new Date(app.decideBy) > new Date() ? (
             <>
               <div className="small">{t("Accept or decline by {date}. If you don't answer, it's taken as accepted.", { date: new Date(app.decideBy).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) })}</div>
@@ -315,6 +391,13 @@ export default function StudentPlacements() {
           </div>
         </div>
       )}
+      <Link href="/play/openings" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{t("Openings off campus")}</b>
+          <div className="small muted">{t("Off-campus drives, pool campuses and internships your placement cell found for you")}</div>
+        </div>
+        <span aria-hidden="true">→</span>
+      </Link>
       <Link href="/play/companies" className="card spread" style={{ color: "inherit" }}>
         <div>
           <b>{t("Companies")}</b>

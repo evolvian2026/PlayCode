@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -54,6 +54,8 @@ export interface TenantSettings {
   placementPolicy?: Partial<PlacementPolicy>;
   /** What the placement brochure says about the institution, and whom recruiters should contact. */
   brochure?: { about?: string; contactName?: string; contactRole?: string; contactEmail?: string; contactPhone?: string };
+  /** Publish the institution's placement results (aggregates only) on a public page. */
+  publicRecord?: boolean;
 }
 
 export interface TenantBranding {
@@ -1457,6 +1459,11 @@ export const placementApplications = pgTable(
     /** Readiness per company profile and practice days in the previous 60, when the student registered: the "before" for outcome reports. */
     readiness: jsonb("readiness").$type<Record<string, number>>().notNull(),
     activeDays60: integer("active_days_60").notNull(),
+    /** For an accepted offer: the offer letter, joining date and joining, or the company withdrawing it. */
+    joiningStatus: text("joining_status").$type<JoiningStatus>(),
+    joiningDate: text("joining_date"),
+    joiningNote: text("joining_note").notNull().default(""),
+    joiningUpdatedAt: timestamp("joining_updated_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }),
   },
@@ -2244,4 +2251,42 @@ export const placementTargets = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
   },
   (t) => [uniqueIndex("placement_targets_idx").on(t.tenantId, t.graduationYear, sql`coalesce(${t.unitId}, '00000000-0000-0000-0000-000000000000'::uuid)`)],
+);
+
+// ---------- Openings outside campus drives ----------
+
+/** An opening the placement cell found elsewhere: an off-campus drive, a pool campus at another college, an internship. */
+export const placementOpenings = pgTable(
+  "placement_openings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<OpeningKind>().notNull(),
+    company: text("company").notNull(),
+    roleTitle: text("role_title").notNull(),
+    /** Annual CTC for a job, monthly stipend for an internship. */
+    payRupees: integer("pay_rupees"),
+    location: text("location").notNull().default(""),
+    details: text("details").notNull().default(""),
+    applyUrl: text("apply_url"),
+    closesOn: text("closes_on").notNull(),
+    criteria: jsonb("criteria").$type<PlacementCriteria>().notNull(),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    withdrawnAt: timestamp("withdrawn_at", { withTimezone: true }),
+  },
+  (t) => [index("placement_openings_tenant_idx").on(t.tenantId, t.closesOn)],
+);
+
+/** A student's answer to an opening: applied, or not for them. */
+export const openingResponses = pgTable(
+  "opening_responses",
+  {
+    openingId: uuid("opening_id").notNull().references(() => placementOpenings.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    response: text("response").$type<OpeningResponse>().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.openingId, t.userId] }), index("opening_responses_user_idx").on(t.userId)],
 );

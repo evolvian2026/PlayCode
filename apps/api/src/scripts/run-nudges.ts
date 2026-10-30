@@ -11,6 +11,7 @@ import { runNudges } from "../services/nudges";
 import { sendDueReports } from "../services/reports";
 import { sendGuardianReports } from "../services/guardians";
 import { settleOffers } from "../services/placements";
+import { joiningCheckIns } from "../services/joining";
 import { circularReminders } from "../services/circulars";
 import { documentReminders } from "../services/documents";
 import { reviewPendingSnapshots } from "../services/snapshot-review";
@@ -40,6 +41,7 @@ try {
       billingEmails: await sendBillingNotices(db, now),
       guardianEmails: await sendGuardianReports(db, now),
       offers: await settleOffers(db, now),
+      joiningCheckIns: await joiningCheckIns(db, now),
       circularReminders: await circularReminders(db, now),
       documentReminders: await documentReminders(db, now),
     })),

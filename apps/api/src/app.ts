@@ -31,6 +31,7 @@ import { circularConsoleRoutes, circularStudentRoutes } from "./routes/circulars
 import { documentConsoleRoutes, documentStudentRoutes } from "./routes/documents";
 import { staffCalendarRoutes } from "./routes/staff-calendar";
 import { recruiterRoutes } from "./routes/recruiters";
+import { openingRoutes } from "./routes/openings";
 import { helpdeskRoutes } from "./routes/helpdesk";
 import { paperRoutes } from "./routes/papers";
 import { writingRoutes } from "./routes/writing";
@@ -193,6 +194,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(circularStudentRoutes);
   await app.register(documentStudentRoutes);
   await app.register(helpdeskRoutes);
+  await app.register(openingRoutes);
   await app.register(writingRoutes);
   await app.register(resumeRoutes);
   await app.register(resumeEntryRoutes);

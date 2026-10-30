@@ -10,6 +10,7 @@ import { effectiveBranding } from "../services/branding";
 import { verifyCertificate } from "../services/certificates";
 import { rateLimit } from "../lib/rate-limit";
 import { publicProfile } from "../services/resume";
+import { publicRecord } from "../services/public-record";
 import { getSamlConnection } from "../services/saml";
 import { getConnection } from "../services/sso";
 import { planHas } from "@playcode/core";
@@ -39,6 +40,13 @@ export async function publicRoutes(app: FastifyInstance) {
     const { code } = parse(z.object({ code: z.string().regex(/^[A-Za-z0-9]{10}$/) }), req.params);
     await rateLimit(`public-profile:${req.ip}`, 120, 60_000);
     return publicProfile(db, code, app.now());
+  });
+
+  // An institution's placement results, if it publishes them.
+  app.get("/public/placements/:slug", async (req) => {
+    const { slug } = parse(z.object({ slug: z.string().regex(/^[a-z0-9-]{2,60}$/i) }), req.params);
+    await rateLimit(`public-record:${req.ip}`, 60, 60_000);
+    return publicRecord(db, slug, app.now());
   });
 
   app.get("/public/certificates/:code", async (req) => {

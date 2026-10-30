@@ -137,7 +137,7 @@ export async function setPlacementPolicy(db: Db, args: { tenantId: string; actor
   return args.policy;
 }
 
-/** Offers each student holds, by drive (declined ones too: an offer made still counts under the policy). */
+/** Offers each student holds, by drive (declined ones too: an offer made still counts under the policy; withdrawn ones don't). */
 async function offersFor(db: DbOrTx, tenantId: string, userIds: string[]) {
   const out = new Map<string, { driveId: string; ctcRupees: number }[]>();
   if (userIds.length === 0) return out;
@@ -145,7 +145,8 @@ async function offersFor(db: DbOrTx, tenantId: string, userIds: string[]) {
     .select({ userId: placementApplications.userId, driveId: placementApplications.driveId, ctc: placementApplications.offerCtcRupees, driveCtc: placementDrives.ctcRupees })
     .from(placementApplications)
     .innerJoin(placementDrives, eq(placementDrives.id, placementApplications.driveId))
-    .where(and(eq(placementApplications.tenantId, tenantId), eq(placementApplications.status, "offered"), inArray(placementApplications.userId, userIds)));
+    // An offer the company withdrew no longer counts.
+    .where(and(eq(placementApplications.tenantId, tenantId), eq(placementApplications.status, "offered"), sql`${placementApplications.joiningStatus} is distinct from 'revoked'`, inArray(placementApplications.userId, userIds)));
   for (const r of rows) (out.get(r.userId) ?? out.set(r.userId, []).get(r.userId)!).push({ driveId: r.driveId, ctcRupees: r.ctc ?? r.driveCtc });
   return out;
 }
@@ -193,19 +194,45 @@ export interface NewDrive {
 
 /** Students the drive's rules let in (ignoring whether they registered). */
 async function eligibleStudents(db: DbOrTx, drive: DriveRow, now: Date): Promise<string[]> {
-  const units = await tenantUnits(db, drive.tenantId);
-  const pool = await studentIdsInUnits(db, drive.tenantId, drive.criteria.unitIds.length ? descendants(units, drive.criteria.unitIds) : units.map((u) => u.id));
-  const policy = await placementPolicy(db, drive.tenantId);
+  return studentsEligible(db, drive.tenantId, drive.criteria, { driveId: drive.id, ctcRupees: drive.ctcRupees, now });
+}
+
+/**
+ * Students a set of rules lets in, by the same checks as a drive: for drives,
+ * and for openings found elsewhere (`ctcRupees` null leaves the offer tiers out).
+ */
+export async function studentsEligible(db: DbOrTx, tenantId: string, criteria: PlacementCriteria, opts: { driveId: string | null; ctcRupees: number | null; now: Date }): Promise<string[]> {
+  const units = await tenantUnits(db, tenantId);
+  const pool = await studentIdsInUnits(db, tenantId, criteria.unitIds.length ? descendants(units, criteria.unitIds) : units.map((u) => u.id));
+  const policy = await placementPolicy(db, tenantId);
   const [records, offers, attendance, noShows] = await Promise.all([
     recordsFor(db, pool),
-    offersFor(db, drive.tenantId, pool),
-    drive.criteria.minAttendancePct != null ? attendanceFor(db, drive.tenantId, pool, now) : new Map<string, { pct: number | null }>(),
-    policy.maxNoShows != null ? noShowsFor(db, drive.tenantId, pool) : new Map<string, number>(),
+    offersFor(db, tenantId, pool),
+    criteria.minAttendancePct != null ? attendanceFor(db, tenantId, pool, opts.now) : new Map<string, { pct: number | null }>(),
+    policy.maxNoShows != null ? noShowsFor(db, tenantId, pool) : new Map<string, number>(),
   ]);
   return pool.filter((id) => {
-    const held = tiersOf(offers.get(id), policy, drive.id);
-    return checkEligibility(drive.criteria, records.get(id) ?? null, { inUnits: true, placed: held.length > 0, attendancePct: attendance.get(id)?.pct ?? null, policy, offers: held, driveCtcRupees: drive.ctcRupees, noShows: noShows.get(id) ?? 0 }).eligible;
+    const held = tiersOf(offers.get(id), policy, opts.driveId ?? "");
+    return checkEligibility(criteria, records.get(id) ?? null, { inUnits: true, placed: held.length > 0, attendancePct: attendance.get(id)?.pct ?? null, policy, offers: held, driveCtcRupees: opts.ctcRupees ?? undefined, noShows: noShows.get(id) ?? 0 }).eligible;
   });
+}
+
+/** One student's standing, to check any number of drives or openings against. */
+export async function eligibilityChecker(db: DbOrTx, tenantId: string, userId: string, now: Date) {
+  const [record, units, offers, attendance, policy, noShows] = await Promise.all([
+    recordsFor(db, [userId]).then((m) => m.get(userId) ?? null),
+    studentUnitIdsWithAncestors(db, tenantId, userId),
+    offersFor(db, tenantId, [userId]).then((m) => m.get(userId)),
+    attendanceFor(db, tenantId, [userId], now).then((m) => m.get(userId)),
+    placementPolicy(db, tenantId),
+    noShowsFor(db, tenantId, [userId]).then((m) => m.get(userId) ?? 0),
+  ]);
+  const mine = new Set(units);
+  return (criteria: PlacementCriteria, ctcRupees: number | null) => {
+    const held = tiersOf(offers, policy, "");
+    const inUnits = criteria.unitIds.length === 0 || criteria.unitIds.some((u) => mine.has(u));
+    return checkEligibility(criteria, record, { inUnits, placed: held.length > 0, attendancePct: attendance?.pct ?? null, policy, offers: held, driveCtcRupees: ctcRupees ?? undefined, noShows });
+  };
 }
 
 export async function createDrive(db: Db, args: NewDrive & { tenantId: string; actorId: string; now: Date }) {
@@ -466,6 +493,7 @@ export async function studentPlacements(db: Db, ctx: { tenantId: string; userId:
               offerCtcRupees: app.offerCtcRupees,
               decision: app.status === "offered" ? (app.decision ?? null) : null,
               decideBy: app.status === "offered" ? app.decideBy : null,
+              joining: app.status === "offered" && app.decision === "accepted" ? { status: app.joiningStatus, joiningDate: app.joiningDate, note: app.joiningNote } : null,
               slots: slots.get(d.id) ?? [],
               // The test for the round they're waiting for, if it's taken on PlayCode.
               test:
@@ -523,7 +551,7 @@ export async function decideOffer(db: Db, ctx: { tenantId: string; userId: strin
   if (app.decideBy && app.decideBy <= ctx.now) throw badRequest("The time to answer this offer has passed");
   const where = (driveId: string) => and(eq(placementApplications.driveId, driveId), eq(placementApplications.userId, ctx.userId));
   if (ctx.accept) {
-    const accepted = mine.find((a) => a.decision === "accepted");
+    const accepted = mine.find((a) => a.decision === "accepted" && a.joiningStatus !== "revoked");
     if (accepted) throw conflict("accepted_elsewhere", "You have already accepted another offer");
     for (const other of mine.filter((a) => a.driveId !== drive.id && !a.decision)) await db.update(placementApplications).set({ decision: "declined", decidedAt: ctx.now }).where(where(other.driveId));
   }

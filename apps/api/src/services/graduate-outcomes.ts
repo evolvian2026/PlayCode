@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { GRADUATE_STATUSES, graduateStatus, median, OUTCOME_KINDS, type GraduateStatus, type OutcomeKind } from "@playcode/core";
 import type { Db } from "../db/client";
 import { academicRecords, memberships, placementApplications, placementDrives, studentOutcomes, users } from "../db/schema";
@@ -55,7 +55,7 @@ export async function myOutcomes(db: Db, ctx: Ctx) {
       .select({ company: placementDrives.company, roleTitle: placementDrives.roleTitle, ctcRupees: placementApplications.offerCtcRupees, driveDate: placementDrives.driveDate })
       .from(placementApplications)
       .innerJoin(placementDrives, eq(placementDrives.id, placementApplications.driveId))
-      .where(and(eq(placementApplications.tenantId, ctx.tenantId), eq(placementApplications.userId, ctx.userId), eq(placementApplications.status, "offered"))),
+      .where(and(eq(placementApplications.tenantId, ctx.tenantId), eq(placementApplications.userId, ctx.userId), eq(placementApplications.status, "offered"), sql`${placementApplications.joiningStatus} is distinct from 'revoked'`)),
   ]);
   return { outcomes: rows.map(view), campusOffers: campus };
 }
@@ -182,7 +182,8 @@ export async function batchReport(db: Db, auth: AuthContext, year: number) {
           .select({ userId: placementApplications.userId, ctc: placementApplications.offerCtcRupees, company: placementDrives.company, decision: placementApplications.decision })
           .from(placementApplications)
           .innerJoin(placementDrives, eq(placementDrives.id, placementApplications.driveId))
-          .where(and(eq(placementApplications.tenantId, tenant.id), eq(placementApplications.status, "offered"), inArray(placementApplications.userId, ids))),
+          // A withdrawn offer isn't a placement.
+          .where(and(eq(placementApplications.tenantId, tenant.id), eq(placementApplications.status, "offered"), sql`${placementApplications.joiningStatus} is distinct from 'revoked'`, inArray(placementApplications.userId, ids))),
     empty ? [] : db.select().from(studentOutcomes).where(and(eq(studentOutcomes.tenantId, tenant.id), inArray(studentOutcomes.userId, ids))),
     empty ? [] : db.select({ userId: memberships.userId, unitId: memberships.orgUnitId }).from(memberships).where(and(eq(memberships.tenantId, tenant.id), eq(memberships.role, "student"), inArray(memberships.userId, ids))),
     tenantUnits(db, tenant.id),

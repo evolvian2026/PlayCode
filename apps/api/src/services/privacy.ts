@@ -54,6 +54,7 @@ import {
   questionPapers,
   orgUnits,
   placementApplications,
+  openingResponses,
   placementDrives,
   playerProfiles,
   pushSubscriptions,
@@ -71,6 +72,7 @@ import {
   type ConsentPurpose,
 } from "../db/schema";
 import { ticketsForExport } from "./helpdesk";
+import { openingResponsesForExport } from "./openings";
 import { audit } from "../lib/audit";
 import { conflict, forbidden, notFound } from "../lib/errors";
 import { deleteObject } from "../lib/storage";
@@ -165,7 +167,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
     academicRecord: (await db.select().from(academicRecords).where(eq(academicRecords.userId, userId)))[0] ?? null,
     resumeProfile: (await db.select().from(studentProfiles).where(eq(studentProfiles.userId, userId)))[0] ?? null,
     placements: await db
-      .select({ company: placementDrives.company, role: placementDrives.roleTitle, status: placementApplications.status, roundsCleared: placementApplications.roundsCleared, offerCtcRupees: placementApplications.offerCtcRupees, registeredAt: placementApplications.createdAt })
+      .select({ company: placementDrives.company, role: placementDrives.roleTitle, status: placementApplications.status, roundsCleared: placementApplications.roundsCleared, offerCtcRupees: placementApplications.offerCtcRupees, decision: placementApplications.decision, joiningStatus: placementApplications.joiningStatus, joiningDate: placementApplications.joiningDate, joiningNote: placementApplications.joiningNote, registeredAt: placementApplications.createdAt })
       .from(placementApplications)
       .innerJoin(placementDrives, eq(placementDrives.id, placementApplications.driveId))
       .where(eq(placementApplications.userId, userId)),
@@ -223,6 +225,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .innerJoin(documentRequests, eq(documentRequests.id, documentSubmissions.requestId))
       .where(eq(documentSubmissions.userId, userId)),
     helpdesk: await ticketsForExport(db, userId),
+    openings: await openingResponsesForExport(db, userId),
     driveInterviews: await db
       .select({ company: placementDrives.company, rounds: placementDrives.rounds, round: driveSchedules.round, startsAt: driveSlots.startsAt, status: driveSlots.status, feedback: driveSlots.feedback })
       .from(driveSlots)
@@ -340,6 +343,7 @@ export async function resolveErasure(
     await tx.delete(circularAcks).where(eq(circularAcks.userId, user.id));
     await tx.delete(documentSubmissions).where(eq(documentSubmissions.userId, user.id));
     await tx.delete(helpTickets).where(eq(helpTickets.userId, user.id));
+    await tx.delete(openingResponses).where(eq(openingResponses.userId, user.id));
     await tx.delete(driveSlots).where(eq(driveSlots.userId, user.id));
     await tx.delete(resumeEntries).where(eq(resumeEntries.userId, user.id));
     await tx.delete(mentorAssignments).where(or(eq(mentorAssignments.studentId, user.id), eq(mentorAssignments.mentorId, user.id)));

@@ -1,8 +1,8 @@
 import { checkEligibility, localDate, seededRandom, type AcademicRecord, type CompanyStage, type InteractionKind, type PlacementCriteria } from "@playcode/core";
-import { eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { createDrive } from "../services/placements";
 import { db } from "./client";
-import { academicRecords, interviews, placementApplications, placementDrives, placementTargets, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
+import { academicRecords, interviews, placementApplications, placementDrives, openingResponses, placementOpenings, placementTargets, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
 
 const DAY_MS = 86_400_000;
 
@@ -233,5 +233,109 @@ export async function seedRecruiters(args: { tenantId: string; tpoId: string; de
     { tenantId, graduationYear: 2027, unitId: null, targetPct: 80, updatedBy: tpoId, updatedAt: now },
     { tenantId, graduationYear: 2027, unitId: args.departments.cse, targetPct: 85, updatedBy: tpoId, updatedAt: now },
     { tenantId, graduationYear: 2027, unitId: args.departments.ece, targetPct: 70, updatedBy: tpoId, updatedAt: now },
+  ]);
+}
+
+/**
+ * Where accepted offers stand: most students have accepted theirs (the first
+ * few still have to answer), with offer letters and joining dates coming in,
+ * one early joining date missed, and openings found off campus.
+ */
+export async function seedJoiningAndOpenings(args: { tenantId: string; tpoId: string; undecided: string[]; students: string[]; now: Date }) {
+  const { tenantId, now } = args;
+  const day = (offset: number) => localDate(new Date(now.getTime() + offset * DAY_MS), "Asia/Kolkata");
+  const offered = await db
+    .select({ driveId: placementApplications.driveId, userId: placementApplications.userId, company: placementDrives.company })
+    .from(placementApplications)
+    .innerJoin(placementDrives, eq(placementDrives.id, placementApplications.driveId))
+    .where(and(eq(placementApplications.tenantId, tenantId), eq(placementApplications.status, "offered")))
+    .orderBy(desc(placementApplications.offerCtcRupees));
+  const skip = new Set(args.undecided);
+  const counts = new Map<string, number>();
+  const taken = new Set<string>();
+  for (const o of offered) {
+    if (skip.has(o.userId)) continue;
+    // Students with two offers took the better one.
+    if (taken.has(o.userId)) {
+      await db.update(placementApplications).set({ decision: "declined", decidedAt: now }).where(and(eq(placementApplications.driveId, o.driveId), eq(placementApplications.userId, o.userId)));
+      continue;
+    }
+    taken.add(o.userId);
+    const i = counts.get(o.company) ?? 0;
+    counts.set(o.company, i + 1);
+    const joining: Partial<typeof placementApplications.$inferInsert> =
+      o.company === "Zoho"
+        ? { joiningStatus: "date_given", joiningDate: "2027-07-01" }
+        : o.company === "Infosys"
+          ? i === 0
+            ? { joiningStatus: "date_given", joiningDate: day(-10), joiningNote: "Asked to join early as an intern, then nothing." }
+            : { joiningStatus: i % 2 ? "letter_received" : "awaiting_letter" }
+          : i % 3 === 0
+            ? { joiningStatus: "letter_received" }
+            : {};
+    await db
+      .update(placementApplications)
+      .set({ decision: "accepted", decidedAt: now, ...joining, joiningUpdatedAt: joining.joiningStatus ? now : null })
+      .where(and(eq(placementApplications.driveId, o.driveId), eq(placementApplications.userId, o.userId)));
+  }
+
+  const [amazon, poolDrive] = await db
+    .insert(placementOpenings)
+    .values([
+      {
+        tenantId,
+        kind: "off_campus" as const,
+        company: "Amazon",
+        roleTitle: "SDE I (2027 graduates)",
+        payRupees: 2_400_000,
+        location: "Bengaluru, Hyderabad",
+        details: "Online assessment with two coding questions and a work-style survey. Apply with your college email.",
+        applyUrl: "https://www.amazon.jobs/",
+        closesOn: day(9),
+        criteria: { unitIds: [], minCgpa: 7, maxBacklogs: 0, graduationYears: [2027], allowPlaced: true },
+        createdBy: args.tpoId,
+        createdAt: new Date(now.getTime() - 2 * DAY_MS),
+      },
+      {
+        tenantId,
+        kind: "pool_campus" as const,
+        company: "Cognizant",
+        roleTitle: "Programmer Analyst Trainee",
+        payRupees: 400_000,
+        location: "Pool drive at City Engineering College, Pune",
+        details: "Report at 8:30 with two copies of your resume, college ID and mark sheets. Register on the link first.",
+        applyUrl: "https://careers.cognizant.com/",
+        closesOn: day(1),
+        criteria: { unitIds: [], maxBacklogs: 1, graduationYears: [2027], allowPlaced: false },
+        createdBy: args.tpoId,
+        createdAt: new Date(now.getTime() - 5 * DAY_MS),
+      },
+      {
+        tenantId,
+        kind: "internship" as const,
+        company: "IISc Bangalore",
+        roleTitle: "Summer research internship",
+        payRupees: 12_000,
+        location: "Bengaluru",
+        details: "Eight weeks in May and June. Needs a statement of purpose and a faculty recommendation.",
+        applyUrl: "https://iisc.ac.in/",
+        closesOn: day(20),
+        criteria: { unitIds: [], minCgpa: 8, graduationYears: [2027, 2028], allowPlaced: true },
+        createdBy: args.tpoId,
+        createdAt: new Date(now.getTime() - DAY_MS),
+      },
+    ])
+    .returning();
+  // A few students who fit have already answered: two applied to Amazon, one passed on the pool drive.
+  const records = await db.select().from(academicRecords).where(eq(academicRecords.tenantId, tenantId));
+  const holding = new Set(offered.map((o) => o.userId));
+  const fits = (id: string, ok: (r: (typeof records)[number]) => boolean) => records.some((r) => r.userId === id && ok(r));
+  const others = args.students.slice(1);
+  const [a, b] = others.filter((id) => fits(id, (r) => (r.cgpa ?? 0) >= 7 && r.backlogs === 0));
+  const c = others.find((id) => !holding.has(id) && fits(id, (r) => (r.backlogs ?? 9) <= 1));
+  await db.insert(openingResponses).values([
+    { openingId: amazon!.id, userId: a!, tenantId, response: "applied" as const, updatedAt: now },
+    { openingId: amazon!.id, userId: b!, tenantId, response: "applied" as const, updatedAt: now },
+    { openingId: poolDrive!.id, userId: c!, tenantId, response: "not_interested" as const, updatedAt: now },
   ]);
 }

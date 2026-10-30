@@ -407,6 +407,13 @@
       "when": 1793248589270,
       "tag": "0057_recruiters_targets",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1793332116411,
+      "tag": "0058_openings_joining",
+      "breakpoints": true
     }
   ]
 }

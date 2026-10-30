@@ -201,6 +201,45 @@ function BrochureCard({ year }: { year: number }) {
   );
 }
 
+/** Whether the institution's results are on its public page. */
+function PublicRecordCard() {
+  const { data, error, setData } = useApi<{ enabled: boolean; slug: string }>("/console/placements/public-record");
+  const [msg, setMsg] = useState<string | null>(null);
+  if (error) return <ErrorBox message={error.message} />;
+  if (!data) return null;
+  const url = typeof window === "undefined" ? `/results/${data.slug}` : `${window.location.origin}/results/${data.slug}`;
+  async function toggle() {
+    if (!data!.enabled && !confirm("Publish the placement results on a public page? Anyone with the link can see the totals; no student is named.")) return;
+    setMsg(null);
+    try {
+      setData(await api<{ enabled: boolean; slug: string }>("/console/placements/public-record", { method: "PUT", body: { enabled: !data!.enabled } }));
+    } catch (e) {
+      setMsg(errorMessage(e));
+    }
+  }
+  return (
+    <section className="card stack" aria-labelledby="h-public">
+      <h2 id="h-public" style={{ margin: 0 }}>
+        Public placement record
+      </h2>
+      <p className="small muted" style={{ margin: 0 }}>
+        A page for parents, applicants and recruiters with each batch&apos;s results: share placed, packages, higher studies and the companies that hired. Totals only; departments with fewer than 10 graduates are left out.
+      </p>
+      <div className="row wrap" style={{ gap: 8 }}>
+        <button className={`btn small ${data.enabled ? "" : "primary"}`} onClick={toggle}>
+          {data.enabled ? "Stop publishing" : "Publish"}
+        </button>
+        {data.enabled && (
+          <a href={`/results/${data.slug}`} target="_blank" rel="noreferrer" className="small">
+            {url}
+          </a>
+        )}
+      </div>
+      {msg && <ErrorBox message={msg} />}
+    </section>
+  );
+}
+
 export default function SeasonPage() {
   const me = useMe();
   const manage = me.permissions.includes("placements.manage");
@@ -355,6 +394,7 @@ export default function SeasonPage() {
 
           {manage && <TargetsEditor key={s.year} year={s.year} onSaved={reload} />}
           {manage && <BrochureCard year={s.year} />}
+          {manage && <PublicRecordCard />}
         </>
       )}
     </div>
