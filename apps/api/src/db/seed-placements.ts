@@ -1,8 +1,9 @@
 import { checkEligibility, localDate, seededRandom, type AcademicRecord, type CompanyStage, type InteractionKind, type PlacementCriteria } from "@playcode/core";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { sha256 } from "../lib/crypto";
 import { createDrive } from "../services/placements";
 import { db } from "./client";
-import { academicRecords, interviews, placementApplications, placementDrives, openingResponses, placementOpenings, placementTargets, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
+import { academicRecords, interviews, placementApplications, placementDrives, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
 
 const DAY_MS = 86_400_000;
 
@@ -229,6 +230,35 @@ export async function seedRecruiters(args: { tenantId: string; tpoId: string; de
     contactPhone: "+91 80 4000 1234",
   };
   await db.update(tenants).set({ settings: sql`${tenants.settings} || ${JSON.stringify({ brochure })}::jsonb` }).where(eq(tenants.id, tenantId));
+  // Two companies have said how the students did; Zoho hasn't answered yet.
+  const drives = await db.select({ id: placementDrives.id, company: placementDrives.company }).from(placementDrives).where(eq(placementDrives.tenantId, tenantId));
+  const driveOf = (c: string) => drives.find((d) => d.company === c)!.id;
+  const link = (c: string) => ({ tenantId, driveId: driveOf(c), tokenHash: sha256(`seed-feedback:${tenantId}:${c}`), sentTo: null, createdBy: tpoId, createdAt: new Date(now.getTime() - 10 * DAY_MS) });
+  await db.insert(recruiterFeedback).values([
+    {
+      ...link("TCS"),
+      ratings: { aptitude: 4, technical: 3, communication: 2, preparedness: 3 },
+      wentWell: "Strong on the aptitude section; most cleared the NQT comfortably.",
+      gaps: "Many struggled to explain their final-year project in English, and a few hadn't read about TCS at all.",
+      returnNextYear: "yes" as const,
+      plannedHires: 25,
+      respondentName: "Meera Iyer",
+      respondentRole: "Campus relations",
+      submittedAt: new Date(now.getTime() - 8 * DAY_MS),
+    },
+    {
+      ...link("Infosys"),
+      ratings: { aptitude: 4, technical: 3, communication: 3, preparedness: 2 },
+      wentWell: "Punctual and well organised drive; students were keen.",
+      gaps: "Resumes were weak: no projects or numbers. Several came without printed copies.",
+      returnNextYear: "yes" as const,
+      plannedHires: 20,
+      respondentName: "HR team",
+      respondentRole: "",
+      submittedAt: new Date(now.getTime() - 5 * DAY_MS),
+    },
+    link("Zoho"),
+  ]);
   await db.insert(placementTargets).values([
     { tenantId, graduationYear: 2027, unitId: null, targetPct: 80, updatedBy: tpoId, updatedAt: now },
     { tenantId, graduationYear: 2027, unitId: args.departments.cse, targetPct: 85, updatedBy: tpoId, updatedAt: now },

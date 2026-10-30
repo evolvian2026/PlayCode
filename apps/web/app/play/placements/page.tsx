@@ -143,6 +143,49 @@ function Joining({ drive, joining, onChange }: { drive: Drive; joining: NonNulla
 
 const rupees = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
+interface Checklist {
+  items: { key: string; label: string; hint: string; link: string; status: "done" | "missing" | "n/a" }[];
+  done: number;
+  total: number;
+}
+
+/** What's left before placements, with a link to each fix. */
+function ChecklistCard() {
+  const t = useT();
+  const { data } = useApi<Checklist>("/student/checklist");
+  const [open, setOpen] = useState(false);
+  if (!data || !data.total) return null;
+  const left = data.items.filter((i) => i.status === "missing");
+  const pct = Math.round((data.done / data.total) * 100);
+  return (
+    <section className="card stack" style={{ gap: 8 }} aria-labelledby="h-checklist">
+      <div className="spread" style={{ gap: 8 }}>
+        <h2 id="h-checklist" style={{ margin: 0, fontSize: "1.05rem" }}>
+          {left.length ? t("Ready for placements: {done} of {total}", { done: data.done, total: data.total }) : t("You're ready for placements")}
+        </h2>
+        {left.length > 2 && (
+          <button className="btn ghost small" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? t("Hide") : t("What's left")}
+          </button>
+        )}
+      </div>
+      <div className={`bar ${left.length ? "warn" : "good"}`} role="img" aria-label={t("{pct}% done", { pct })}>
+        <span style={{ width: `${pct}%` }} />
+      </div>
+      {(open || left.length <= 2) &&
+        left.map((i) => (
+          <Link key={i.key} href={i.link} className="row small" style={{ gap: 8, color: "inherit" }}>
+            <span aria-hidden="true">○</span>
+            <span>
+              <b>{t(i.label)}</b>
+              <span className="muted"> · {t(i.hint)}</span>
+            </span>
+          </Link>
+        ))}
+    </section>
+  );
+}
+
 /** What the offer is made of, in a line or two. */
 function OfferFacts({ d, ctcRupees }: { d: OfferDetails; ctcRupees: number }) {
   const t = useT();
@@ -471,6 +514,7 @@ export default function StudentPlacements() {
           <span aria-hidden="true">→</span>
         </Link>
       )}
+      <ChecklistCard />
       <div className="card tight small">
         {r ? (
           <span>

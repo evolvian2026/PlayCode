@@ -1084,6 +1084,23 @@ const HI: Record<string, string> = {
   "{n} months": "{n} महीने",
   "{n} months probation": "{n} महीने प्रोबेशन",
   "{round} at {time}": "{round}, {time} बजे",
+  "Ready for placements: {done} of {total}": "प्लेसमेंट के लिए तैयारी: {total} में से {done}",
+  "You're ready for placements": "आप प्लेसमेंट के लिए तैयार हैं",
+  "What's left": "क्या बाकी है",
+  Hide: "छिपाएँ",
+  "{pct}% done": "{pct}% पूरा",
+  "Academic record complete": "शैक्षणिक रिकॉर्ड पूरा",
+  "CGPA, backlogs, class 10 and 12 marks and graduating year": "CGPA, बैकलॉग, कक्षा 10 और 12 के अंक और ग्रेजुएशन वर्ष",
+  "Resume headline and summary": "रिज़्यूमे की हेडलाइन और सारांश",
+  "A one-line headline and a few lines about you": "एक लाइन की हेडलाइन और अपने बारे में कुछ पंक्तियाँ",
+  "Documents uploaded": "दस्तावेज़ अपलोड किए",
+  "Everything the placement cell has asked for": "प्लेसमेंट सेल ने जो कुछ माँगा है",
+  "A mock interview done": "एक मॉक इंटरव्यू पूरा",
+  "At least one full mock interview": "कम से कम एक पूरा मॉक इंटरव्यू",
+  "Practice readiness of 50 or more": "प्रैक्टिस तैयारी 50 या अधिक",
+  "For service or product companies": "सर्विस या प्रोडक्ट कंपनियों के लिए",
+  "Training attendance of 75% or more": "ट्रेनिंग में 75% या अधिक उपस्थिति",
+  "In placement training sessions": "प्लेसमेंट ट्रेनिंग सत्रों में",
 };
 
 const STORAGE_KEY = "playcode.locale";

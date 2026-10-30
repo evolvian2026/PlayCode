@@ -354,3 +354,102 @@ export function OfferDetailsEditor({ driveId, ctcRupees, initial }: { driveId: s
     </section>
   );
 }
+
+interface Feedback {
+  sentTo: string | null;
+  createdAt: string;
+  submittedAt: string | null;
+  ratings: Record<string, number> | null;
+  wentWell: string;
+  gaps: string;
+  returnLabel: string | null;
+  plannedHires: number | null;
+  respondentName: string;
+  respondentRole: string;
+}
+
+const DIMENSION_LABELS: Record<string, string> = { aptitude: "Aptitude", technical: "Technical", communication: "Communication", preparedness: "Preparedness" };
+
+/** The company's feedback on the students, through a private link. */
+export function RecruiterFeedbackCard({ driveId, company }: { driveId: string; company: string }) {
+  const { data, error, loading, reload, setData } = useApi<{ feedback: Feedback | null; emailConfigured: boolean }>(`/console/placements/${driveId}/feedback`);
+  const [email, setEmail] = useState("");
+  const [link, setLink] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  if (error) return <ErrorBox message={error.message} onRetry={reload} />;
+  if (loading && !data) return <Loading />;
+  if (!data) return null;
+  const f = data.feedback;
+  async function make() {
+    setMsg(null);
+    try {
+      const r = await api<{ link: string; feedback: Feedback; emailConfigured: boolean }>(`/console/placements/${driveId}/feedback`, { body: { email: email.trim() || null } });
+      setLink(r.link);
+      setData({ feedback: r.feedback, emailConfigured: r.emailConfigured });
+      setMsg(email.trim() ? `Emailed to ${email.trim()}.` : "Copy the link and send it to the company.");
+    } catch (e) {
+      setMsg(errorMessage(e));
+    }
+  }
+  return (
+    <section className="card stack no-print" aria-labelledby="h-feedback">
+      <div>
+        <h2 id="h-feedback" style={{ margin: 0 }}>
+          {company}&apos;s feedback on the students
+        </h2>
+        <div className="small muted">A private link for the company: ratings, what went well, where students fell short. No account needed.</div>
+      </div>
+      {f?.submittedAt ? (
+        <div className="stack" style={{ gap: 6 }}>
+          <div className="row wrap" style={{ gap: 6 }}>
+            {Object.entries(f.ratings ?? {}).map(([k, v]) => (
+              <span key={k} className={`pill ${v <= 2 ? "bad" : v >= 4 ? "good" : "warn"}`}>
+                {DIMENSION_LABELS[k] ?? k}: {v}/5
+              </span>
+            ))}
+          </div>
+          {f.wentWell && (
+            <div>
+              <b className="small">Went well:</b> {f.wentWell}
+            </div>
+          )}
+          {f.gaps && (
+            <div>
+              <b className="small">Fell short:</b> {f.gaps}
+            </div>
+          )}
+          <div className="small muted">
+            {f.returnLabel}
+            {f.plannedHires ? ` · plans to hire about ${f.plannedHires} next year` : ""} · {[f.respondentName, f.respondentRole].filter(Boolean).join(", ") || "the company"}, {when(f.submittedAt)}
+          </div>
+        </div>
+      ) : (
+        <>
+          {f && <div className="small">Link made {when(f.createdAt)}{f.sentTo ? ` and emailed to ${f.sentTo}` : ""}; no answer yet. Making a new one replaces it.</div>}
+          <div className="row wrap" style={{ gap: 8, alignItems: "flex-end" }}>
+            {data.emailConfigured && (
+              <div style={{ minWidth: 240 }}>
+                <label htmlFor="f-email">Email it to (optional)</label>
+                <input id="f-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="campus.hiring@company.com" />
+              </div>
+            )}
+            <button className="btn small" onClick={make}>
+              {f ? "Make a new link" : "Ask for feedback"}
+            </button>
+          </div>
+          {link && (
+            <div>
+              <label htmlFor="f-link">Link for {company} (shown once)</label>
+              <input id="f-link" readOnly value={link} onFocus={(e) => e.target.select()} />
+            </div>
+          )}
+          {msg && (
+            <div className="small" role="status">
+              {msg}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}

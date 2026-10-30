@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -2338,4 +2338,32 @@ export const driveCheckIns = pgTable(
     byId: uuid("by_id").notNull(),
   },
   (t) => [primaryKey({ columns: [t.driveId, t.userId] })],
+);
+
+// ---------- Recruiter feedback ----------
+
+/** What a company says about the students after a drive, through a private link sent to its contact. */
+export const recruiterFeedback = pgTable(
+  "recruiter_feedback",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    driveId: uuid("drive_id")
+      .notNull()
+      .unique()
+      .references(() => placementDrives.id, { onDelete: "cascade" }),
+    /** Hash of the link's secret; the link itself is shown once. */
+    tokenHash: text("token_hash").notNull().unique(),
+    sentTo: text("sent_to"),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    ratings: jsonb("ratings").$type<Record<RecruiterDimension, number>>(),
+    wentWell: text("went_well").notNull().default(""),
+    gaps: text("gaps").notNull().default(""),
+    returnNextYear: text("return_next_year").$type<ReturnIntention>(),
+    plannedHires: integer("planned_hires"),
+    respondentName: text("respondent_name").notNull().default(""),
+    respondentRole: text("respondent_role").notNull().default(""),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  },
 );

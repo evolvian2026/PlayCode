@@ -421,6 +421,13 @@
       "when": 1793333608858,
       "tag": "0059_drive_days",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1793335000492,
+      "tag": "0060_recruiter_feedback",
+      "breakpoints": true
     }
   ]
 }

@@ -85,6 +85,8 @@ const PAGES = [
   { as: "tpo@demo.edu", path: "/console/joining", mobile: false },
   { as: "student@demo.edu", path: "/play/openings", mobile: true },
   { as: "student@demo.edu", path: "/play/desk", mobile: true },
+  { as: "tpo@demo.edu", path: "/console/readiness", mobile: false },
+  { as: "tpo@demo.edu", path: "/console/recruiter-feedback", mobile: false },
   { as: "tpo@demo.edu", path: "/console/internships", mobile: false },
   { as: "student@demo.edu", path: "/play/class-tests", mobile: true },
   { as: "tpo@demo.edu", path: "/console/training", mobile: false },
