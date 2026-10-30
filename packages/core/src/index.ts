@@ -38,3 +38,4 @@ export * from "./recruiters";
 export * from "./openings";
 export * from "./drive-day";
 export * from "./checklist";
+export * from "./resume-checks";

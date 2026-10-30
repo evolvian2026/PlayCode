@@ -4,6 +4,7 @@ import { db } from "../db/client";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
 import { addEntry, decideVerification, deleteEntry, myEntries, requestVerification, updateEntry, verificationQueue } from "../services/resume-entries";
 import { getOwnProfile, renderResumePdf, resumeData, saveProfile, setPublic } from "../services/resume";
+import { checksFor } from "../services/resume-review";
 
 const url = z.string().trim().url().max(300).refine((v) => /^https:\/\//.test(v), "Use an https:// link").optional().or(z.literal("").transform(() => undefined));
 
@@ -12,7 +13,10 @@ export async function resumeRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
   app.addHook("preHandler", requirePermission("practice.play"));
 
-  app.get("/student/resume", async (req) => ({ profile: await getOwnProfile(db, req.auth.userId), resume: await resumeData(db, req.auth.userId, app.now()) }));
+  app.get("/student/resume", async (req) => {
+    const resume = await resumeData(db, req.auth.userId, app.now());
+    return { profile: await getOwnProfile(db, req.auth.userId), resume, ...checksFor(resume) };
+  });
 
   app.put("/student/resume", async (req) => {
     const body = parse(

@@ -28,6 +28,8 @@ const NAV: NavItem[] = [
   { href: "/console/joining", label: "Joining", icon: "briefcase", perm: "placements.manage", feature: "placements", noCompany: true },
   { href: "/console/readiness", label: "Readiness", icon: "flag", perm: ["placements.manage", "analytics.institution", "analytics.department", "analytics.own_units"], feature: "placements", noCompany: true },
   { href: "/console/recruiter-feedback", label: "Recruiter feedback", icon: "chat", perm: ["placements.manage", "analytics.institution", "analytics.department", "analytics.own_units"], feature: "placements", noCompany: true },
+  { href: "/console/resume-reviews", label: "Resume reviews", icon: "clipboard", perm: ["placements.manage", "assignments.manage"], noCompany: true },
+  { href: "/console/alumni", label: "Alumni", icon: "users", perm: "placements.manage", feature: "placements", noCompany: true },
   { href: "/console/experiences", label: "Interview experiences", icon: "book", perm: "placements.manage", feature: "placements" },
   { href: "/console/help", label: "Helpdesk", icon: "chat", perm: "placements.manage", feature: "placements" },
   { href: "/console/internships", label: "Internships", icon: "briefcase", perm: ["placements.manage", "assignments.manage"], noCompany: true },

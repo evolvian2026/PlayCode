@@ -20,7 +20,7 @@ import { createContest } from "../services/contests";
 import { sendInvite, setDiscoverable, setInstitutionPool } from "../services/talent";
 import { db, pool, type Db } from "./client";
 import { runMigrations } from "./migrate";
-import { seedInterview, seedJoiningAndOpenings, seedPlacements, seedRecruiters } from "./seed-placements";
+import { seedAlumni, seedInterview, seedJoiningAndOpenings, seedPlacements, seedRecruiters } from "./seed-placements";
 import { assessments, assignments, competitions, contestSubmissions, memberships, orgUnits, packs, questionReports, questions, responses, skills, tenants, users } from "./schema";
 
 export const DEMO_PASSWORD = "playcode123";
@@ -258,6 +258,7 @@ export async function seedDemo(now = new Date()): Promise<void> {
   await seedInterview({ tenantId, userId: demoStudent.id, now });
   await seedRecruiters({ tenantId, tpoId: tpoUser.id, departments: { cse: cse.id, ece: ece.id }, now });
   await seedJoiningAndOpenings({ tenantId, tpoId: tpoUser.id, undecided: students.slice(0, 4).map((s) => s.id), students: students.map((s) => s.id), now });
+  await seedAlumni({ tenantId, studentId: students[5]!.id, now });
   // Two students reported the same question, so the content team's review queue has something in it.
   const [reported] = await db
     .select({ questionId: responses.questionId, version: questions.version })

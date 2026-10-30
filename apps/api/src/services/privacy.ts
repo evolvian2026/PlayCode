@@ -56,6 +56,8 @@ import {
   placementApplications,
   openingResponses,
   driveCheckIns,
+  resumeReviews,
+  alumniIntros,
   driveCoordinators,
   driveUpdates,
   placementDrives,
@@ -77,6 +79,8 @@ import {
 import { ticketsForExport } from "./helpdesk";
 import { openingResponsesForExport } from "./openings";
 import { driveDayForExport } from "./drive-day";
+import { reviewsForExport } from "./resume-review";
+import { myIntros } from "./alumni";
 import { audit } from "../lib/audit";
 import { conflict, forbidden, notFound } from "../lib/errors";
 import { deleteObject } from "../lib/storage";
@@ -231,6 +235,8 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
     helpdesk: await ticketsForExport(db, userId),
     openings: await openingResponsesForExport(db, userId),
     driveDay: await driveDayForExport(db, userId),
+    resumeReviews: await reviewsForExport(db, userId),
+    alumniIntroductions: user.tenantId ? (await myIntros(db, { tenantId: user.tenantId, userId, now })).intros : [],
     driveInterviews: await db
       .select({ company: placementDrives.company, rounds: placementDrives.rounds, round: driveSchedules.round, startsAt: driveSlots.startsAt, status: driveSlots.status, feedback: driveSlots.feedback })
       .from(driveSlots)
@@ -350,6 +356,8 @@ export async function resolveErasure(
     await tx.delete(helpTickets).where(eq(helpTickets.userId, user.id));
     await tx.delete(openingResponses).where(eq(openingResponses.userId, user.id));
     await tx.delete(driveCheckIns).where(eq(driveCheckIns.userId, user.id));
+    await tx.delete(resumeReviews).where(eq(resumeReviews.userId, user.id));
+    await tx.delete(alumniIntros).where(eq(alumniIntros.userId, user.id));
     await tx.delete(driveCoordinators).where(eq(driveCoordinators.userId, user.id));
     await tx.update(driveUpdates).set({ recipients: sql`${driveUpdates.recipients} - ${user.id}::text` }).where(sql`${driveUpdates.recipients} @> ${JSON.stringify([user.id])}::jsonb`);
     await tx.delete(driveSlots).where(eq(driveSlots.userId, user.id));

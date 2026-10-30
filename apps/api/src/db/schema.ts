@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, IntroPurpose, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -2366,4 +2366,80 @@ export const recruiterFeedback = pgTable(
     respondentRole: text("respondent_role").notNull().default(""),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
   },
+);
+
+// ---------- Resume review ----------
+
+/** A student asking staff to review their resume; one waiting at a time, the rest kept as history. */
+export const resumeReviews = pgTable(
+  "resume_reviews",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    status: text("status").$type<"waiting" | "reviewed" | "withdrawn">().notNull().default("waiting"),
+    /** What the student wants looked at, or the role they're aiming for. */
+    note: text("note").notNull().default(""),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull(),
+    reviewerId: uuid("reviewer_id"),
+    verdict: text("verdict").$type<ReviewVerdict>(),
+    summary: text("summary").notNull().default(""),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  },
+  (t) => [index("resume_reviews_tenant_idx").on(t.tenantId, t.status), index("resume_reviews_user_idx").on(t.userId)],
+);
+
+export const resumeComments = pgTable("resume_comments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  reviewId: uuid("review_id")
+    .notNull()
+    .references(() => resumeReviews.id, { onDelete: "cascade" }),
+  section: text("section").$type<ResumeSection>().notNull(),
+  body: text("body").notNull(),
+  resolved: boolean("resolved").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+});
+
+// ---------- Alumni ----------
+
+/** A graduate the placement cell keeps in touch with. Their email is never shown to students. */
+export const alumni = pgTable(
+  "alumni",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    graduationYear: integer("graduation_year").notNull(),
+    department: text("department").notNull().default(""),
+    company: text("company").notNull(),
+    role: text("role").notNull().default(""),
+    city: text("city").notNull().default(""),
+    openToReferrals: boolean("open_to_referrals").notNull().default(false),
+    openToAdvice: boolean("open_to_advice").notNull().default(true),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("alumni_tenant_idx").on(t.tenantId)],
+);
+
+/** A student asking to be introduced to an alumnus; the placement cell decides and sends it. */
+export const alumniIntros = pgTable(
+  "alumni_intros",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    alumnusId: uuid("alumnus_id")
+      .notNull()
+      .references(() => alumni.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    purpose: text("purpose").$type<IntroPurpose>().notNull(),
+    message: text("message").notNull(),
+    status: text("status").$type<"pending" | "sent" | "declined">().notNull().default("pending"),
+    decidedBy: uuid("decided_by"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    declineNote: text("decline_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("alumni_intros_tenant_idx").on(t.tenantId, t.status), index("alumni_intros_user_idx").on(t.userId)],
 );

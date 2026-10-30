@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Bar, ErrorBox, Loading, masteryTone } from "@/components/ui";
 import { ResumeEntries } from "@/components/ResumeEntries";
+import { ResumeReview, type Check } from "@/components/ResumeReview";
 import { api, errorMessage, fetchObjectUrl, useApi } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 
@@ -29,7 +30,7 @@ interface Resume {
 
 export default function ResumePage() {
   const t = useT();
-  const { data, error, loading, reload } = useApi<{ profile: Profile; resume: Resume }>("/student/resume");
+  const { data, error, loading, reload } = useApi<{ profile: Profile; resume: Resume; checks: Check[]; score: number }>("/student/resume");
   const [form, setForm] = useState<Profile | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -50,6 +51,8 @@ export default function ResumePage() {
       const res = await api<{ profile: Profile }>("/student/resume", { method: "PUT", body: { headline: form!.headline, about: form!.about, links: form!.links, hide: form!.hide } });
       setForm(res.profile);
       setMsg(t("Saved"));
+      // The checks look at what was just saved.
+      void reload();
     } catch (e2) {
       setErr(errorMessage(e2));
     } finally {
@@ -94,6 +97,7 @@ export default function ResumePage() {
           {t("Download PDF")}
         </button>
       </div>
+      <ResumeReview checks={data.checks} score={data.score} onChange={() => void reload()} />
       <form className="card stack" onSubmit={save}>
         <h2 style={{ margin: 0 }}>{t("About you")}</h2>
         <input aria-label={t("Headline")} placeholder={t("e.g. Final-year CSE student who enjoys Java and SQL")} maxLength={120} value={form.headline} onChange={(e) => setForm({ ...form, headline: e.target.value })} />

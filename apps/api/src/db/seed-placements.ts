@@ -3,7 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { sha256 } from "../lib/crypto";
 import { createDrive } from "../services/placements";
 import { db } from "./client";
-import { academicRecords, interviews, placementApplications, placementDrives, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
+import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
 
 const DAY_MS = 86_400_000;
 
@@ -371,4 +371,33 @@ export async function seedJoiningAndOpenings(args: { tenantId: string; tpoId: st
     { openingId: amazon!.id, userId: b!, tenantId, response: "applied" as const, updatedAt: now },
     { openingId: poolDrive!.id, userId: c!, tenantId, response: "not_interested" as const, updatedAt: now },
   ]);
+}
+
+/** Graduates the placement cell keeps in touch with, and one student waiting for an introduction. */
+export async function seedAlumni(args: { tenantId: string; studentId: string; now: Date }) {
+  const { tenantId, now } = args;
+  const rows = await db
+    .insert(alumni)
+    .values(
+      (
+        [
+          ["Priyanka Desai", "priyanka.desai@example.com", 2022, "Computer Science", "Zoho", "Member Technical Staff", "Chennai", true, true],
+          ["Arjun Menon", "arjun.menon@example.com", 2021, "Computer Science", "Amazon", "SDE II", "Bengaluru", true, true],
+          ["Farhan Shaikh", "farhan.shaikh@example.com", 2023, "Electronics", "Infosys", "Systems Engineer", "Pune", false, true],
+          ["Lakshmi Narayan", "lakshmi.n@example.com", 2020, "Computer Science", "Freshworks", "Senior Software Engineer", "Chennai", true, true],
+          ["Rohit Kulkarni", "rohit.k@example.com", 2019, "Electronics", "Texas Instruments", "Design Engineer", "Bengaluru", false, true],
+          ["Neha Joshi", "neha.joshi@example.com", 2022, "Computer Science", "TCS", "Systems Engineer", "Mumbai", true, false],
+        ] as const
+      ).map(([name, email, graduationYear, department, company, role, city, openToReferrals, openToAdvice]) => ({ tenantId, name, email, graduationYear, department, company, role, city, openToReferrals, openToAdvice, createdAt: now })),
+    )
+    .returning();
+  const freshworks = rows.find((r) => r.company === "Freshworks")!;
+  await db.insert(alumniIntros).values({
+    tenantId,
+    alumnusId: freshworks.id,
+    userId: args.studentId,
+    purpose: "advice",
+    message: "I'm a final-year CSE student preparing for the Freshworks drive next month. Could you tell me what the hiring-manager round looks for, and how you prepared for it?",
+    createdAt: new Date(now.getTime() - 2 * DAY_MS),
+  });
 }

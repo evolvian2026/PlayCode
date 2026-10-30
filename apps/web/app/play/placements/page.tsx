@@ -564,6 +564,13 @@ export default function StudentPlacements() {
         </div>
         <span aria-hidden="true">→</span>
       </Link>
+      <Link href="/play/alumni" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{t("Alumni")}</b>
+          <div className="small muted">{t("Seniors at the companies you're aiming for: ask for advice or a referral")}</div>
+        </div>
+        <span aria-hidden="true">→</span>
+      </Link>
       <Link href="/play/companies" className="card spread" style={{ color: "inherit" }}>
         <div>
           <b>{t("Companies")}</b>
