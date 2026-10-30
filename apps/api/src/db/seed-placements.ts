@@ -3,7 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { sha256 } from "../lib/crypto";
 import { createDrive } from "../services/placements";
 import { db } from "./client";
-import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, peerFeedback, peerRequests, peerSessions, onDutyRequests, resumeEntries, batchGraduations, graduateResponses, memberships, adaptiveAttempts, aptitudeSittings, type AdaptiveSectionState, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
+import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, peerFeedback, peerRequests, peerSessions, onDutyRequests, resumeEntries, batchGraduations, graduateResponses, memberships, adaptiveAttempts, aptitudeSittings, aptitudeHomework, aptitudeHomeworkWork, type AdaptiveSectionState, type HomeworkPart, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
 
 const DAY_MS = 86_400_000;
 
@@ -553,4 +553,35 @@ export async function seedAptitude(args: { tenantId: string; tpoId: string; stud
   }
   if (rows.length) await db.insert(adaptiveAttempts).values(rows);
   return rows.length;
+}
+
+/**
+ * Aptitude homework for CSE 2027 - A: last week's, done by most (the demo
+ * student included), and this week's, due in three days, started by a few.
+ */
+export async function seedAptitudeHomework(args: { tenantId: string; facultyId: string; sectionId: string; students: { id: string; skill: number }[]; now: Date }) {
+  const sets: { title: string; parts: HomeworkPart[]; due: number; doneBy: (i: number) => boolean }[] = [
+    { title: "Percentages and profit, warm-up", parts: [{ template: "percentages", level: 2, count: 4 }, { template: "profit-loss", level: 2, count: 4 }], due: -5, doneBy: (i) => i % 4 !== 3 },
+    { title: "Time and work, and trains", parts: [{ template: "time-work", level: 3, count: 5 }, { template: "trains", level: 3, count: 5 }], due: 3, doneBy: (i) => i > 0 && i % 3 === 1 },
+  ];
+  for (const set of sets) {
+    const dueAt = new Date(args.now.getTime() + set.due * DAY_MS);
+    const [hw] = await db.insert(aptitudeHomework).values({ tenantId: args.tenantId, title: set.title, unitIds: [args.sectionId], parts: set.parts, dueAt, createdBy: args.facultyId, createdAt: new Date(dueAt.getTime() - 7 * DAY_MS) }).returning();
+    const rows = [];
+    for (const [i, s] of args.students.entries()) {
+      if (!set.doneBy(i)) continue;
+      const r = seededRandom(900 + i + set.due);
+      const finishedAt = new Date(Math.min(dueAt.getTime() - DAY_MS, args.now.getTime() - 3_600_000) - i * 3_600_000);
+      const questions = set.parts.flatMap((p) =>
+        Array.from({ length: p.count }, () => {
+          const q = generateQuestion(p.template, p.level, Math.floor(r() * 2 ** 30));
+          // Weaker on trains, as batches usually are.
+          const correct = r() < s.skill - (p.template === "trains" ? 0.2 : 0);
+          return { template: p.template, level: p.level, seed: q.seed, chosen: correct ? q.answer : (q.answer + 1) % 4, correct, answeredAt: finishedAt.toISOString() };
+        }),
+      );
+      rows.push({ homeworkId: hw!.id, userId: s.id, tenantId: args.tenantId, questions, correct: questions.filter((q) => q.correct).length, startedAt: new Date(finishedAt.getTime() - 20 * 60_000), finishedAt });
+    }
+    if (rows.length) await db.insert(aptitudeHomeworkWork).values(rows);
+  }
 }

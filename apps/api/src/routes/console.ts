@@ -91,15 +91,21 @@ export async function consoleRoutes(app: FastifyInstance) {
     const units = (await tenantUnits(db, tenantId)).filter((u) => scoped.has(u.id));
     const counts = units.length
       ? await db
-          .select({ unitId: memberships.orgUnitId, count: sql<number>`count(*)::int` })
+          .select({ unitId: memberships.orgUnitId, count: sql<number>`count(*)::int`, current: sql<number>`count(*) filter (where ${memberships.graduatedAt} is null)::int` })
           .from(memberships)
           .where(and(eq(memberships.role, "student"), inArray(memberships.orgUnitId, units.map((u) => u.id))))
           .groupBy(memberships.orgUnitId)
       : [];
-    const countByUnit = new Map(counts.map((c) => [c.unitId, c.count]));
+    const countByUnit = new Map(counts.map((c) => [c.unitId, c]));
+    const all = await tenantUnits(db, tenantId);
+    // A unit whose students have all graduated: pickers for new work leave it out.
+    const graduated = (id: string) => {
+      const sub = descendants(all, [id]).map((u) => countByUnit.get(u));
+      return sub.some((c) => c && c.count > 0) && sub.every((c) => !c || c.current === 0);
+    };
     return {
       units: units
-        .map((u) => ({ id: u.id, name: u.name, kind: u.kind, parentId: u.parentId, students: countByUnit.get(u.id) ?? 0 }))
+        .map((u) => ({ id: u.id, name: u.name, kind: u.kind, parentId: u.parentId, students: countByUnit.get(u.id)?.count ?? 0, graduated: graduated(u.id) }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     };
   });

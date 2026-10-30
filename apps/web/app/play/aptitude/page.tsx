@@ -23,6 +23,7 @@ export default function AptitudeHub() {
   const locale = useLocale();
   const router = useRouter();
   const { data, error, loading, reload } = useApi<Hub>("/student/aptitude");
+  const homework = useApi<{ homework: { id: string; title: string; dueAt: string; questions: number; answered: number; correct: number; done: boolean; topics: string[] }[] }>("/student/aptitude/homework");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   if (loading && !data) return <Loading />;
@@ -78,6 +79,31 @@ export default function AptitudeHub() {
           )}
         </section>
       ))}
+
+      {(homework.data?.homework.length ?? 0) > 0 && (
+        <section className="card stack" aria-labelledby="h-homework">
+          <h2 id="h-homework" style={{ margin: 0 }}>
+            {t("Homework")}
+          </h2>
+          {homework.data!.homework.map((h) => (
+            <Link key={h.id} href={`/play/aptitude/homework/${h.id}`} className="spread" style={{ color: "inherit", borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+              <div>
+                <b>{h.title}</b>
+                <div className="small muted">
+                  {h.topics.map((x) => t(x)).join(", ")} · {t("due {when}", { when: date(h.dueAt) })}
+                </div>
+              </div>
+              {h.done ? (
+                <span className="pill good">
+                  {h.correct}/{h.questions}
+                </span>
+              ) : (
+                <span className={`pill ${new Date(h.dueAt) < new Date() ? "bad" : "warn"}`}>{h.answered ? `${h.answered}/${h.questions}` : t("To do")}</span>
+              )}
+            </Link>
+          ))}
+        </section>
+      )}
 
       {data.official && (
         <div className="card spread wrap" style={{ gap: 8 }}>

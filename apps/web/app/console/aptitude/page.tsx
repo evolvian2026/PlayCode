@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { APTITUDE_TEMPLATES } from "@playcode/core";
 import { useMe } from "@/components/Auth";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, fetchObjectUrl, useApi } from "@/lib/api";
@@ -46,9 +47,243 @@ const BANDS: [string, string][] = [
 ];
 const day = (d: string) => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 const when = (d: string) => new Date(d).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-const STATUS: Record<string, string> = { not_started: "not started", in_progress: "taking it", finished: "done" };
+const STATUS: Record<string, string> = { not_started: "not started", in_progress: "taking it", finished: "done", started: "started", done: "done" };
+const local = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+type Unit = { id: string; name: string; kind: string; graduated?: boolean };
+type Part = { template: string; level: number; count: number };
 
-function StudentsTab() {
+/** Topics the students in scope get wrong most, from tests and homework in the last 90 days. */
+function Struggles({ onAssign }: { onAssign: ((p: Part) => void) | null }) {
+  const { data } = useApi<{ topics: { template: string; label: string; answered: number; accuracyPct: number; averageLevel: number }[] }>("/console/aptitude/topics");
+  if (!data?.topics.length) return null;
+  return (
+    <section className="card stack" aria-labelledby="h-struggles">
+      <div>
+        <h2 id="h-struggles" style={{ margin: 0, fontSize: 18 }}>
+          Where the batch struggles
+        </h2>
+        <p className="small muted" style={{ margin: 0 }}>
+          Share of answers right by topic, from adaptive tests and homework in the last 90 days, lowest first.
+        </p>
+      </div>
+      {data.topics.slice(0, 8).map((x) => (
+        <div key={x.template} className="row wrap small" style={{ gap: 10 }}>
+          <span style={{ flex: "0 0 220px" }}>{x.label}</span>
+          <span aria-hidden="true" style={{ flex: "0 0 160px", height: 8, background: "var(--surface-2)", borderRadius: 4, overflow: "hidden" }}>
+            <span style={{ display: "block", width: `${x.accuracyPct}%`, height: "100%", background: x.accuracyPct < 50 ? "var(--bad)" : x.accuracyPct < 70 ? "var(--warn)" : "var(--good)" }} />
+          </span>
+          <b style={{ width: 44 }}>{x.accuracyPct}%</b>
+          <span className="muted" style={{ width: 110 }}>
+            {x.answered} answers
+          </span>
+          {onAssign && (
+            <button className="btn ghost small" onClick={() => onAssign({ template: x.template, level: Math.max(1, Math.min(5, Math.round(x.averageLevel))), count: 5 })}>
+              Set homework on this
+            </button>
+          )}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function NewHomework({ preset, onDone }: { preset: Part | null; onDone: () => void }) {
+  const units = useApi<{ units: Unit[] }>("/console/org-units");
+  const [f, setF] = useState({ title: preset ? `${APTITUDE_TEMPLATES.find((x) => x.id === preset.template)?.label ?? ""} practice` : "", unitIds: [] as string[], dueAt: local(new Date(Date.now() + 3 * 86_400_000)) });
+  const [parts, setParts] = useState<Part[]>(preset ? [preset] : [{ template: APTITUDE_TEMPLATES[0]!.id, level: 2, count: 5 }]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const total = parts.reduce((n, p) => n + p.count, 0);
+  const groups = units.data?.units.filter((u) => (u.kind === "section" || u.kind === "batch") && !u.graduated) ?? [];
+  const setPart = (i: number, p: Partial<Part>) => setParts(parts.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api<{ invited: number }>("/console/aptitude/homework", { body: { ...f, parts, dueAt: new Date(f.dueAt).toISOString() } });
+      setMsg(`Set. ${r.invited} students were told.`);
+      setF({ ...f, title: "" });
+      onDone();
+    } catch (err) {
+      setMsg(errorMessage(err));
+    }
+    setBusy(false);
+  }
+  return (
+    <form className="card stack" onSubmit={submit} aria-labelledby="h-new-hw">
+      <div>
+        <h2 id="h-new-hw" style={{ margin: 0, fontSize: 18 }}>
+          Set aptitude homework
+        </h2>
+        <p className="small muted" style={{ margin: 0 }}>
+          Each student gets their own numbers, so copying a classmate&apos;s answers doesn&apos;t help, and sees the working after each answer.
+        </p>
+      </div>
+      <div>
+        <label htmlFor="h-title">Title</label>
+        <input id="h-title" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} required maxLength={120} placeholder="e.g. Time and work, week 1" />
+      </div>
+      <fieldset className="row wrap" style={{ gap: 12, border: 0, padding: 0, margin: 0 }}>
+        <legend className="small muted" style={{ padding: 0, marginBottom: 6 }}>
+          For
+        </legend>
+        {groups.map((u) => (
+          <label key={u.id} className="row small" style={{ gap: 6 }}>
+            <input type="checkbox" style={{ width: "auto" }} checked={f.unitIds.includes(u.id)} onChange={(e) => setF({ ...f, unitIds: e.target.checked ? [...f.unitIds, u.id] : f.unitIds.filter((x) => x !== u.id) })} />
+            {u.name}
+          </label>
+        ))}
+      </fieldset>
+      <fieldset className="stack" style={{ gap: 6, border: 0, padding: 0, margin: 0 }}>
+        <legend className="small muted" style={{ padding: 0, marginBottom: 6 }}>
+          Questions ({total} of up to 40)
+        </legend>
+        {parts.map((p, i) => (
+          <div key={i} className="row wrap" style={{ gap: 8 }}>
+            <select aria-label={`Topic ${i + 1}`} value={p.template} onChange={(e) => setPart(i, { template: e.target.value })} style={{ maxWidth: 260 }}>
+              {APTITUDE_TEMPLATES.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.label}
+                </option>
+              ))}
+            </select>
+            <select aria-label={`Level for topic ${i + 1}`} value={p.level} onChange={(e) => setPart(i, { level: Number(e.target.value) })} style={{ width: 110 }}>
+              {[1, 2, 3, 4, 5].map((l) => (
+                <option key={l} value={l}>
+                  Level {l}
+                </option>
+              ))}
+            </select>
+            <input aria-label={`Questions for topic ${i + 1}`} type="number" min={1} max={20} value={p.count} onChange={(e) => setPart(i, { count: Number(e.target.value) || 1 })} style={{ width: 80 }} />
+            {parts.length > 1 && (
+              <button type="button" className="btn ghost small" onClick={() => setParts(parts.filter((_, j) => j !== i))}>
+                Remove
+              </button>
+            )}
+          </div>
+        ))}
+        <button type="button" className="btn ghost small" style={{ alignSelf: "flex-start" }} onClick={() => setParts([...parts, { template: APTITUDE_TEMPLATES[0]!.id, level: 2, count: 5 }])}>
+          Add a topic
+        </button>
+      </fieldset>
+      <div>
+        <label htmlFor="h-due">Due</label>
+        <input id="h-due" type="datetime-local" value={f.dueAt} onChange={(e) => setF({ ...f, dueAt: e.target.value })} required style={{ maxWidth: 260 }} />
+      </div>
+      {msg && <div className="small">{msg}</div>}
+      <div>
+        <button className="btn primary small" disabled={busy}>
+          Set it
+        </button>
+      </div>
+    </form>
+  );
+}
+
+interface HomeworkRow {
+  id: string;
+  title: string;
+  units: string[];
+  parts: (Part & { label: string })[];
+  questions: number;
+  dueAt: string;
+  overdue: boolean;
+  setBy: string | null;
+  invited: number;
+  started: number;
+  finished: number;
+  averagePct: number | null;
+}
+
+function HomeworkResults({ id }: { id: string }) {
+  const { data, error, reload } = useApi<{ students: { id: string; name: string; rollNo: string | null; status: string; answered: number; correct: number; late: boolean }[]; topics: { template: string; label: string; answered: number; accuracyPct: number | null }[]; homework: { questions: number } }>(
+    `/console/aptitude/homework/${id}`,
+  );
+  if (error) return <ErrorBox message={error.message} onRetry={reload} />;
+  if (!data) return <Loading />;
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <div className="row wrap small" style={{ gap: 12 }}>
+        {data.topics.map((x) => (
+          <span key={x.template}>
+            {x.label}: <b>{x.accuracyPct === null ? "-" : `${x.accuracyPct}%`}</b> right
+          </span>
+        ))}
+      </div>
+      <div className="table-wrap">
+        <table className="small">
+          <thead>
+            <tr>
+              <th scope="col">Student</th>
+              <th scope="col">Status</th>
+              <th scope="col">Right</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.students.map((s) => (
+              <tr key={s.id}>
+                <td>
+                  {s.name} {s.rollNo && <span className="muted">({s.rollNo})</span>}
+                </td>
+                <td>
+                  {STATUS[s.status] ?? s.status}
+                  {s.status === "started" ? ` (${s.answered} of ${data.homework.questions})` : ""}
+                  {s.late ? " · late" : ""}
+                </td>
+                <td>{s.status === "not_started" ? "-" : `${s.correct} of ${s.status === "done" ? data.homework.questions : s.answered}`}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function HomeworkTab({ manage, preset }: { manage: boolean; preset: Part | null }) {
+  const { data, error, loading, reload } = useApi<{ homework: HomeworkRow[] }>("/console/aptitude/homework");
+  const [openId, setOpenId] = useState<string | null>(null);
+  return (
+    <>
+      {manage && <NewHomework key={preset ? `${preset.template}-${preset.level}` : "new"} preset={preset} onDone={reload} />}
+      {error ? (
+        <ErrorBox message={error.message} onRetry={reload} />
+      ) : loading && !data ? (
+        <Loading />
+      ) : !data?.homework.length ? (
+        <div className="card muted">No homework set yet.</div>
+      ) : (
+        data.homework.map((h) => (
+          <section key={h.id} className="card stack" aria-labelledby={`h-hw-${h.id}`}>
+            <div className="spread wrap" style={{ gap: 8 }}>
+              <div>
+                <h2 id={`h-hw-${h.id}`} style={{ margin: 0, fontSize: 17 }}>
+                  {h.title}
+                </h2>
+                <div className="small muted">
+                  {h.parts.map((p) => `${p.count} × ${p.label} (level ${p.level})`).join(" · ")}
+                  <br />
+                  {h.units.join(", ")} · due {when(h.dueAt)}
+                  {h.setBy ? ` · set by ${h.setBy}` : ""}
+                </div>
+              </div>
+              <div className="small">
+                {h.finished} of {h.invited} done{h.averagePct !== null ? ` · ${h.averagePct}% right on average` : ""}
+              </div>
+            </div>
+            <button className="btn ghost small" style={{ alignSelf: "flex-start" }} aria-expanded={openId === h.id} onClick={() => setOpenId(openId === h.id ? null : h.id)}>
+              {openId === h.id ? "Hide students" : "Show students"}
+            </button>
+            {openId === h.id && <HomeworkResults id={h.id} />}
+          </section>
+        ))
+      )}
+    </>
+  );
+}
+
+function StudentsTab({ onAssign }: { onAssign: ((p: Part) => void) | null }) {
   const { data, error, loading, reload } = useApi<Scores>("/console/aptitude");
   if (error) return <ErrorBox message={error.message} onRetry={reload} />;
   if (loading && !data) return <Loading />;
@@ -56,6 +291,7 @@ function StudentsTab() {
   const s = data.summary;
   return (
     <>
+      <Struggles onAssign={onAssign} />
       <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
         <div className="card">
           <div className="small muted">Taken it</div>
@@ -109,8 +345,7 @@ function StudentsTab() {
 }
 
 function NewSitting({ onDone }: { onDone: () => void }) {
-  const units = useApi<{ units: { id: string; name: string; kind: string }[] }>("/console/org-units");
-  const local = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  const units = useApi<{ units: Unit[] }>("/console/org-units");
   const [f, setF] = useState({ title: "", unitIds: [] as string[], opensAt: local(new Date()), closesAt: local(new Date(Date.now() + 3 * 3_600_000)) });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -128,7 +363,8 @@ function NewSitting({ onDone }: { onDone: () => void }) {
     }
     setBusy(false);
   }
-  const batches = units.data?.units.filter((u) => u.kind === "batch") ?? [];
+  // Graduated batches have no one left to take it.
+  const batches = units.data?.units.filter((u) => u.kind === "batch" && !u.graduated) ?? [];
   return (
     <form className="card stack" onSubmit={submit} aria-labelledby="h-new-sitting">
       <div>
@@ -291,7 +527,9 @@ function SittingsTab({ manage }: { manage: boolean }) {
 
 export default function AptitudeScores() {
   const me = useMe();
-  const [tab, setTab] = useState<"students" | "sittings">("students");
+  const [tab, setTab] = useState<"students" | "sittings" | "homework">("students");
+  const [preset, setPreset] = useState<Part | null>(null);
+  const teach = me.permissions.includes("assignments.manage");
   return (
     <div className="stack" style={{ gap: 16, maxWidth: 1000 }}>
       <div>
@@ -305,6 +543,7 @@ export default function AptitudeScores() {
           [
             ["students", "Students"],
             ["sittings", "Sittings"],
+            ["homework", "Homework"],
           ] as const
         ).map(([k, label]) => (
           <button key={k} className={`btn small ${tab === k ? "primary" : ""}`} aria-pressed={tab === k} onClick={() => setTab(k)}>
@@ -312,7 +551,22 @@ export default function AptitudeScores() {
           </button>
         ))}
       </div>
-      {tab === "students" ? <StudentsTab /> : <SittingsTab manage={me.permissions.includes("placements.manage")} />}
+      {tab === "students" ? (
+        <StudentsTab
+          onAssign={
+            teach
+              ? (p) => {
+                  setPreset(p);
+                  setTab("homework");
+                }
+              : null
+          }
+        />
+      ) : tab === "sittings" ? (
+        <SittingsTab manage={me.permissions.includes("placements.manage")} />
+      ) : (
+        <HomeworkTab manage={teach} preset={preset} />
+      )}
     </div>
   );
 }

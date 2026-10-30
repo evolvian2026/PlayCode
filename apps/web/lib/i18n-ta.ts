@@ -636,4 +636,9 @@ export const TA: Record<string, string> = {
   "On your resume since {date}. Practice tests don't change it.": "{date} முதல் உங்கள் ரெஸ்யூமில். பயிற்சித் தேர்வுகள் இதை மாற்றாது.",
   "Start a practice test": "பயிற்சித் தேர்வைத் தொடங்கு",
   "Aptitude score: {n} of 900, from an official sitting": "திறனறிவு மதிப்பெண்: 900-இல் {n}, அதிகாரப்பூர்வத் தேர்விலிருந்து",
+  Homework: "வீட்டுப்பாடம்",
+  "To do": "செய்ய வேண்டியது",
+  "Was due {date}": "{date}-க்குள் செய்திருக்க வேண்டும்",
+  "Due {date}": "{date}-க்குள்",
+  "Done: {right} of {n} right": "முடிந்தது: {n}-இல் {right} சரி",
 };

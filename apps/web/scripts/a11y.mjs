@@ -102,6 +102,7 @@ const PAGES = [
   { as: "student@demo.edu", path: "/play/aptitude", mobile: true },
   { as: "student@demo.edu", path: "/play/aptitude/drill?t=trains", mobile: true },
   { as: "tpo@demo.edu", path: "/console/aptitude", mobile: false },
+  { as: "faculty@demo.edu", path: "/console/aptitude", mobile: false },
   { as: "tpo@demo.edu", path: "/console/internships", mobile: false },
   { as: "student@demo.edu", path: "/play/class-tests", mobile: true },
   { as: "tpo@demo.edu", path: "/console/training", mobile: false },

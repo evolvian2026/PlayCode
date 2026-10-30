@@ -470,6 +470,13 @@
       "when": 1793363608089,
       "tag": "0066_aptitude_sittings",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1793364794513,
+      "tag": "0067_aptitude_homework",
+      "breakpoints": true
     }
   ]
 }

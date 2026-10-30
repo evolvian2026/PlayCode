@@ -2644,3 +2644,56 @@ export const adaptiveAttempts = pgTable(
     uniqueIndex("adaptive_attempts_sitting_uq").on(t.sittingId, t.userId),
   ],
 );
+
+// ---------- Aptitude homework ----------
+
+/** Part of a homework: so many questions from one template at one level. */
+export interface HomeworkPart {
+  template: string;
+  level: number;
+  count: number;
+}
+
+/** A question as a student got it: rebuilt from the seed, so each student's numbers differ. */
+export interface HomeworkQuestion {
+  template: string;
+  level: number;
+  seed: number;
+  chosen: number | null;
+  correct: boolean | null;
+  answeredAt: string | null;
+}
+
+/** Aptitude questions a teacher sets for batches, due by a date. */
+export const aptitudeHomework = pgTable(
+  "aptitude_homework",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    unitIds: jsonb("unit_ids").$type<string[]>().notNull(),
+    parts: jsonb("parts").$type<HomeworkPart[]>().notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    remindedAt: timestamp("reminded_at", { withTimezone: true }),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("aptitude_homework_tenant_idx").on(t.tenantId, t.dueAt)],
+);
+
+/** One student's go at a homework. */
+export const aptitudeHomeworkWork = pgTable(
+  "aptitude_homework_work",
+  {
+    homeworkId: uuid("homework_id")
+      .notNull()
+      .references(() => aptitudeHomework.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    questions: jsonb("questions").$type<HomeworkQuestion[]>().notNull(),
+    correct: integer("correct").notNull().default(0),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.homeworkId, t.userId] }), index("aptitude_homework_work_user_idx").on(t.userId)],
+);

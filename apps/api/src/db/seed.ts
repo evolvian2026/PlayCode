@@ -20,7 +20,7 @@ import { createContest } from "../services/contests";
 import { sendInvite, setDiscoverable, setInstitutionPool } from "../services/talent";
 import { db, pool, type Db } from "./client";
 import { runMigrations } from "./migrate";
-import { seedAlumni, seedAptitude, seedCertificationsAndOnDuty, seedGraduates, seedInterview, seedPeer, seedJoiningAndOpenings, seedPlacements, seedRecruiters } from "./seed-placements";
+import { seedAlumni, seedAptitude, seedAptitudeHomework, seedCertificationsAndOnDuty, seedGraduates, seedInterview, seedPeer, seedJoiningAndOpenings, seedPlacements, seedRecruiters } from "./seed-placements";
 import { assessments, assignments, competitions, contestSubmissions, memberships, orgUnits, packs, questionReports, questions, responses, skills, tenants, users } from "./schema";
 
 export const DEMO_PASSWORD = "playcode123";
@@ -262,6 +262,7 @@ export async function seedDemo(now = new Date()): Promise<void> {
   await seedPeer({ tenantId, students: students.map((s) => s.id), now });
   await seedCertificationsAndOnDuty({ tenantId, tpoId: tpoUser.id, students: students.map((s) => s.id), now });
   await seedAptitude({ tenantId, tpoId: tpoUser.id, students: students.map((s, i) => ({ id: s.id, skill: sims[i]!.skill })), now });
+  await seedAptitudeHomework({ tenantId, facultyId: faculty.id, sectionId: cseA.id, students: students.map((s, i) => ({ id: s.id, skill: sims[i]!.skill, section: s.section })).filter((s) => s.section === cseA.id), now });
   // Last year's batch, graduated in June: read-only accounts, exit survey answers, a few on the alumni list.
   const cse26 = await unit("CSE 2026", "batch", cse.id);
   const graduates = [];

@@ -15,6 +15,7 @@ import { joiningCheckIns } from "../services/joining";
 import { peerJob } from "../services/peer";
 import { weeklyDigests } from "../services/digest";
 import { finalizeAbandonedAdaptive } from "../services/adaptive";
+import { homeworkReminders } from "../services/aptitude-homework";
 import { circularReminders } from "../services/circulars";
 import { documentReminders } from "../services/documents";
 import { reviewPendingSnapshots } from "../services/snapshot-review";
@@ -48,6 +49,7 @@ try {
       peer: await peerJob(db, now),
       weeklyDigests: await weeklyDigests(db, now),
       adaptiveFinished: await finalizeAbandonedAdaptive(db, now),
+      homeworkReminders: await homeworkReminders(db, now),
       circularReminders: await circularReminders(db, now),
       documentReminders: await documentReminders(db, now),
     })),

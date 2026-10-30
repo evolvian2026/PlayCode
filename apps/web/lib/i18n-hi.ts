@@ -1303,4 +1303,9 @@ export const HI: Record<string, string> = {
   "On your resume since {date}. Practice tests don't change it.": "{date} से आपके रेज़्यूमे पर। प्रैक्टिस टेस्ट से यह नहीं बदलता।",
   "Start a practice test": "प्रैक्टिस टेस्ट शुरू करें",
   "Aptitude score: {n} of 900, from an official sitting": "एप्टीट्यूड स्कोर: 900 में से {n}, आधिकारिक टेस्ट से",
+  Homework: "होमवर्क",
+  "To do": "करना है",
+  "Was due {date}": "{date} तक देना था",
+  "Due {date}": "{date} तक",
+  "Done: {right} of {n} right": "हो गया: {n} में से {right} सही",
 };
