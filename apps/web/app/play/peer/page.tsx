@@ -5,7 +5,7 @@ import { useState } from "react";
 import { addDays, PEER_MODES, PEER_RATINGS, PEER_SLOTS, PEER_TRACKS, zonedTime, type PeerMode, type PeerRating, type PeerSlot, type PeerTrack, type PeerWindow } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface Session {
   id: string;
@@ -43,7 +43,7 @@ function Ask({ data, onDone }: { data: Peer; onDone: (p: Peer) => void }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(data.today, i));
   // A slot can be picked if it starts more than an hour from now.
   const open = (date: string, slot: PeerSlot) => zonedTime(date, PEER_SLOTS[slot].start, data.timeZone).getTime() > Date.now() + 3_600_000;
-  const label = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "short", day: "numeric", month: "short" });
+  const label = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(intlLocale(locale), { weekday: "short", day: "numeric", month: "short" });
   async function send() {
     setMsg(null);
     try {
@@ -138,7 +138,7 @@ function Upcoming({ s, timeZone, onChange }: { s: Session; timeZone: string; onC
   const t = useT();
   const locale = useLocale();
   const [msg, setMsg] = useState<string | null>(null);
-  const when = new Date(s.startsAt).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "long", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone });
+  const when = new Date(s.startsAt).toLocaleString(intlLocale(locale), { weekday: "long", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone });
   async function cancel() {
     if (!window.confirm(t("Call off this session? Your partner will be told."))) return;
     try {
@@ -242,7 +242,7 @@ export default function PeerPage() {
   if (loading && !data) return <Loading />;
   if (!data) return null;
   // Times as the institution keeps them, wherever the phone is set.
-  const day = (d: string) => new Date(d).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short", timeZone: data.timeZone });
+  const day = (d: string) => new Date(d).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short", timeZone: data.timeZone });
   async function cancelRequest() {
     setData(await api<Peer>("/student/peer/request/cancel", { body: {} }));
   }

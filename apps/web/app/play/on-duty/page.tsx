@@ -9,7 +9,7 @@ import {
 } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, fetchObjectUrl, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface Request {
   id: string;
@@ -236,7 +236,7 @@ function Item({ r, onChange }: { r: Request; onChange: (d: OnDuty) => void }) {
   const locale = useLocale();
   const [msg, setMsg] = useState<string | null>(null);
   const day = new Date(`${r.date}T00:00:00Z`).toLocaleDateString(
-    locale === "hi" ? "hi-IN" : "en-IN",
+    intlLocale(locale),
     { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" },
   );
   async function letter() {

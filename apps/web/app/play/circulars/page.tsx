@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface Circular {
   id: string;
@@ -27,7 +27,7 @@ export default function CircularsPage() {
   const [msg, setMsg] = useState<string | null>(null);
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
-  const fmt = (d: string | Date) => new Date(d).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short", year: "numeric" });
+  const fmt = (d: string | Date) => new Date(d).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short", year: "numeric" });
 
   async function ack(id: string) {
     setBusy(id);

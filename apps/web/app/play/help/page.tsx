@@ -6,7 +6,7 @@ import { Suspense, useState, type FormEvent } from "react";
 import { HELP_CATEGORIES, RECORD_FIELDS, type HelpCategory, type RecordField } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 type Status = "open" | "answered" | "closed";
 interface Thread {
@@ -100,7 +100,7 @@ function ThreadView({ id }: { id: string }) {
   const [msg, setMsg] = useState<string | null>(null);
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
-  const fmt = (d: string) => new Date(d).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const fmt = (d: string) => new Date(d).toLocaleString(intlLocale(locale), { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
   async function call(path: "reply" | "close") {
     setBusy(true);
     setMsg(null);

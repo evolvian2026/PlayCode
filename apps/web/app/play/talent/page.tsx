@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 type CompanyType = "service" | "product";
 
@@ -44,7 +44,7 @@ export default function TalentPage() {
 
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
-  const fmt = (iso: string) => new Date(iso).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" });
+  const fmt = (iso: string) => new Date(iso).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" });
 
   async function save(discoverable: boolean) {
     if (!discoverable && !window.confirm(t("Leave the talent pool? Companies will no longer find you; invitations you already have stay here."))) return;

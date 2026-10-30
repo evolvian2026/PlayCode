@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 type Result = "selected" | "not_selected" | "awaiting";
 interface Experience {
@@ -229,7 +229,7 @@ function ReadView({ company }: { company: string | null }) {
               <article key={e.id} className="card stack" style={{ gap: 8 }}>
                 <div className="spread wrap" style={{ gap: 8 }}>
                   <div className="small muted">
-                    {e.roleTitle} · {new Date(`${e.driveDate}T12:00:00`).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { month: "short", year: "numeric" })} · {e.author ?? t("Anonymous")}
+                    {e.roleTitle} · {new Date(`${e.driveDate}T12:00:00`).toLocaleDateString(intlLocale(locale), { month: "short", year: "numeric" })} · {e.author ?? t("Anonymous")}
                   </div>
                   <div className="row" style={{ gap: 6 }}>
                     <span className="pill">{t(DIFFICULTY[e.difficulty]!)}</span>

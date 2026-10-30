@@ -4,7 +4,7 @@ import { useState } from "react";
 import { PANEL_KINDS, type PanelKind, type PanelRecommendation } from "@playcode/core";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface Slot {
   id: string;
@@ -34,7 +34,7 @@ export default function PanelInterviews() {
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
 
-  const fmt = (iso: string, opts: Intl.DateTimeFormatOptions) => new Date(iso).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", opts);
+  const fmt = (iso: string, opts: Intl.DateTimeFormatOptions) => new Date(iso).toLocaleString(intlLocale(locale), opts);
   const day = (iso: string) => fmt(iso, { weekday: "long", day: "numeric", month: "short" });
   const time = (iso: string) => fmt(iso, { hour: "numeric", minute: "2-digit" });
   async function act(path: string, id: string) {

@@ -5,7 +5,7 @@ import { useState, type FormEvent } from "react";
 import { formatLpa, localDate, OUTCOME_KINDS, QUALIFYING_EXAMS, type OutcomeKind } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 type Status = "pending" | "verified" | "rejected";
 interface Outcome {
@@ -119,7 +119,7 @@ export default function OutcomesPage() {
   const [msg, setMsg] = useState<string | null>(null);
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
-  const fmt = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short", year: "numeric" });
+  const fmt = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short", year: "numeric" });
 
   async function remove(o: Outcome) {
     if (!window.confirm(t("Withdraw this report?"))) return;

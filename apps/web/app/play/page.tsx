@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { DIVISION_LABELS, type Division } from "@playcode/core";
 import { useMe } from "@/components/Auth";
 import { Icon } from "@/components/Icon";
@@ -12,7 +12,7 @@ import type { EventItem } from "@/components/Events";
 import { startAndOpen, type StartInput } from "@/lib/start";
 import { startFor, type StudyPlan } from "@/lib/plan";
 import type { ProfileSummary, StudentPath } from "@/lib/types";
-import { useLocale, useT, type Translate } from "@/lib/i18n";
+import { intlLocale, type Translate, useLocale, useT } from "@/lib/i18n";
 import { unsyncedAnswers } from "@/lib/offline";
 
 interface Home {
@@ -59,7 +59,7 @@ function PlacementCard({ drives }: { drives: PlacementDrive[] }) {
         <b>{open.length ? t("{n} drives open for you", { n: open.length }) : t("{n} applications in progress", { n: inProgress })}</b>
         {open[0] && (
           <div className="small muted">
-            {t("Next: {company}, register by {when}", { company: open[0].company, when: new Date(open[0].registerBy).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" }) })}
+            {t("Next: {company}, register by {when}", { company: open[0].company, when: new Date(open[0].registerBy).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" }) })}
           </div>
         )}
       </div>
@@ -136,7 +136,7 @@ function TrainingCard() {
         <div className="small muted">
           {open
             ? t("Type the code shown in {place}.", { place: open.location })
-            : `${new Date(next!.startsAt).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "short", hour: "numeric", minute: "2-digit" })} · ${next!.location}`}
+            : `${new Date(next!.startsAt).toLocaleString(intlLocale(locale), { weekday: "short", hour: "numeric", minute: "2-digit" })} · ${next!.location}`}
         </div>
       </div>
       <Icon name="arrow" />
@@ -214,7 +214,45 @@ function ContestCard() {
   );
 }
 
+/** For a graduate: no practice, just what's still theirs and what's asked of them. */
+function GraduateHome() {
+  const me = useMe();
+  const t = useT();
+  const locale = useLocale();
+  const { data } = useApi<{ alumni?: { choice: string | null }; survey?: { done: boolean } }>("/student/graduation");
+  const toDo = data ? Number(!data.alumni?.choice) + Number(!data.survey?.done) : 0;
+  const since = new Date(me.graduatedAt!).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "long", year: "numeric" });
+  const card = (href: string, title: string, sub: string, extra?: ReactNode) => (
+    <Link href={href} className="card spread" style={{ color: "inherit" }}>
+      <div>
+        <b>{title}</b> {extra}
+        <div className="small muted">{sub}</div>
+      </div>
+      <Icon name="arrow" />
+    </Link>
+  );
+  return (
+    <div className="stack">
+      <div>
+        <h1>{t("Hi {name}", { name: me.user.name.split(" ")[0]! })}</h1>
+        <p className="muted" style={{ margin: 0 }}>
+          {t("Graduated on {date}. Practice is closed, but your record stays here.", { date: since })}
+        </p>
+      </div>
+      {card("/play/graduated", t("Alumni list and exit survey"), t("Help juniors, and tell the placement cell how it went"), toDo > 0 ? <span className="pill warn">{t("{n} to do", { n: toDo })}</span> : null)}
+      {card("/play/resume", t("My resume"), t("Download it, or share your verified public profile"))}
+      {card("/play/placements", t("Placements"), t("Your offers, and where joining stands"))}
+      {card("/play/me", t("Certificates"), t("Certificates you earned, with links that prove they're genuine"))}
+    </div>
+  );
+}
+
 export default function PlayHome() {
+  const me = useMe();
+  return me.graduatedAt ? <GraduateHome /> : <StudentHome />;
+}
+
+function StudentHome() {
   const me = useMe();
   const t = useT();
   const router = useRouter();

@@ -6,7 +6,7 @@ import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { INTERVIEW_TRACK_LABELS, interviewDimensions, type InterviewTrack } from "@playcode/core";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 import { speak, speechInputSupported, speechOutputSupported, stopSpeaking, useDictation } from "@/lib/speech";
 import { startAndOpen } from "@/lib/start";
 
@@ -410,7 +410,7 @@ function InterviewHome() {
               <span>
                 {t(INTERVIEW_TRACK_LABELS[iv.track])}
                 {iv.mode === "voice" ? ` · ${t("spoken")}` : ""}{" "}
-                <span className="small muted">· {new Date(iv.startedAt).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" })}</span>
+                <span className="small muted">· {new Date(iv.startedAt).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" })}</span>
               </span>
               {iv.overall ? <span className="pill">{iv.overall}/5</span> : <span className="small muted">{t(iv.status === "active" ? "In progress" : "Not scored")}</span>}
             </button>

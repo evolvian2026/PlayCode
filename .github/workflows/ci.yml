@@ -45,6 +45,8 @@ jobs:
       # Fails on high or critical advisories.
       - run: pnpm audit --audit-level high
       - run: pnpm typecheck
+      # Translations keep the {placeholders} of their English text.
+      - run: pnpm --filter @playcode/web i18n:check
       # Runs every bundled question's code to prove its stated answer.
       - run: pnpm verify:content
       - run: pnpm test

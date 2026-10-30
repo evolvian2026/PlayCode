@@ -7,7 +7,7 @@ import { fixedShare, formatLpa, INTERVIEW_FEEDBACK_DIMENSIONS, JOINING_STATUSES,
 import { Icon } from "@/components/Icon";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 import { startAndOpen } from "@/lib/start";
 
 interface Drive {
@@ -104,7 +104,7 @@ function Joining({ drive, joining, onChange }: { drive: Drive; joining: NonNulla
     <div className="stack" style={{ gap: 6, background: "var(--surface-2)", padding: "8px 10px", borderRadius: 8 }}>
       <div className="small" style={{ fontWeight: 600 }}>
         {joining.status === "joined"
-          ? t("Joined on {date}", { date: new Date(`${joining.joiningDate}T00:00:00`).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short", year: "numeric" }) })
+          ? t("Joined on {date}", { date: new Date(`${joining.joiningDate}T00:00:00`).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short", year: "numeric" }) })
           : t("Where does your offer stand?")}
       </div>
       <div className="row wrap" style={{ gap: 6, alignItems: "flex-end" }}>
@@ -224,7 +224,7 @@ function Updates({ updates }: { updates: { body: string; at: string }[] }) {
       </div>
       {shown.map((u) => (
         <div key={u.at + u.body} className="small">
-          <span className="muted">{new Date(u.at).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</span>
+          <span className="muted">{new Date(u.at).toLocaleString(intlLocale(locale), { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</span>
           <div style={{ whiteSpace: "pre-wrap" }}>{u.body}</div>
         </div>
       ))}
@@ -297,7 +297,7 @@ function DriveCard({ drive, experiences, onChange }: { drive: Drive; experiences
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fmt = (d: Date) => d.toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" });
+  const fmt = (d: Date) => d.toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" });
   const app = drive.application;
 
   async function call(action: "register" | "withdraw" | "accept" | "decline") {
@@ -361,7 +361,7 @@ function DriveCard({ drive, experiences, onChange }: { drive: Drive; experiences
             </>
           ) : app.decideBy && new Date(app.decideBy) > new Date() ? (
             <>
-              <div className="small">{t("Accept or decline by {date}. If you don't answer, it's taken as accepted.", { date: new Date(app.decideBy).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) })}</div>
+              <div className="small">{t("Accept or decline by {date}. If you don't answer, it's taken as accepted.", { date: new Date(app.decideBy).toLocaleString(intlLocale(locale), { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) })}</div>
               <div className="row wrap">
                 <button className="btn primary small" disabled={busy} onClick={() => call("accept")}>
                   {t("Accept offer")}
@@ -381,7 +381,7 @@ function DriveCard({ drive, experiences, onChange }: { drive: Drive; experiences
             .map((s) => (
               <div key={`${s.round}-${s.startsAt}`} className="small">
                 <b>
-                  {s.round}: {new Date(s.startsAt).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                  {s.round}: {new Date(s.startsAt).toLocaleString(intlLocale(locale), { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
                 </b>
                 <div>
                   {s.panel.name}
@@ -399,8 +399,8 @@ function DriveCard({ drive, experiences, onChange }: { drive: Drive; experiences
             <b>{t("{round} on PlayCode: {title}", { round: app.test.round, title: app.test.title })}</b>
             <div>
               {new Date(app.test.openAt) > new Date()
-                ? t("Opens {date}", { date: new Date(app.test.openAt).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) })
-                : t("Open until {date}", { date: new Date(app.test.closeAt).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) })}
+                ? t("Opens {date}", { date: new Date(app.test.openAt).toLocaleString(intlLocale(locale), { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) })
+                : t("Open until {date}", { date: new Date(app.test.closeAt).toLocaleString(intlLocale(locale), { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) })}
             </div>
           </div>
           {new Date(app.test.openAt) <= new Date() && (

@@ -51,7 +51,8 @@ export function GraduateBanner() {
   const me = useMe();
   const t = useT();
   const path = usePathname();
-  if (!me.graduatedAt || path === "/play/graduated") return null;
+  // The graduate home and the graduation page already say it.
+  if (!me.graduatedAt || path === "/play/graduated" || path === "/play") return null;
   return (
     <div role="status" className="card tight small" style={{ background: "var(--accent-soft)", borderColor: "transparent", marginBottom: 12 }}>
       {t("You've graduated, so practice is closed. Your resume and records stay here for you.")} <Link href="/play/graduated">{t("Alumni list and exit survey")}</Link>

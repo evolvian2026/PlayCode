@@ -2,7 +2,7 @@
 
 import { ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface Mine {
   doubts: { id: string; stem: string; text: string; status: "open" | "answered" | "closed"; answer: string | null; createdAt: string; answeredAt: string | null }[];
@@ -14,7 +14,7 @@ export default function MyDoubts() {
   const { data, error, loading, reload } = useApi<Mine>("/student/doubts");
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
-  const date = (iso: string) => new Date(iso).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" });
+  const date = (iso: string) => new Date(iso).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" });
   return (
     <div className="stack">
       <h1 style={{ margin: 0 }}>{t("My doubts")}</h1>

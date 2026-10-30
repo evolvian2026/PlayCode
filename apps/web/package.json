@@ -8,7 +8,8 @@
     "start": "next start -p 3000",
     "typecheck": "tsc --noEmit",
     "test": "echo \"web: no unit tests yet\"",
-    "a11y": "node scripts/a11y.mjs"
+    "a11y": "node scripts/a11y.mjs",
+    "i18n:check": "node --no-warnings --experimental-strip-types scripts/i18n-check.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "6.11.1",

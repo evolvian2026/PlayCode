@@ -117,6 +117,8 @@ describe("nudges and notifications", () => {
     // Interface language is saved on the account and comes back with /me.
     expect((await t.put(s, "/student/settings", { locale: "hi" })).body.locale).toBe("hi");
     expect((await t.get(s, "/me")).body.user.locale).toBe("hi");
+    expect((await t.put(s, "/student/settings", { locale: "ta" })).body.locale).toBe("ta");
+    expect((await t.get(s, "/me")).body.user.locale).toBe("ta");
     expect((await t.put(s, "/student/settings", { locale: "fr" })).status).toBe(400);
     const admin = await t.login("admin@demo.edu");
     expect((await t.put(admin, "/console/settings/nudges", { enabled: false })).body.enabled).toBe(false);

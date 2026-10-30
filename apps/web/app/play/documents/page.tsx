@@ -4,7 +4,7 @@ import { useState, type ChangeEvent } from "react";
 import { DOCUMENT_TYPES, MAX_DOCUMENT_BYTES } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, fetchObjectUrl, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 type Status = "pending" | "verified" | "rejected";
 interface Request {
@@ -72,7 +72,7 @@ export default function DocumentsPage() {
   const [msg, setMsg] = useState<string | null>(null);
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
-  const fmt = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" });
+  const fmt = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" });
 
   async function view(id: string) {
     setMsg(null);

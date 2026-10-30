@@ -5,7 +5,7 @@ import { useState } from "react";
 import { CALENDAR_KINDS, type CalendarEvent } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface Data {
   events: CalendarEvent[];
@@ -101,7 +101,7 @@ export default function CalendarPage() {
   const { data, error, loading, reload } = useApi<Data>("/student/calendar");
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
-  const lang = locale === "hi" ? "hi-IN" : "en-IN";
+  const lang = intlLocale(locale);
   const dayOf = (e: CalendarEvent) => (e.allDay ? e.start : new Date(e.start).toLocaleDateString("en-CA"));
   const days = new Map<string, CalendarEvent[]>();
   for (const e of data.events) days.set(dayOf(e), [...(days.get(dayOf(e)) ?? []), e]);

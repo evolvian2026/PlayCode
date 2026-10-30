@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import { CodeBlock } from "@/components/CodeBlock";
 import { ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface List {
   tests: { id: string; title: string; score: number; marks: number; pct: number; enteredAt: string }[];
@@ -98,7 +98,7 @@ function ClassTests() {
           <button key={x.id} className="card spread" style={{ textAlign: "left", cursor: "pointer", color: "inherit", font: "inherit" }} onClick={() => router.push(`/play/class-tests?id=${x.id}`)}>
             <div>
               <b>{x.title}</b>
-              <div className="small muted">{new Date(x.enteredAt).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short", year: "numeric" })}</div>
+              <div className="small muted">{new Date(x.enteredAt).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short", year: "numeric" })}</div>
             </div>
             <span className={`pill ${x.pct >= 70 ? "good" : x.pct >= 40 ? "warn" : "bad"}`}>
               {x.score}/{x.marks}

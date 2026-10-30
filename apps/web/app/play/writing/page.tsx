@@ -5,7 +5,7 @@ import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { countWords, WRITING_DIMENSIONS, WRITING_KINDS, wordLimitStatus, type WritingKind, type WritingTask } from "@playcode/core";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface Feedback {
   scores: Record<string, number>;
@@ -316,7 +316,7 @@ function WritingHome() {
           {d.attempts.map((a) => (
             <button key={a.id} className="spread" style={{ all: "unset", cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 8 }} onClick={() => router.push(`/play/writing?id=${a.id}`)}>
               <span>
-                {a.title} <span className="small muted">· {new Date(a.createdAt).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" })}</span>
+                {a.title} <span className="small muted">· {new Date(a.createdAt).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" })}</span>
               </span>
               <span className="pill">{a.overall}/5</span>
             </button>

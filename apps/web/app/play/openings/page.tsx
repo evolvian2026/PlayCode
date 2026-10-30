@@ -6,7 +6,7 @@ import { Suspense, useState } from "react";
 import type { OpeningKind, OpeningResponse } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface Opening {
   id: string;
@@ -28,7 +28,7 @@ function Card({ o, highlight, onChange }: { o: Opening; highlight: boolean; onCh
   const locale = useLocale();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const by = new Date(`${o.closesOn}T00:00:00`).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" });
+  const by = new Date(`${o.closesOn}T00:00:00`).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" });
   async function answer(response: OpeningResponse | null) {
     setBusy(true);
     setError(null);

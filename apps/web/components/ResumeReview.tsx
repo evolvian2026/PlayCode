@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ErrorBox } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 export interface Check {
   section: string;
@@ -57,7 +57,7 @@ export function ResumeReview({ checks, score, onChange }: { checks: Check[]; sco
       setMsg(errorMessage(e));
     }
   }
-  const when = (d: string) => new Date(d).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" });
+  const when = (d: string) => new Date(d).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" });
   return (
     <section className="card stack" aria-labelledby="h-review">
       <div className="spread wrap" style={{ gap: 8 }}>

@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { ATTENDANCE_TARGET_PCT, FEEDBACK_DIMENSIONS, type FeedbackDimension, type TrainingKind } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface Session {
   id: string;
@@ -150,7 +150,7 @@ export default function TrainingPage() {
   const locale = useLocale();
   const { data, error, loading, reload } = useApi<Mine>("/student/training");
   const [done, setDone] = useState<string | null>(null);
-  const fmt = (d: string) => new Date(d).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const fmt = (d: string) => new Date(d).toLocaleString(intlLocale(locale), { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
   const pct = data.attendancePct;

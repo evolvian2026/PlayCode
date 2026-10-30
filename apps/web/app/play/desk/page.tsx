@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface DeskRow {
   id: string;
@@ -36,7 +36,7 @@ function DeskView({ id }: { id: string }) {
   if (error) return <ErrorBox message={error.message} onRetry={reload} />;
   if (loading && !data) return <Loading />;
   if (!data) return null;
-  const time = (d: string) => new Date(d).toLocaleTimeString(locale === "hi" ? "hi-IN" : "en-IN", { hour: "numeric", minute: "2-digit" });
+  const time = (d: string) => new Date(d).toLocaleTimeString(intlLocale(locale), { hour: "numeric", minute: "2-digit" });
   async function mark(userId: string, reported: boolean) {
     setBusy(userId);
     setMsg(null);
@@ -112,7 +112,7 @@ function Desks() {
   if (id) return <DeskView key={id} id={id} />;
   if (error) return <ErrorBox message={error.message} onRetry={reload} />;
   if (loading && !data) return <Loading />;
-  const day = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "short", day: "numeric", month: "short" });
+  const day = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(intlLocale(locale), { weekday: "short", day: "numeric", month: "short" });
   return (
     <div className="stack">
       <div>

@@ -8,9 +8,9 @@ import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
 import { startAndOpen } from "@/lib/start";
 import type { StudentPath, StudentPathStep } from "@/lib/types";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
-const due = (s: StudentPathStep, locale: string) => (s.dueAt ? new Date(s.dueAt).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" }) : null);
+const due = (s: StudentPathStep, locale: string) => (s.dueAt ? new Date(s.dueAt).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" }) : null);
 
 function StepRow({ step, onStart, busy }: { step: StudentPathStep; onStart: () => void; busy: boolean }) {
   const t = useT();

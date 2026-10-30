@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 import { startFor, type PlanDayView, type StudyPlan } from "@/lib/plan";
 import { startAndOpen } from "@/lib/start";
 
@@ -86,7 +86,7 @@ export default function PlanPage() {
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
   const plan = data.plan;
-  const fmt = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "short", day: "numeric", month: "short" });
+  const fmt = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(intlLocale(locale), { weekday: "short", day: "numeric", month: "short" });
 
   async function remove() {
     if (!window.confirm(t("Remove your study plan?"))) return;

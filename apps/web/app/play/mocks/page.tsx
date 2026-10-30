@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Bar, ErrorBox, Loading, masteryTone } from "@/components/ui";
 import { api, ApiError, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface MocksResponse {
   patterns: { id: string; name: string; description: string; minutes: number; sections: { title: string; minutes: number; count: number; kind: "quick" | "coding" }[] }[];
@@ -94,7 +94,7 @@ export default function MockTests() {
               <Link key={a.id} href={`/play/mocks/${a.id}`} className="stack" style={{ color: "inherit", gap: 4 }}>
                 <div className="spread small">
                   <span>
-                    <b>{t(nameOf(a.pattern))}</b> · {new Date(a.startedAt).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" })}
+                    <b>{t(nameOf(a.pattern))}</b> · {new Date(a.startedAt).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" })}
                   </span>
                   <span>{a.pct}%</span>
                 </div>

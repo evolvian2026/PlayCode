@@ -144,7 +144,7 @@ export async function engageRoutes(app: FastifyInstance) {
     return { phone: u?.phone ?? null, whatsapp: u?.prefs.whatsapp !== false, locale: u?.locale ?? "en" };
   });
   app.put("/student/settings", { preHandler: requirePermission("practice.play") }, async (req) => {
-    const body = parse(z.object({ phone: z.string().regex(/^\+?\d[\d\s-]{8,16}$/).nullable().optional(), whatsapp: z.boolean().optional(), locale: z.enum(["en", "hi"]).optional() }), req.body);
+    const body = parse(z.object({ phone: z.string().regex(/^\+?\d[\d\s-]{8,16}$/).nullable().optional(), whatsapp: z.boolean().optional(), locale: z.enum(["en", "hi", "ta"]).optional() }), req.body);
     const set: Partial<typeof users.$inferInsert> = {};
     if (body.phone !== undefined) set.phone = body.phone ? body.phone.replace(/[^\d+]/g, "") : null;
     if (body.whatsapp !== undefined) {

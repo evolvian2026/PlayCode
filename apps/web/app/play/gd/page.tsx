@@ -5,7 +5,7 @@ import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { GD_DIMENSIONS, GD_TOPIC_KINDS, type GdParticipation, type GdPersona, type GdSpeaker, type GdTopic } from "@playcode/core";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 import { speakInTurn, speechInputSupported, speechOutputSupported, stopSpeaking, useDictation } from "@/lib/speech";
 
 interface Scorecard {
@@ -381,7 +381,7 @@ function GdHome() {
           {d.discussions.map((g) => (
             <button key={g.id} className="spread" style={{ all: "unset", cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 8 }} onClick={() => router.push(`/play/gd?id=${g.id}`)}>
               <span>
-                {g.topic.title} <span className="small muted">· {new Date(g.startedAt).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" })}</span>
+                {g.topic.title} <span className="small muted">· {new Date(g.startedAt).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" })}</span>
               </span>
               {g.overall ? <span className="pill">{g.overall}/5</span> : <span className="small muted">{t(g.status === "active" ? "In progress" : "Not scored")}</span>}
             </button>

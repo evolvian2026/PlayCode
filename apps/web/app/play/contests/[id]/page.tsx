@@ -9,7 +9,7 @@ import { draftToResponse, emptyDraft, QuestionInput, type Draft } from "@/compon
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { STATE_LABEL, type BoardRow } from "@/lib/contests";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 import type { Evaluation, QuestionView } from "@/lib/types";
 
 interface ContestView {
@@ -136,7 +136,7 @@ export default function ContestPage() {
   const problem = data.problems[tab];
   const question = problem?.question ? ({ ...problem.question, hintsUsed: 0, coachUsed: 0 } as QuestionView) : null;
   const draft = question ? (drafts[question.id] ?? emptyDraft(question)) : null;
-  const fmt = (iso: string) => new Date(iso).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const fmt = (iso: string) => new Date(iso).toLocaleString(intlLocale(locale), { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 
   async function send(kind: "run" | "submit") {
     if (!question || !draft) return;
@@ -273,7 +273,7 @@ export default function ContestPage() {
               <ul className="small" style={{ margin: "8px 0 0", paddingLeft: 18 }}>
                 {data.submissions.map((s) => (
                   <li key={s.id}>
-                    {s.letter} · {t(VERDICT_LABELS[s.verdict])} · {s.passed}/{s.total} · {s.upsolve ? `${t("practice")} · ` : ""} {new Date(s.at).toLocaleTimeString(locale === "hi" ? "hi-IN" : "en-IN", { hour: "numeric", minute: "2-digit" })}
+                    {s.letter} · {t(VERDICT_LABELS[s.verdict])} · {s.passed}/{s.total} · {s.upsolve ? `${t("practice")} · ` : ""} {new Date(s.at).toLocaleTimeString(intlLocale(locale), { hour: "numeric", minute: "2-digit" })}
                   </li>
                 ))}
               </ul>

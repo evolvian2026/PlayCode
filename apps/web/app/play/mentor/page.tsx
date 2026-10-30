@@ -3,7 +3,7 @@
 import { MEETING_MODES, type MeetingMode } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface Data {
   mentor: { name: string; email: string } | null;
@@ -16,7 +16,7 @@ export default function MentorPage() {
   const { data, error, loading, reload } = useApi<Data>("/student/mentor");
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
-  const fmt = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short", year: "numeric" });
+  const fmt = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short", year: "numeric" });
   return (
     <div className="stack">
       <h1 style={{ margin: 0 }}>{t("My mentor")}</h1>

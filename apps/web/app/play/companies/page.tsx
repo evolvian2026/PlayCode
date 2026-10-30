@@ -6,7 +6,7 @@ import { Suspense, useState } from "react";
 import { COMPANY_TYPE_LABELS, formatLpa, type CompanyType } from "@playcode/core";
 import { ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 import { startAndOpen } from "@/lib/start";
 
 interface Company {
@@ -42,7 +42,7 @@ function CompanyView({ name }: { name: string }) {
   const [startError, setStartError] = useState<string | null>(null);
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
-  const fmt = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { month: "short", year: "numeric" });
+  const fmt = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(intlLocale(locale), { month: "short", year: "numeric" });
   const open = data.drives.find((d) => d.open);
   const gap = data.readiness.selectedMedian === null ? null : data.readiness.selectedMedian - data.readiness.mine;
   return (
@@ -159,7 +159,7 @@ function CompanyList() {
               <div className="small muted">
                 {t(c.offers === 1 ? "1 offer" : "{n} offers", { n: c.offers })}
                 {c.experiences ? ` · ${t(c.experiences === 1 ? "1 experience" : "{n} experiences", { n: c.experiences })}` : ""}
-                {c.openDrive ? ` · ${t("register by {date}", { date: new Date(c.openDrive.registerBy).toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" }) })}` : ""}
+                {c.openDrive ? ` · ${t("register by {date}", { date: new Date(c.openDrive.registerBy).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" }) })}` : ""}
               </div>
             </div>
             {c.openDrive ? <span className="pill accent">{t("Open")}</span> : <span aria-hidden="true">→</span>}

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
 import { STATE_LABEL } from "@/lib/contests";
-import { useLocale, useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface ContestRow {
   id: string;
@@ -23,7 +23,7 @@ export default function ContestsPage() {
   const { data, error, loading, reload } = useApi<{ contests: ContestRow[] }>("/student/contests");
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
-  const fmt = (iso: string) => new Date(iso).toLocaleString(locale === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const fmt = (iso: string) => new Date(iso).toLocaleString(intlLocale(locale), { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
   return (
     <div className="stack">
       <h1 style={{ margin: 0 }}>{t("Coding contests")}</h1>
