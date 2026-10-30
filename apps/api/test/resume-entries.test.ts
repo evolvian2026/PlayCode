@@ -39,7 +39,7 @@ describe("projects and internships", () => {
     expect((await t.post(riya, `/student/resume/entries/${project}/verify`, {})).status).toBe(400);
     expect((await t.post(riya, `/student/resume/entries/${internship}/verify`, {})).body.entries[0].verification).toBe("requested");
     expect((await t.post(riya, `/student/resume/entries/${internship}/verify`, {})).status).toBe(409);
-    const queue = (await t.get(tpo, "/console/internships")).body;
+    const queue = (await t.get(tpo, "/console/internships?kind=internship")).body;
     expect(queue.entries).toEqual([expect.objectContaining({ id: internship, student: expect.objectContaining({ name: "Riya Kapoor" }) })]);
     expect((await t.post(tpo, `/console/internships/${internship}/review`, { verify: false })).status).toBe(400);
     await t.post(tpo, `/console/internships/${internship}/review`, { verify: true });

@@ -7,7 +7,7 @@ import { browseAlumni, createAlumnus, decideIntro, deleteAlumnus, introQueue, li
 import { myReview, requestReview, resolveComment, reviewDetail, reviewQueue, submitReview, withdrawReview } from "../services/resume-review";
 
 const idParam = z.object({ id: z.string().uuid() });
-const sections = z.enum(["headline", "about", "education", "projects", "internships", "skills", "links", "overall"]);
+const sections = z.enum(["headline", "about", "education", "projects", "internships", "certifications", "skills", "links", "overall"]);
 
 /** Resume reviews and alumni connect. */
 export async function resumeReviewRoutes(app: FastifyInstance) {

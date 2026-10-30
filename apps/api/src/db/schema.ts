@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, OnDutyPart, OnDutyReason, OnDutyStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -2512,3 +2512,31 @@ export const staffDigests = pgTable("staff_digests", {
   enabled: boolean("enabled").notNull().default(true),
   lastWeek: text("last_week"),
 });
+
+// ---------- On duty ----------
+
+/** A student away from class for a drive, an off-campus interview or a placement event, approved by the placement cell. */
+export const onDutyRequests = pgTable(
+  "on_duty_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    /** The day away from class, "2026-11-20". */
+    date: text("date").notNull(),
+    part: text("part").$type<OnDutyPart>().notNull(),
+    reason: text("reason").$type<OnDutyReason>().notNull(),
+    driveId: uuid("drive_id").references(() => placementDrives.id, { onDelete: "set null" }),
+    openingId: uuid("opening_id").references(() => placementOpenings.id, { onDelete: "set null" }),
+    /** What it is for, fixed when asked (the company and role, or the student's own words). */
+    purpose: text("purpose").notNull(),
+    detail: text("detail").notNull().default(""),
+    status: text("status").$type<OnDutyStatus>().notNull().default("pending"),
+    /** Why it was declined, or "Reported at the drive desk" when approved without waiting. */
+    note: text("note"),
+    decidedBy: uuid("decided_by"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("on_duty_user_idx").on(t.userId, t.date), index("on_duty_tenant_idx").on(t.tenantId, t.date)],
+);

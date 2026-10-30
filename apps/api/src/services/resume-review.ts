@@ -27,6 +27,7 @@ export function checksFor(r: ResumeData) {
     academic: r.academic,
     projects: r.projects,
     internships: r.internships,
+    certifications: r.certifications,
     skills: r.skills.length,
   });
   return { checks: checks.map((c) => ({ ...c, sectionLabel: RESUME_SECTIONS[c.section] })), score: resumeScore(checks) };

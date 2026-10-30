@@ -33,7 +33,10 @@ export function correctionError(field: RecordField, value: number): string | nul
 
 // ---------- Projects and internships ----------
 
-export type ResumeEntryKind = "project" | "internship";
+export type ResumeEntryKind = "project" | "internship" | "certification";
+
+/** Kinds the college can verify: an internship against its letter, a certification against its credential. */
+export const VERIFIABLE_KINDS: ResumeEntryKind[] = ["internship", "certification"];
 
 /** "2026-05" style months; an entry ends after it starts, and not in the future. */
 export function entryDatesError(start: string, end: string | null, thisMonth: string): string | null {
@@ -52,4 +55,10 @@ export function entryPeriod(start: string, end: string | null): string {
   };
   if (end === null) return `since ${fmt(start)}`;
   return start === end ? fmt(start) : `${fmt(start)} to ${fmt(end)}`;
+}
+
+/** A certification: "May 2026", or "May 2026, valid until Jul 2029" when it lapses. */
+export function certificationPeriod(earned: string, validUntil: string | null): string {
+  const one = entryPeriod(earned, earned);
+  return validUntil ? `${one}, valid until ${entryPeriod(validUntil, validUntil)}` : one;
 }

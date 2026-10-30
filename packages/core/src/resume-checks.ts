@@ -1,7 +1,7 @@
 // What makes a campus resume work, checked automatically, and the sections
 // a reviewer comments on.
 
-export type ResumeSection = "headline" | "about" | "education" | "projects" | "internships" | "skills" | "links" | "overall";
+export type ResumeSection = "headline" | "about" | "education" | "projects" | "internships" | "certifications" | "skills" | "links" | "overall";
 
 export const RESUME_SECTIONS: Record<ResumeSection, string> = {
   headline: "Headline",
@@ -9,6 +9,7 @@ export const RESUME_SECTIONS: Record<ResumeSection, string> = {
   education: "Education",
   projects: "Projects",
   internships: "Internships",
+  certifications: "Certifications",
   skills: "Skills and practice",
   links: "Links",
   overall: "Overall",
@@ -21,6 +22,7 @@ export interface ResumeForCheck {
   academic: { cgpa: number | null } | null;
   projects: { title: string; description: string; link: string | null }[];
   internships: { title: string; description: string; verified: boolean }[];
+  certifications?: { title: string; link: string | null; verified: boolean }[];
   skills: number;
 }
 
@@ -49,6 +51,9 @@ export function resumeChecks(r: ResumeForCheck): ResumeCheck[] {
     if (!r.projects.some((p) => p.link) && !r.links.github) add("links", "tip", "Link the code: a GitHub link on a project or your profile.");
   }
   if (r.internships.some((i) => !i.verified)) add("internships", "tip", "Ask your placement cell to verify your internship; verified ones say so on the resume.");
+  const certs = r.certifications ?? [];
+  if (certs.some((c) => !c.link)) add("certifications", "tip", "Add the credential link to each certification, so a recruiter can check it.");
+  else if (certs.some((c) => !c.verified)) add("certifications", "tip", "Ask your placement cell to verify your certification against its credential.");
   if (!r.links.linkedin) add("links", "tip", "Add your LinkedIn profile.");
   if (r.skills === 0) add("skills", "tip", "Practise until some skills show as mastered; they appear on the resume by themselves.");
   return out;

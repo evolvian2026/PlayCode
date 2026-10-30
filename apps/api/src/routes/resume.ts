@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
-import { addEntry, decideVerification, deleteEntry, myEntries, requestVerification, updateEntry, verificationQueue } from "../services/resume-entries";
+import { addEntry, certificationSummary, decideVerification, deleteEntry, myEntries, requestVerification, updateEntry, verificationQueue } from "../services/resume-entries";
 import { getOwnProfile, renderResumePdf, resumeData, saveProfile, setPublic } from "../services/resume";
 import { checksFor } from "../services/resume-review";
 
@@ -44,7 +44,7 @@ export async function resumeRoutes(app: FastifyInstance) {
 }
 
 const entryBody = z.object({
-  kind: z.enum(["project", "internship"]),
+  kind: z.enum(["project", "internship", "certification"]),
   title: z.string().trim().min(2, "Give it a title").max(120),
   organisation: z.string().trim().max(120).default(""),
   startMonth: z.string(),
@@ -54,7 +54,7 @@ const entryBody = z.object({
 });
 const entryId = z.object({ id: z.string().uuid() });
 
-/** Projects and internships: students add them; staff verify internships (under /console). */
+/** Projects, internships and certifications: students add them; staff verify internships and certifications (under /console). */
 export async function resumeEntryRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
   const play = requirePermission("practice.play");
@@ -67,9 +67,12 @@ export async function resumeEntryRoutes(app: FastifyInstance) {
   app.delete("/student/resume/entries/:id", { preHandler: play }, async (req) => deleteEntry(db, ctx(req), parse(entryId, req.params).id));
   app.post("/student/resume/entries/:id/verify", { preHandler: play }, async (req) => requestVerification(db, ctx(req), parse(entryId, req.params).id));
 
-  app.get("/console/internships", { preHandler: staff }, async (req) =>
-    verificationQueue(db, { ...req.auth, tenantId: tenantOf(req) }, parse(z.object({ status: z.enum(["requested", "verified", "rejected"]).default("requested") }), req.query).status),
-  );
+  app.get("/console/internships", { preHandler: staff }, async (req) => {
+    const q = parse(z.object({ status: z.enum(["requested", "verified", "rejected"]).default("requested"), kind: z.enum(["internship", "certification"]).optional() }), req.query);
+    const auth = { ...req.auth, tenantId: tenantOf(req) };
+    const [queue, summary] = await Promise.all([verificationQueue(db, auth, q.status, q.kind), certificationSummary(db, auth)]);
+    return { ...queue, certifications: summary };
+  });
   app.post("/console/internships/:id/review", { preHandler: staff }, async (req) => {
     const decision = parse(z.object({ verify: z.boolean(), note: z.string().max(1000).nullable().default(null) }), req.body);
     return decideVerification(db, { ...req.auth, tenantId: tenantOf(req) }, parse(entryId, req.params).id, decision, app.now());

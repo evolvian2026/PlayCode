@@ -119,6 +119,8 @@ export async function resumeData(db: Db, userId: string, now: Date) {
     mockInterview: latest?.scorecard ? { track: latest.track, overall: latest.scorecard.overall, scores: latest.scorecard.scores, at: latest.finishedAt } : null,
     /** What the student wrote about their internships and projects; verified internships say so. */
     internships: entries.entries.filter((e) => e.kind === "internship").map(({ title, organisation, period, description, link, verification }) => ({ title, organisation, period, description, link, verified: verification === "verified" })),
+    /** Certifications from outside (NPTEL, AWS, Coursera); verified ones were checked against their credential. */
+    certifications: entries.entries.filter((e) => e.kind === "certification").map(({ title, organisation, period, description, link, verification }) => ({ title, organisation, period, description, link, verified: verification === "verified" })),
     projects: entries.entries.filter((e) => e.kind === "project").map(({ title, organisation, period, description, link }) => ({ title, organisation, period, description, link })),
     /** Coding contests: the rating once at least one contest is rated. */
     contests: profile[0]?.contestsRated ? { rating: profile[0].contestRating, rated: profile[0].contestsRated } : null,
@@ -153,6 +155,7 @@ export function shareableProfile(d: ResumeData, now: Date) {
     mockInterview: d.mockInterview && !d.hide.interview ? { track: d.mockInterview.track, overall: d.mockInterview.overall } : null,
     contests: d.contests,
     internships: d.internships,
+    certifications: d.certifications,
     projects: d.projects,
     verifiedAt: now,
   };
@@ -252,6 +255,10 @@ export function drawResume(doc: PDFKit.PDFDocument, d: ResumeData) {
     heading("Projects");
     for (const e of d.projects) entry(e, null);
   }
+  if (d.certifications.length) {
+    heading("Certifications");
+    for (const e of d.certifications) entry(e, e.verified ? `Verified by ${d.institution}` : null);
+  }
 
   if (d.skills.length) {
     heading("Skills mastered");
@@ -259,7 +266,7 @@ export function drawResume(doc: PDFKit.PDFDocument, d: ResumeData) {
   }
 
   if (d.certificates.length) {
-    heading("Certificates");
+    heading(`${d.appName} certificates`);
     for (const c of d.certificates) {
       doc.font("Helvetica-Bold").fontSize(9.5).fillColor(ink).text(`${c.title}  `, { continued: true });
       doc.font("Helvetica").fillColor(muted).text(`${c.scorePct}% · ${date(c.issuedAt)} · verify at ${c.verifyUrl}`);

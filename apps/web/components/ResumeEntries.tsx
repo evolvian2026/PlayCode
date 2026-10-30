@@ -5,7 +5,8 @@ import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 
-type Kind = "project" | "internship";
+type Kind = "project" | "internship" | "certification";
+const KIND_LABEL: Record<Kind, string> = { internship: "Internship", project: "Project", certification: "Certification" };
 interface Entry {
   id: string;
   kind: Kind;
@@ -35,6 +36,7 @@ function EntryForm({ initial, onSaved, onCancel }: { initial?: Entry; onSaved: (
   });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const cert = f.kind === "certification";
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -50,36 +52,43 @@ function EntryForm({ initial, onSaved, onCancel }: { initial?: Entry; onSaved: (
   return (
     <form className="stack" onSubmit={submit} style={{ gap: 8, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
       <div className="row" role="group" aria-label={t("Kind")}>
-        {(["internship", "project"] as Kind[]).map((k) => (
+        {(["internship", "project", "certification"] as Kind[]).map((k) => (
           <button key={k} type="button" className={`btn small ${f.kind === k ? "primary" : ""}`} aria-pressed={f.kind === k} onClick={() => setF({ ...f, kind: k })}>
-            {t(k === "internship" ? "Internship" : "Project")}
+            {t(KIND_LABEL[k])}
           </button>
         ))}
       </div>
       <div>
-        <label htmlFor="e-title">{t(f.kind === "internship" ? "Role" : "Project")}</label>
-        <input id="e-title" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} maxLength={120} required placeholder={t(f.kind === "internship" ? "e.g. Software engineering intern" : "e.g. Canteen ordering app")} />
+        <label htmlFor="e-title">{t(cert ? "Certification" : f.kind === "internship" ? "Role" : "Project")}</label>
+        <input id="e-title" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} maxLength={120} required placeholder={t(cert ? "e.g. Programming in Java" : f.kind === "internship" ? "e.g. Software engineering intern" : "e.g. Canteen ordering app")} />
       </div>
       <div>
-        <label htmlFor="e-org">{t(f.kind === "internship" ? "Company" : "For (optional)")}</label>
-        <input id="e-org" value={f.organisation} onChange={(e) => setF({ ...f, organisation: e.target.value })} maxLength={120} required={f.kind === "internship"} placeholder={f.kind === "project" ? t("e.g. Smart India Hackathon, a course") : undefined} />
+        <label htmlFor="e-org">{t(cert ? "Issued by" : f.kind === "internship" ? "Company" : "For (optional)")}</label>
+        <input
+          id="e-org"
+          value={f.organisation}
+          onChange={(e) => setF({ ...f, organisation: e.target.value })}
+          maxLength={120}
+          required={f.kind !== "project"}
+          placeholder={cert ? t("e.g. NPTEL (IIT Kharagpur), AWS, Coursera") : f.kind === "project" ? t("e.g. Smart India Hackathon, a course") : undefined}
+        />
       </div>
       <div className="row wrap">
         <div>
-          <label htmlFor="e-start">{t("From")}</label>
+          <label htmlFor="e-start">{t(cert ? "Earned in" : "From")}</label>
           <input id="e-start" type="month" value={f.startMonth} onChange={(e) => setF({ ...f, startMonth: e.target.value })} required />
         </div>
         <div>
-          <label htmlFor="e-end">{t("To (leave empty if ongoing)")}</label>
+          <label htmlFor="e-end">{t(cert ? "Valid until (optional)" : "To (leave empty if ongoing)")}</label>
           <input id="e-end" type="month" value={f.endMonth} onChange={(e) => setF({ ...f, endMonth: e.target.value })} />
         </div>
       </div>
       <div>
-        <label htmlFor="e-desc">{t("What you did")}</label>
-        <textarea id="e-desc" className="prose" rows={3} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} maxLength={800} />
+        <label htmlFor="e-desc">{t(cert ? "Score or grade (optional)" : "What you did")}</label>
+        <textarea id="e-desc" className="prose" rows={cert ? 1 : 3} placeholder={cert ? t("e.g. Elite, 82%") : undefined} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} maxLength={800} />
       </div>
       <div>
-        <label htmlFor="e-link">{t("Link (optional)")}</label>
+        <label htmlFor="e-link">{t(cert ? "Credential link" : "Link (optional)")}</label>
         <input id="e-link" type="url" value={f.link} onChange={(e) => setF({ ...f, link: e.target.value })} maxLength={300} placeholder="https://" />
       </div>
       {initial?.verification === "verified" && <div className="small">{t("This is verified. Changing it means asking your college to verify it again.")}</div>}
@@ -96,7 +105,7 @@ function EntryForm({ initial, onSaved, onCancel }: { initial?: Entry; onSaved: (
   );
 }
 
-/** Internships and projects on the resume, written by the student; internships can be verified by the college. */
+/** Internships, projects and certifications on the resume, written by the student; internships and certifications can be verified by the college. */
 export function ResumeEntries({ onChange }: { onChange: () => void }) {
   const t = useT();
   const { data, error, loading, reload, setData } = useApi<{ entries: Entry[] }>("/student/resume/entries");
@@ -118,9 +127,9 @@ export function ResumeEntries({ onChange }: { onChange: () => void }) {
   return (
     <div className="card stack">
       <div>
-        <h2 style={{ margin: 0 }}>{t("Internships and projects")}</h2>
+        <h2 style={{ margin: 0 }}>{t("Internships, projects and certifications")}</h2>
         <p className="small muted" style={{ margin: 0 }}>
-          {t("Written by you, so your resume shows them apart from what PlayCode measured. Ask your college to verify an internship: bring the offer letter or completion certificate.")}
+          {t("Written by you, so your resume shows them apart from what PlayCode measured. Ask your college to verify an internship (bring the offer letter or completion certificate) or a certification (add its credential link).")}
         </p>
       </div>
       {data.entries.map((e) =>
@@ -142,7 +151,7 @@ export function ResumeEntries({ onChange }: { onChange: () => void }) {
                 <b>{e.title}</b>
                 {e.organisation ? <span>, {e.organisation}</span> : null}
                 <div className="small muted">
-                  {t(e.kind === "internship" ? "Internship" : "Project")} · {e.period}
+                  {t(KIND_LABEL[e.kind])} · {e.period}
                 </div>
               </div>
               {VERIFICATION[e.verification] && <span className={`pill ${VERIFICATION[e.verification]![1]}`}>{t(VERIFICATION[e.verification]![0])}</span>}
@@ -157,7 +166,7 @@ export function ResumeEntries({ onChange }: { onChange: () => void }) {
               <button className="btn small" onClick={() => setEditing(e)}>
                 {t("Edit")}
               </button>
-              {e.kind === "internship" && (e.verification === "none" || e.verification === "rejected") && (
+              {e.kind !== "project" && (e.verification === "none" || e.verification === "rejected") && (
                 <button className="btn small" onClick={() => call(`/student/resume/entries/${e.id}/verify`, "POST")}>
                   {t("Ask the college to verify")}
                 </button>
@@ -180,7 +189,7 @@ export function ResumeEntries({ onChange }: { onChange: () => void }) {
         />
       ) : (
         <button className="btn small" style={{ alignSelf: "flex-start" }} onClick={() => setEditing("new")}>
-          {t("Add an internship or project")}
+          {t("Add an internship, project or certification")}
         </button>
       )}
       {msg && <ErrorBox message={msg} />}

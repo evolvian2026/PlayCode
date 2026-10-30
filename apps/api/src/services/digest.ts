@@ -6,6 +6,7 @@ import {
   documentSubmissions,
   helpTickets,
   interviewExperiences,
+  onDutyRequests,
   memberships,
   placementApplications,
   placementDrives,
@@ -35,7 +36,7 @@ export async function weekSummary(db: Db, auth: AuthContext, now: Date) {
   const today = localDate(now, tenant.timeZone);
   const weekAgo = new Date(now.getTime() - 7 * DAY);
   const n = async (q: Promise<{ n: number }[]>) => (await q)[0]?.n ?? 0;
-  const [drives, offers, helpdesk, reviews, intros, documents, outcomes, internships, experiences, followUps, joining, peer] = await Promise.all([
+  const [drives, offers, helpdesk, reviews, intros, documents, outcomes, internships, experiences, followUps, onDuty, joining, peer] = await Promise.all([
     db
       .select({ id: placementDrives.id, company: placementDrives.company, roleTitle: placementDrives.roleTitle, driveDate: placementDrives.driveDate, registered: sql<number>`(select count(*)::int from placement_applications a where a.drive_id = ${placementDrives.id} and a.status <> 'withdrawn')` })
       .from(placementDrives)
@@ -55,6 +56,7 @@ export async function weekSummary(db: Db, auth: AuthContext, now: Date) {
     n(db.select({ n: count() }).from(resumeEntries).where(and(eq(resumeEntries.tenantId, tenantId), eq(resumeEntries.verification, "requested")))),
     n(db.select({ n: count() }).from(interviewExperiences).where(and(eq(interviewExperiences.tenantId, tenantId), eq(interviewExperiences.status, "pending")))),
     n(db.select({ n: count() }).from(recruiterInteractions).where(and(eq(recruiterInteractions.tenantId, tenantId), eq(recruiterInteractions.followUpDone, false), lte(recruiterInteractions.followUpOn, today)))),
+    n(db.select({ n: count() }).from(onDutyRequests).where(and(eq(onDutyRequests.tenantId, tenantId), eq(onDutyRequests.status, "pending")))),
     joiningBoard(db, auth, now),
     peerStats(db, auth, weekAgo, now),
   ]);
@@ -63,10 +65,11 @@ export async function weekSummary(db: Db, auth: AuthContext, now: Date) {
     { key: "documents", label: "Documents to verify", count: documents, link: "/console/documents" },
     { key: "resume_reviews", label: "Resumes waiting for a review", count: reviews, link: "/console/resume-reviews" },
     { key: "intros", label: "Alumni introductions to send", count: intros, link: "/console/alumni" },
-    { key: "internships", label: "Internships to verify", count: internships, link: "/console/internships" },
+    { key: "internships", label: "Internships and certifications to verify", count: internships, link: "/console/internships" },
     { key: "outcomes", label: "Off-campus offers and admissions to verify", count: outcomes, link: "/console/outcomes" },
     { key: "experiences", label: "Interview experiences to review", count: experiences, link: "/console/experiences" },
     { key: "follow_ups", label: "Company follow-ups due", count: followUps, link: "/console/recruiters" },
+    { key: "on_duty", label: "On-duty requests to approve", count: onDuty, link: "/console/on-duty" },
     { key: "joining", label: "Accepted offers with joining delayed", count: joining.totals.delayed, link: "/console/joining" },
   ];
   return {

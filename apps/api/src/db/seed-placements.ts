@@ -3,7 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { sha256 } from "../lib/crypto";
 import { createDrive } from "../services/placements";
 import { db } from "./client";
-import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, peerFeedback, peerRequests, peerSessions, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
+import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, peerFeedback, peerRequests, peerSessions, onDutyRequests, resumeEntries, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
 
 const DAY_MS = 86_400_000;
 
@@ -427,4 +427,46 @@ export async function seedPeer(args: { tenantId: string; students: string[]; now
     ],
     createdAt: new Date(now.getTime() - 3_600_000),
   });
+}
+
+/**
+ * Certifications on resumes (some verified, one waiting), and students on duty:
+ * two at a hackathon today, one asking for an off-campus interview.
+ */
+export async function seedCertificationsAndOnDuty(args: { tenantId: string; tpoId: string; students: string[]; now: Date }) {
+  const { tenantId, tpoId, now } = args;
+  const s = args.students;
+  const month = (back: number) => localDate(new Date(now.getTime() - back * 30 * DAY_MS), "Asia/Kolkata").slice(0, 7);
+  const cert = (userId: string, title: string, organisation: string, monthsAgo: number, description: string, link: string, verified: boolean, validYears?: number) => ({
+    tenantId,
+    userId,
+    kind: "certification" as const,
+    title,
+    organisation,
+    startMonth: month(monthsAgo),
+    endMonth: validYears ? `${Number(month(monthsAgo).slice(0, 4)) + validYears}${month(monthsAgo).slice(4)}` : null,
+    description,
+    link,
+    verification: verified ? ("verified" as const) : ("requested" as const),
+    verifiedBy: verified ? tpoId : null,
+    verifiedAt: verified ? new Date(now.getTime() - 20 * DAY_MS) : null,
+    createdAt: new Date(now.getTime() - 40 * DAY_MS),
+    updatedAt: new Date(now.getTime() - (verified ? 30 : 1) * DAY_MS),
+  });
+  await db.insert(resumeEntries).values([
+    cert(s[2]!, "Programming, Data Structures and Algorithms using Python", "NPTEL (IIT Madras)", 6, "Elite, 81%", "https://nptel.ac.in/noc/certificate/NPTEL26CS40S0001", true),
+    cert(s[3]!, "Database Management System", "NPTEL (IIT Kharagpur)", 5, "Elite + Silver, 88%", "https://nptel.ac.in/noc/certificate/NPTEL26CS39S0002", true),
+    cert(s[4]!, "Programming in Java", "NPTEL (IIT Kharagpur)", 4, "Elite, 76%", "https://nptel.ac.in/noc/certificate/NPTEL26CS68S0003", true),
+    cert(s[5]!, "AWS Certified Cloud Practitioner", "AWS", 2, "Score 812/1000", "https://www.credly.com/badges/0d1e2f3a-demo", true, 3),
+    cert(s[8]!, "Introduction to Networks (CCNA 1)", "Cisco Networking Academy", 1, "", "https://www.credly.com/badges/4b5c6d7e-demo", false),
+  ]);
+  const today = localDate(now, "Asia/Kolkata");
+  const tomorrow = localDate(new Date(now.getTime() + DAY_MS), "Asia/Kolkata");
+  const hackathon = "Smart India Hackathon grand finale (team CodeCrafters)";
+  await db.insert(onDutyRequests).values([
+    ...[s[2]!, s[3]!].flatMap((userId) =>
+      [today, tomorrow].map((date) => ({ tenantId, userId, date, part: "full" as const, reason: "other" as const, purpose: hackathon, detail: "KIET, Ghaziabad", status: "approved" as const, decidedBy: tpoId, decidedAt: new Date(now.getTime() - 3 * DAY_MS), createdAt: new Date(now.getTime() - 4 * DAY_MS) })),
+    ),
+    { tenantId, userId: s[4]!, date: tomorrow, part: "forenoon" as const, reason: "other" as const, purpose: "Accenture off-campus interview", detail: "Their Bengaluru office, 9:30 am", status: "pending" as const, createdAt: new Date(now.getTime() - 2 * 3_600_000) },
+  ]);
 }

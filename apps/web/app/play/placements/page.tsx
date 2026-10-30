@@ -571,6 +571,13 @@ export default function StudentPlacements() {
         </div>
         <span aria-hidden="true">→</span>
       </Link>
+      <Link href="/play/on-duty" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{t("On duty")}</b>
+          <div className="small muted">{t("Missing class for a drive or an interview? Ask the placement cell, and get a letter")}</div>
+        </div>
+        <span aria-hidden="true">→</span>
+      </Link>
       <Link href="/play/alumni" className="card spread" style={{ color: "inherit" }}>
         <div>
           <b>{t("Alumni")}</b>

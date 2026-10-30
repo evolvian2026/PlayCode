@@ -41,6 +41,7 @@ interface Detail {
     skills: { name: string }[];
     projects: { title: string; organisation: string; period: string; description: string; link: string | null }[];
     internships: { title: string; organisation: string; period: string; description: string; verified: boolean }[];
+    certifications: { title: string; organisation: string; period: string; description: string; link: string | null; verified: boolean }[];
   };
   checks: { section: string; sectionLabel: string; level: "fix" | "tip"; message: string }[];
   score: number;
@@ -130,6 +131,11 @@ function ReviewView({ id, onBack }: { id: string; onBack: () => void }) {
             <div className="small muted">Internships</div>
             {r.internships.length ? r.internships.map((p) => <Entry key={p.title} title={p.title} sub={[p.organisation, p.period].filter(Boolean).join(" · ")} body={p.description} extra={p.verified ? "verified" : undefined} />) : <div className="small muted">None</div>}
             {box("internships")}
+          </section>
+          <section className="card stack" aria-label="Certifications">
+            <div className="small muted">Certifications</div>
+            {r.certifications.length ? r.certifications.map((p) => <Entry key={p.title} title={p.title} sub={[p.organisation, p.period, p.link].filter(Boolean).join(" · ")} body={p.description} extra={p.verified ? "verified" : undefined} />) : <div className="small muted">None</div>}
+            {box("certifications")}
           </section>
           <section className="card stack" aria-label="Skills and links">
             <div className="small muted">Skills and practice</div>

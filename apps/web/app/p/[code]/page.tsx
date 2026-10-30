@@ -22,6 +22,7 @@ interface PublicProfile {
   contests: { rating: number; rated: number } | null;
   internships: { title: string; organisation: string; period: string; description: string; link: string | null; verified: boolean }[];
   projects: { title: string; organisation: string; period: string; description: string; link: string | null }[];
+  certifications?: { title: string; organisation: string; period: string; description: string; link: string | null; verified: boolean }[];
   verifiedAt: string;
 }
 
@@ -109,11 +110,11 @@ export default function PublicProfilePage() {
           </div>
         )}
       </div>
-      {(data.internships.length > 0 || data.projects.length > 0) && (
+      {(data.internships.length > 0 || data.projects.length > 0 || (data.certifications?.length ?? 0) > 0) && (
         <div className="card stack">
-          <h2 style={{ margin: 0 }}>Internships and projects</h2>
-          <div className="small muted">Written by {data.name.split(" ")[0]}. Internships marked verified were checked by {data.institution}.</div>
-          {[...data.internships.map((e) => ({ ...e, kind: "Internship" })), ...data.projects.map((e) => ({ ...e, kind: "Project", verified: false }))].map((e, i) => (
+          <h2 style={{ margin: 0 }}>Internships, projects and certifications</h2>
+          <div className="small muted">Written by {data.name.split(" ")[0]}. Those marked verified were checked by {data.institution}.</div>
+          {[...data.internships.map((e) => ({ ...e, kind: "Internship" })), ...data.projects.map((e) => ({ ...e, kind: "Project", verified: false })), ...(data.certifications ?? []).map((e) => ({ ...e, kind: "Certification" }))].map((e, i) => (
             <div key={i} className="stack" style={{ gap: 2 }}>
               <div className="spread wrap" style={{ gap: 8 }}>
                 <div>
