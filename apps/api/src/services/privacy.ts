@@ -62,6 +62,8 @@ import {
   peerSessions,
   staffDigests,
   onDutyRequests,
+  graduateResponses,
+  alumni,
   driveCoordinators,
   driveUpdates,
   placementDrives,
@@ -249,6 +251,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
       .innerJoin(driveSchedules, eq(driveSchedules.id, driveSlots.scheduleId))
       .innerJoin(placementDrives, eq(placementDrives.id, driveSchedules.driveId))
       .where(eq(driveSlots.userId, userId)),
+    graduation: await db.select({ alumniChoice: graduateResponses.alumniChoice, ratings: graduateResponses.ratings, recommend: graduateResponses.recommend, comment: graduateResponses.comment, surveyAt: graduateResponses.surveyAt }).from(graduateResponses).where(eq(graduateResponses.userId, userId)),
     onDuty: await db.select({ date: onDutyRequests.date, part: onDutyRequests.part, purpose: onDutyRequests.purpose, detail: onDutyRequests.detail, status: onDutyRequests.status, note: onDutyRequests.note }).from(onDutyRequests).where(eq(onDutyRequests.userId, userId)),
     projectsAndInternships: await db.select({ kind: resumeEntries.kind, title: resumeEntries.title, organisation: resumeEntries.organisation, startMonth: resumeEntries.startMonth, endMonth: resumeEntries.endMonth, description: resumeEntries.description, link: resumeEntries.link, verification: resumeEntries.verification }).from(resumeEntries).where(eq(resumeEntries.userId, userId)),
     circularsAcknowledged: await db.select({ title: circulars.title, at: circularAcks.at }).from(circularAcks).innerJoin(circulars, eq(circulars.id, circularAcks.circularId)).where(eq(circularAcks.userId, userId)),
@@ -370,6 +373,9 @@ export async function resolveErasure(
     await tx.delete(peerSessions).where(or(eq(peerSessions.aId, user.id), eq(peerSessions.bId, user.id)));
     await tx.delete(staffDigests).where(eq(staffDigests.userId, user.id));
     await tx.delete(onDutyRequests).where(eq(onDutyRequests.userId, user.id));
+    await tx.delete(graduateResponses).where(eq(graduateResponses.userId, user.id));
+    // An alumni entry they made themselves is theirs; one the placement cell added stays with the college.
+    await tx.delete(alumni).where(eq(alumni.userId, user.id));
     await tx.delete(driveCoordinators).where(eq(driveCoordinators.userId, user.id));
     await tx.update(driveUpdates).set({ recipients: sql`${driveUpdates.recipients} - ${user.id}::text` }).where(sql`${driveUpdates.recipients} @> ${JSON.stringify([user.id])}::jsonb`);
     await tx.delete(driveSlots).where(eq(driveSlots.userId, user.id));

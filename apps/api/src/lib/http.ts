@@ -8,6 +8,7 @@ import { verifyToken } from "./auth";
 import { badRequest, forbidden, HttpError, unauthorized } from "./errors";
 import type { AuthContext } from "../services/scope";
 import { assertWritable } from "../services/licence";
+import { assertNotGraduated } from "../services/graduation";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -60,6 +61,8 @@ export async function authenticate(req: FastifyRequest, _reply: FastifyReply): P
   req.auth = { userId: claims.sub, tenantId: claims.tenantId, roles: claims.roles, sessionId: claims.sid };
   // Past the licence grace period the account is read-only.
   await assertWritable(db, { tenantId: claims.tenantId, method: req.method, url: req.url, superAdmin: claims.roles.includes("super_admin"), now: req.server.now() });
+  // A graduate's account is read-only too, apart from what graduates still need.
+  await assertNotGraduated(db, { userId: claims.sub, tenantId: claims.tenantId, roles: claims.roles, method: req.method, url: req.url });
 }
 
 /** What staff can still reach before setting up two-factor sign-in. */

@@ -17,6 +17,8 @@ interface Alumnus {
   openToAdvice: boolean;
   active: boolean;
   introsSent: number;
+  /** Set when the graduate added themselves. */
+  userId: string | null;
 }
 interface Intro {
   id: string;
@@ -220,6 +222,7 @@ export default function AlumniConsolePage() {
                 <tr key={a.id} style={{ opacity: a.active ? 1 : 0.6 }}>
                   <td>
                     {a.name}
+                    {a.userId && <span className="pill small" style={{ marginLeft: 6 }}>joined at graduation</span>}
                     <div className="small muted">
                       {[a.department, `batch of ${a.graduationYear}`].filter(Boolean).join(" · ")} · {a.email}
                     </div>

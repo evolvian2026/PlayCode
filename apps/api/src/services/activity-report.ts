@@ -19,6 +19,7 @@ import {
 import { forbidden } from "../lib/errors";
 import { mentoringStats } from "./mentoring";
 import { certificationStats, internshipStats } from "./resume-entries";
+import { exitSurveyStats } from "./graduation";
 import { pdfSafe } from "./papers";
 import { descendants, scopedUnitIds, studentIdsInUnits, tenantUnits, type AuthContext } from "./scope";
 import { getTenant } from "./tenant";
@@ -49,7 +50,7 @@ export async function activityReport(db: Db, auth: AuthContext, period: ReportPe
   const scoped = await scopedUnitIds(db, auth);
   if (period.unitId && !scoped.includes(period.unitId)) throw forbidden("That batch or section is outside your scope");
   const units = await tenantUnits(db, tenantId);
-  const students = await studentIdsInUnits(db, tenantId, period.unitId ? descendants(units, [period.unitId]) : scoped);
+  const students = await studentIdsInUnits(db, tenantId, period.unitId ? descendants(units, [period.unitId]) : scoped, { graduated: true });
   const inScope = new Set(students);
   // Rows are fetched with a day's slack either side, then kept by their local date.
   const lo = new Date(new Date(`${period.from}T00:00:00Z`).getTime() - DAY);
@@ -148,6 +149,7 @@ export async function activityReport(db: Db, auth: AuthContext, period: ReportPe
     mentoring: await mentoringStats(db, tenantId, students, period.from, period.to),
     internships: await internshipStats(db, tenantId, inScope, period.from, period.to),
     certifications: await certificationStats(db, tenantId, inScope, period.from, period.to),
+    exitSurvey: await exitSurveyStats(db, tenantId, inScope, new Date(`${period.from}T00:00:00Z`), new Date(new Date(`${period.to}T00:00:00Z`).getTime() + DAY)),
     placements: {
       companies,
       registered: new Set(apps.map((a) => a.userId)).size,
@@ -194,6 +196,7 @@ export function activityCsv(r: ActivityReport): string {
     [],
     ["Internships verified by the institution", r.internships.internships, "Students", r.internships.students],
     ["Certifications earned (verified)", r.certifications.certifications, "Students", r.certifications.students],
+    ["Exit survey responses", r.exitSurvey.responses, "Overall rating (of 5)", r.exitSurvey.averages?.overall ?? "", "Would recommend (%)", r.exitSurvey.recommendPct ?? ""],
     [],
     ["Placement drives"],
     ["Date", "Company", "Role", "CTC (Rs)", "Registered", "Offers"],
@@ -303,6 +306,7 @@ export function activityPdf(r: ActivityReport): Promise<Buffer> {
     ["Mentoring meetings held", `${m.meetings}, with ${m.studentsMet} students`],
     ["Internships verified", `${r.internships.internships}, by ${r.internships.students} students`],
     ["Certifications earned (verified)", `${r.certifications.certifications}, by ${r.certifications.students} students`],
+    ["Exit survey of graduating students", r.exitSurvey.averages ? `${r.exitSurvey.responses} responses; overall ${r.exitSurvey.averages.overall} of 5; ${r.exitSurvey.recommendPct}% would recommend` : `${r.exitSurvey.responses} responses`],
   ]);
 
   heading("Placement drives");

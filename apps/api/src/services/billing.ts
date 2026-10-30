@@ -26,7 +26,7 @@ export async function usage(db: Db, tenantId: string, now: Date) {
   const [{ used } = { used: 0 }] = await db
     .select({ used: sql<number>`count(distinct ${memberships.userId})::int` })
     .from(memberships)
-    .where(and(eq(memberships.tenantId, tenantId), eq(memberships.role, "student")));
+    .where(and(eq(memberships.tenantId, tenantId), eq(memberships.role, "student"), isNull(memberships.graduatedAt)));
   return {
     plan: tenant.plan,
     planName: spec.name,

@@ -20,7 +20,7 @@ import { createContest } from "../services/contests";
 import { sendInvite, setDiscoverable, setInstitutionPool } from "../services/talent";
 import { db, pool, type Db } from "./client";
 import { runMigrations } from "./migrate";
-import { seedAlumni, seedCertificationsAndOnDuty, seedInterview, seedPeer, seedJoiningAndOpenings, seedPlacements, seedRecruiters } from "./seed-placements";
+import { seedAlumni, seedCertificationsAndOnDuty, seedGraduates, seedInterview, seedPeer, seedJoiningAndOpenings, seedPlacements, seedRecruiters } from "./seed-placements";
 import { assessments, assignments, competitions, contestSubmissions, memberships, orgUnits, packs, questionReports, questions, responses, skills, tenants, users } from "./schema";
 
 export const DEMO_PASSWORD = "playcode123";
@@ -142,7 +142,7 @@ export async function seedDemo(now = new Date()): Promise<void> {
   const ece27 = await unit("ECE 2027", "batch", ece.id);
   const eceA = await unit("ECE 2027 - A", "section", ece27.id);
 
-  await createUser(tenantId, "Institute Admin", "admin@demo.edu", passwordHash, [{ role: "inst_admin", orgUnitId: null }]);
+  const instAdmin = await createUser(tenantId, "Institute Admin", "admin@demo.edu", passwordHash, [{ role: "inst_admin", orgUnitId: null }]);
   await createUser(tenantId, "Rajesh Sharma (TPO)", "tpo@demo.edu", passwordHash, [{ role: "tpo", orgUnitId: null }]);
   await createUser(tenantId, "Dr. Lakshmi Iyer (HOD CSE)", "hod.cse@demo.edu", passwordHash, [{ role: "hod", orgUnitId: cse.id }]);
   const faculty = await createUser(tenantId, "Prof. Anil Kumar", "faculty@demo.edu", passwordHash, [{ role: "faculty", orgUnitId: cseA.id }]);
@@ -261,6 +261,14 @@ export async function seedDemo(now = new Date()): Promise<void> {
   await seedAlumni({ tenantId, studentId: students[5]!.id, now });
   await seedPeer({ tenantId, students: students.map((s) => s.id), now });
   await seedCertificationsAndOnDuty({ tenantId, tpoId: tpoUser.id, students: students.map((s) => s.id), now });
+  // Last year's batch, graduated in June: read-only accounts, exit survey answers, a few on the alumni list.
+  const cse26 = await unit("CSE 2026", "batch", cse.id);
+  const graduates = [];
+  for (const [i, name] of ["Arjun Nair", "Meghna Rao", "Siddharth Jain", "Fatima Sheikh", "Karan Malhotra", "Lavanya Pillai"].entries()) {
+    const email = i === 0 ? "graduate@demo.edu" : `${name.toLowerCase().replace(/ /g, ".")}.2026@demo.edu`;
+    graduates.push(await createUser(tenantId, name, email, passwordHash, [{ role: "student", orgUnitId: cse26.id }], `CSE26A${String(i + 1).padStart(3, "0")}`));
+  }
+  await seedGraduates({ tenantId, unitId: cse26.id, adminId: instAdmin.id, graduates: graduates.map((g) => g.id), now });
   // Two students reported the same question, so the content team's review queue has something in it.
   const [reported] = await db
     .select({ questionId: responses.questionId, version: questions.version })

@@ -48,7 +48,7 @@ export async function privacyRoutes(app: FastifyInstance) {
 
     // ---------- Admins ----------
     const inScope = (req: Parameters<typeof tenantOf>[0]) => async (userId: string) =>
-      (await studentIdsInUnits(db, tenantOf(req), await scopedUnitIds(db, req.auth))).includes(userId);
+      (await studentIdsInUnits(db, tenantOf(req), await scopedUnitIds(db, req.auth), { graduated: true })).includes(userId);
 
     r.get("/console/privacy/requests", { preHandler: requirePermission("users.manage") }, async (req) => ({ requests: await listErasureRequests(db, tenantOf(req)) }));
 

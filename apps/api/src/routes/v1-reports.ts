@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, inArray, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { masteryFromRating, readinessBand } from "@playcode/core";
 import { z } from "zod";
@@ -38,15 +38,15 @@ function send(reply: FastifyReply, fmt: "json" | "csv", name: string, rows: Reco
   return [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n");
 }
 
-/** Each active student's section (or other unit) and its parents' names. */
-async function studentUnits(tenantId: string) {
+/** Each active student's section (or other unit) and its parents' names; graduates only when asked for (for history). */
+async function studentUnits(tenantId: string, opts: { graduated?: boolean } = {}) {
   const units = await db.select().from(orgUnits).where(eq(orgUnits.tenantId, tenantId));
   const byId = new Map(units.map((u) => [u.id, u]));
   const rows = await db
     .select({ userId: memberships.userId, unitId: memberships.orgUnitId })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
-    .where(and(eq(memberships.tenantId, tenantId), eq(memberships.role, "student"), eq(users.status, "active")));
+    .where(and(eq(memberships.tenantId, tenantId), eq(memberships.role, "student"), eq(users.status, "active"), opts.graduated ? undefined : isNull(memberships.graduatedAt)));
   const out = new Map<string, { unitId: string; unit: string; department: string | null }>();
   for (const r of rows) {
     if (!r.unitId || out.has(r.userId)) continue;
@@ -75,7 +75,7 @@ export function reportRoutes(api: FastifyInstance, requireScope: (s: ApiScope) =
       .where(and(eq(responses.tenantId, req.api.tenantId), gte(responses.createdAt, new Date(from.getTime() - DAY_MS)), lt(responses.createdAt, new Date(to.getTime() + 2 * DAY_MS))))
       .groupBy(sql`1`, responses.userId);
     const inRange = rows.filter((r) => r.day >= q.from && r.day <= q.to);
-    const units = q.group_by === "unit" ? await studentUnits(req.api.tenantId) : null;
+    const units = q.group_by === "unit" ? await studentUnits(req.api.tenantId, { graduated: true }) : null;
     const groups = new Map<string, { date: string; unit_id?: string | null; unit?: string | null; department?: string | null; active_students: number; answers: number; correct: number; ms: number }>();
     for (const r of inRange) {
       const u = units?.get(r.userId);

@@ -41,3 +41,4 @@ export * from "./checklist";
 export * from "./resume-checks";
 export * from "./peer-interview";
 export * from "./on-duty";
+export * from "./graduation";

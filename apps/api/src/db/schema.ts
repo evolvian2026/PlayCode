@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, OnDutyPart, OnDutyReason, OnDutyStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, ExitItem, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, OnDutyPart, OnDutyReason, OnDutyStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -122,6 +122,8 @@ export const memberships = pgTable(
     /** null = role applies to the whole tenant. */
     orgUnitId: uuid("org_unit_id").references(() => orgUnits.id, { onDelete: "cascade" }),
     role: text("role").$type<Role>().notNull(),
+    /** A student whose batch has graduated: the account is read-only and doesn't use a seat. */
+    graduatedAt: timestamp("graduated_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [index("memberships_user_idx").on(t.userId), index("memberships_unit_idx").on(t.orgUnitId)],
@@ -2418,9 +2420,11 @@ export const alumni = pgTable(
     openToReferrals: boolean("open_to_referrals").notNull().default(false),
     openToAdvice: boolean("open_to_advice").notNull().default(true),
     active: boolean("active").notNull().default(true),
+    /** A graduate who added themselves; the placement cell adds the rest. */
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
-  (t) => [index("alumni_tenant_idx").on(t.tenantId)],
+  (t) => [index("alumni_tenant_idx").on(t.tenantId), uniqueIndex("alumni_user_uq").on(t.tenantId, t.userId)],
 );
 
 /** A student asking to be introduced to an alumnus; the placement cell decides and sends it. */
@@ -2540,3 +2544,36 @@ export const onDutyRequests = pgTable(
   },
   (t) => [index("on_duty_user_idx").on(t.userId, t.date), index("on_duty_tenant_idx").on(t.tenantId, t.date)],
 );
+
+// ---------- Graduation ----------
+
+/** A batch marked as graduated, with whom it covered, so it can be undone for a while. */
+export const batchGraduations = pgTable(
+  "batch_graduations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    unitId: uuid("unit_id").notNull().references(() => orgUnits.id, { onDelete: "cascade" }),
+    userIds: jsonb("user_ids").$type<string[]>().notNull(),
+    byId: uuid("by_id").notNull(),
+    graduatedAt: timestamp("graduated_at", { withTimezone: true }).notNull(),
+    undoneAt: timestamp("undone_at", { withTimezone: true }),
+  },
+  (t) => [index("batch_graduations_unit_idx").on(t.tenantId, t.unitId)],
+);
+
+/** A graduate's answers: whether they'll be on the alumni list, and the exit survey (shown to staff only in aggregate). */
+export const graduateResponses = pgTable("graduate_responses", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  /** The batch they graduated with. */
+  unitId: uuid("unit_id").references(() => orgUnits.id, { onDelete: "set null" }),
+  alumniChoice: text("alumni_choice").$type<"joined" | "declined">(),
+  ratings: jsonb("ratings").$type<Record<ExitItem, number>>(),
+  recommend: boolean("recommend"),
+  comment: text("comment").notNull().default(""),
+  surveyAt: timestamp("survey_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+});

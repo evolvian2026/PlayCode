@@ -37,6 +37,7 @@ import { readinessRoutes } from "./routes/readiness";
 import { resumeReviewRoutes } from "./routes/resume-review";
 import { peerRoutes } from "./routes/peer";
 import { onDutyRoutes } from "./routes/on-duty";
+import { graduationRoutes } from "./routes/graduation";
 import { helpdeskRoutes } from "./routes/helpdesk";
 import { paperRoutes } from "./routes/papers";
 import { writingRoutes } from "./routes/writing";
@@ -205,6 +206,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(resumeReviewRoutes);
   await app.register(peerRoutes);
   await app.register(onDutyRoutes);
+  await app.register(graduationRoutes);
   await app.register(writingRoutes);
   await app.register(resumeRoutes);
   await app.register(resumeEntryRoutes);

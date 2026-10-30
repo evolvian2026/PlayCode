@@ -3,7 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { sha256 } from "../lib/crypto";
 import { createDrive } from "../services/placements";
 import { db } from "./client";
-import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, peerFeedback, peerRequests, peerSessions, onDutyRequests, resumeEntries, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
+import { academicRecords, interviews, placementApplications, placementDrives, alumni, alumniIntros, peerFeedback, peerRequests, peerSessions, onDutyRequests, resumeEntries, batchGraduations, graduateResponses, memberships, openingResponses, placementOpenings, placementTargets, recruiterFeedback, recruiterContacts, recruiterInteractions, recruiters, tenants, type ApplicationStatus, type InterviewTurn } from "./schema";
 
 const DAY_MS = 86_400_000;
 
@@ -469,4 +469,48 @@ export async function seedCertificationsAndOnDuty(args: { tenantId: string; tpoI
     ),
     { tenantId, userId: s[4]!, date: tomorrow, part: "forenoon" as const, reason: "other" as const, purpose: "Accenture off-campus interview", detail: "Their Bengaluru office, 9:30 am", status: "pending" as const, createdAt: new Date(now.getTime() - 2 * 3_600_000) },
   ]);
+}
+
+/**
+ * A batch that graduated in June: everyone's account is read-only, four
+ * answered the exit survey and three joined the alumni list. The first
+ * (graduate@demo.edu) hasn't answered yet.
+ */
+export async function seedGraduates(args: { tenantId: string; unitId: string; adminId: string; graduates: string[]; now: Date }) {
+  const { tenantId, unitId, graduates } = args;
+  // The most recent June 20th: graduation is in June.
+  const june = (y: number) => new Date(`${y}-06-20T06:30:00Z`);
+  const at = june(args.now.getUTCFullYear()) <= args.now ? june(args.now.getUTCFullYear()) : june(args.now.getUTCFullYear() - 1);
+  await db.update(memberships).set({ graduatedAt: at }).where(and(eq(memberships.orgUnitId, unitId), eq(memberships.role, "student")));
+  await db.insert(batchGraduations).values({ tenantId, unitId, userIds: graduates, byId: args.adminId, graduatedAt: at });
+  const answers = [
+    { training: 4, practice: 5, information: 3, support: 4, overall: 4, recommend: true, comment: "The mock interviews helped most. Share the drive schedule earlier; we heard about two drives the evening before." },
+    { training: 3, practice: 4, information: 2, support: 4, overall: 3, recommend: true, comment: "More practice for the HR round, and earlier notice of drives." },
+    { training: 5, practice: 4, information: 4, support: 5, overall: 5, recommend: true, comment: "" },
+    { training: 2, practice: 3, information: 3, support: 3, overall: 3, recommend: false, comment: "Aptitude training started too late in the final year." },
+  ];
+  await db.insert(graduateResponses).values(
+    graduates.map((userId, i) => {
+      const a = i > 0 ? answers[i - 1] : undefined;
+      return {
+        userId,
+        tenantId,
+        unitId,
+        alumniChoice: i >= 1 && i <= 3 ? ("joined" as const) : null,
+        ratings: a ? { training: a.training, practice: a.practice, information: a.information, support: a.support, overall: a.overall } : null,
+        recommend: a ? a.recommend : null,
+        comment: a?.comment ?? "",
+        surveyAt: a ? new Date(at.getTime() + (i + 1) * DAY_MS) : null,
+        updatedAt: new Date(at.getTime() + (i + 1) * DAY_MS),
+      };
+    }),
+  );
+  const joined = [
+    { i: 1, name: "Meghna Rao", company: "PhonePe", role: "Software Engineer", city: "Bengaluru", referrals: true },
+    { i: 2, name: "Siddharth Jain", company: "Wipro", role: "Project Engineer", city: "Pune", referrals: false },
+    { i: 3, name: "Fatima Sheikh", company: "IIT Madras (M.Tech)", role: "Student", city: "Chennai", referrals: false },
+  ];
+  await db.insert(alumni).values(
+    joined.map((j) => ({ tenantId, userId: graduates[j.i]!, name: j.name, email: `${j.name.toLowerCase().replace(/ /g, ".")}@gmail.example`, graduationYear: at.getUTCFullYear(), department: "Computer Science", company: j.company, role: j.role, city: j.city, openToReferrals: j.referrals, openToAdvice: true, createdAt: new Date(at.getTime() + (j.i + 1) * DAY_MS) })),
+  );
 }

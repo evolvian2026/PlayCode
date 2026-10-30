@@ -100,7 +100,7 @@ export async function deleteOutcome(db: Db, ctx: Ctx, id: string) {
 // ---------- Placement cell ----------
 
 async function studentsInScope(db: Db, auth: AuthContext) {
-  return new Set(await studentIdsInUnits(db, auth.tenantId!, await scopedUnitIds(db, auth)));
+  return new Set(await studentIdsInUnits(db, auth.tenantId!, await scopedUnitIds(db, auth), { graduated: true }));
 }
 
 export async function outcomeQueue(db: Db, auth: AuthContext, status: Row["status"]) {

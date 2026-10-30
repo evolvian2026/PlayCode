@@ -25,6 +25,8 @@ export interface Me {
   home: "console" | "play";
   mfaSetupRequired?: boolean;
   licence: { state: "active" | "ending" | "grace" | "expired"; validUntil: string | null; daysLeft: number | null; graceEndsOn: string | null } | null;
+  /** The student's batch has graduated: the account is read-only. */
+  graduatedAt?: string | null;
 }
 
 export interface ProfileSummary {

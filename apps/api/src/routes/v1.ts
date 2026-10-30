@@ -118,7 +118,7 @@ export async function v1Routes(app: FastifyInstance) {
         .limit(q.limit + 1);
       const pageRows = rows.slice(0, q.limit);
       const units = pageRows.length
-        ? await db.select({ userId: memberships.userId, unitId: memberships.orgUnitId, role: memberships.role }).from(memberships).where(inArray(memberships.userId, pageRows.map((r) => r.user.id)))
+        ? await db.select({ userId: memberships.userId, unitId: memberships.orgUnitId, role: memberships.role, graduatedAt: memberships.graduatedAt }).from(memberships).where(inArray(memberships.userId, pageRows.map((r) => r.user.id)))
         : [];
       const last = pageRows.at(-1)?.user;
       return {
@@ -130,6 +130,8 @@ export async function v1Routes(app: FastifyInstance) {
           status: u.status,
           roles: [...new Set(units.filter((m) => m.userId === u.id).map((m) => m.role))],
           unit_ids: units.filter((m) => m.userId === u.id && m.unitId).map((m) => m.unitId),
+          /** Set once the student's batch has graduated. */
+          graduated_at: units.find((m) => m.userId === u.id && m.role === "student" && m.graduatedAt)?.graduatedAt ?? null,
           created_at: u.createdAt,
         })),
         next_cursor: rows.length > q.limit && last ? encodeCursor(last.createdAt, last.id) : null,

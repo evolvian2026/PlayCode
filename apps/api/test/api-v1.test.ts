@@ -77,10 +77,11 @@ describe("public API", () => {
       seen.push(...res.body.data.map((u: { id: string }) => u.id));
       cursor = res.body.next_cursor;
     } while (cursor);
-    expect(seen.length).toBe(31);
-    expect(new Set(seen).size).toBe(31);
+    // The 31 current students and last year's six graduates, who say so.
+    expect(seen.length).toBe(37);
+    expect(new Set(seen).size).toBe(37);
     const units = (await t.get(api, "/v1/org-units")).body.data;
-    expect(units.length).toBe(7);
+    expect(units.length).toBe(8); // with CSE 2026, the graduated batch
   });
 
   it("enforces scopes and revocation", async () => {

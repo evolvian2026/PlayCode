@@ -53,7 +53,7 @@ export async function setMyJoining(db: Db, ctx: { tenantId: string; userId: stri
 
 /** The placement cell records any status, including a withdrawn offer. */
 export async function setJoining(db: Db, auth: AuthContext, driveId: string, userId: string, input: JoiningInput, now: Date) {
-  if (!(await studentIdsInUnits(db, auth.tenantId!, await scopedUnitIds(db, auth))).includes(userId)) throw notFound("Accepted offer");
+  if (!(await studentIdsInUnits(db, auth.tenantId!, await scopedUnitIds(db, auth), { graduated: true })).includes(userId)) throw notFound("Accepted offer");
   const { a, company } = await loadAccepted(db, auth.tenantId!, driveId, userId);
   await db.update(placementApplications).set({ ...clean(input), joiningUpdatedAt: now }).where(and(eq(placementApplications.driveId, driveId), eq(placementApplications.userId, userId)));
   if (input.status === "revoked" && a.joiningStatus !== "revoked") {
@@ -79,7 +79,7 @@ export async function setJoining(db: Db, auth: AuthContext, driveId: string, use
 export async function joiningBoard(db: Db, auth: AuthContext, now: Date) {
   const tenant = await getTenant(db, auth.tenantId!);
   const today = tenantToday(tenant, now);
-  const scope = new Set(await studentIdsInUnits(db, tenant.id, await scopedUnitIds(db, auth)));
+  const scope = new Set(await studentIdsInUnits(db, tenant.id, await scopedUnitIds(db, auth), { graduated: true }));
   const rows = (
     await db
       .select({ a: placementApplications, company: placementDrives.company, roleTitle: placementDrives.roleTitle, driveDate: placementDrives.driveDate, driveCtc: placementDrives.ctcRupees, name: users.name, rollNo: users.rollNo })

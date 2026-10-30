@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import { BENCHMARK_MIN_STUDENTS, compareWithPeers, localDate, quantile, type BenchmarkValues } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { institutionMetrics, memberships, responses, tenants, users } from "../db/schema";
@@ -24,7 +24,7 @@ export async function measureInstitution(db: DbOrTx, tenantId: string, now: Date
       .selectDistinct({ id: users.id })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
-      .where(and(eq(users.tenantId, tenantId), eq(memberships.role, "student"), eq(users.status, "active")))
+      .where(and(eq(users.tenantId, tenantId), eq(memberships.role, "student"), isNull(memberships.graduatedAt), eq(users.status, "active")))
   ).map((r) => r.id);
   if (ids.length < BENCHMARK_MIN_STUDENTS) return null;
   const readiness = await readinessFor(db, ids, localDate(now, tenant.timeZone));

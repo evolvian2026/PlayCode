@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, ne, sql } from "drizzle-orm";
 import { assessHealth, type HealthStatus } from "@playcode/core";
 import type { DbOrTx } from "../db/client";
 import { aiUsage, assignments, authSessions, invoices, memberships, responses, tenants, users } from "../db/schema";
@@ -27,7 +27,7 @@ export async function customerHealth(db: DbOrTx, args: { partnerId: string | nul
       .select({ tenantId: memberships.tenantId, n: sql<number>`count(distinct ${memberships.userId})::int` })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
-      .where(and(inArray(memberships.tenantId, ids), eq(memberships.role, "student"), eq(users.status, "active")))
+      .where(and(inArray(memberships.tenantId, ids), eq(memberships.role, "student"), isNull(memberships.graduatedAt), eq(users.status, "active")))
       .groupBy(memberships.tenantId),
     db.select({ tenantId: responses.tenantId, n: sql<number>`count(distinct ${responses.userId})::int` }).from(responses).where(and(inArray(responses.tenantId, ids), gte(responses.createdAt, since(7)))).groupBy(responses.tenantId),
     // The same week a month ago, for the trend.

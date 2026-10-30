@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "../db/client";
 import { memberships, users } from "../db/schema";
@@ -27,7 +27,7 @@ export async function importStudents(db: Db, args: { tenantId: string; actorId: 
   const [{ count: used } = { count: 0 }] = await db
     .select({ count: sql<number>`count(distinct ${memberships.userId})::int` })
     .from(memberships)
-    .where(and(eq(memberships.tenantId, tenantId), eq(memberships.role, "student")));
+    .where(and(eq(memberships.tenantId, tenantId), eq(memberships.role, "student"), isNull(memberships.graduatedAt)));
   const toCreate = rows.filter((r, i) => !existing.has(r.email.toLowerCase()) && rows.findIndex((x) => x.email.toLowerCase() === r.email.toLowerCase()) === i);
   if (used + toCreate.length > tenant.seats) {
     throw badRequest(`This import needs ${toCreate.length} seats but only ${Math.max(0, tenant.seats - used)} are left on your licence`);

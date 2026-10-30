@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useMe } from "@/components/Auth";
 import { useT } from "@/lib/i18n";
 
@@ -40,6 +42,19 @@ export function LicenceBanner({ area }: { area: "console" | "play" }) {
           <a href="/console/billing">Plan &amp; billing</a>
         </>
       )}
+    </div>
+  );
+}
+
+/** For a graduate: the account is read-only now, and where to find what's still theirs to do. */
+export function GraduateBanner() {
+  const me = useMe();
+  const t = useT();
+  const path = usePathname();
+  if (!me.graduatedAt || path === "/play/graduated") return null;
+  return (
+    <div role="status" className="card tight small" style={{ background: "var(--accent-soft)", borderColor: "transparent", marginBottom: 12 }}>
+      {t("You've graduated, so practice is closed. Your resume and records stay here for you.")} <Link href="/play/graduated">{t("Alumni list and exit survey")}</Link>
     </div>
   );
 }

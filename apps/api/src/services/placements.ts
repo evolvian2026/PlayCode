@@ -625,7 +625,7 @@ const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : 0);
  */
 export async function outcomes(db: Db, tenantId: string, unitIds: string[] | null) {
   const units = await tenantUnits(db, tenantId);
-  const students = await studentIdsInUnits(db, tenantId, unitIds?.length ? descendants(units, unitIds) : units.map((u) => u.id));
+  const students = await studentIdsInUnits(db, tenantId, unitIds?.length ? descendants(units, unitIds) : units.map((u) => u.id), { graduated: true });
   const studentSet = new Set(students);
   const drives = await db.select().from(placementDrives).where(eq(placementDrives.tenantId, tenantId));
   const driveById = new Map(drives.map((d) => [d.id, d]));

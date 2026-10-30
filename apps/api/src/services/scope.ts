@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { hasInstitutionScope, type Role } from "@playcode/core";
 import type { DbOrTx } from "../db/client";
 import { memberships, orgUnits, users } from "../db/schema";
@@ -54,8 +54,12 @@ export async function assertUnitsInScope(db: DbOrTx, auth: AuthContext, unitIds:
   if (outside.length) throw forbidden("Some batches or sections are outside your scope");
 }
 
-/** Student user ids with a student membership in any of the given units. */
-export async function studentIdsInUnits(db: DbOrTx, tenantId: string, unitIds: string[]): Promise<string[]> {
+/**
+ * Student user ids with a student membership in any of the given units.
+ * Graduates are left out unless asked for: reports about the past include
+ * them, everything that reaches or counts current students doesn't.
+ */
+export async function studentIdsInUnits(db: DbOrTx, tenantId: string, unitIds: string[], opts: { graduated?: boolean } = {}): Promise<string[]> {
   if (unitIds.length === 0) return [];
   const rows = await db
     .selectDistinct({ userId: memberships.userId })
@@ -67,6 +71,7 @@ export async function studentIdsInUnits(db: DbOrTx, tenantId: string, unitIds: s
         eq(memberships.role, "student"),
         inArray(memberships.orgUnitId, unitIds),
         eq(users.status, "active"),
+        opts.graduated ? undefined : isNull(memberships.graduatedAt),
       ),
     );
   return rows.map((r) => r.userId);

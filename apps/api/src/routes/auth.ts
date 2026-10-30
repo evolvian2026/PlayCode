@@ -16,6 +16,7 @@ import { finishLogin, startLogin } from "../services/sso";
 import { authenticate, parse } from "../lib/http";
 import { checkSecondFactor, requestLoginCode, verifyLoginCode } from "../services/mfa";
 import { issueSession, type SignInMethod } from "../services/sessions";
+import { graduatedAt } from "../services/graduation";
 
 /**
  * The signed-in user, their roles and the tenant they are working in. Partner
@@ -43,6 +44,8 @@ export async function loadIdentity(userId: string, activeTenantId?: string | nul
       mfaSetupRequired: Boolean(isStaff(roles) && tenant?.settings.requireStaffMfa && !user.totpSecretEnc),
       /** For the renewal and read-only banners. */
       licence: tenant ? await tenantLicence(db, tenant.id, now).then(({ tenantName: _n, ...l }) => l) : null,
+      /** When this student's batch graduated (their account is then read-only), or null. */
+      graduatedAt: tenant && roles.length === 1 && roles[0] === "student" ? await graduatedAt(db, user.id, tenant.id) : null,
     },
   };
 }

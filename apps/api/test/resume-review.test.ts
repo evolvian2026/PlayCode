@@ -99,7 +99,8 @@ describe("alumni connect", () => {
 
   it("shows students the alumni open to help, without their email", async () => {
     const res = (await t.get(riya, "/student/alumni")).body;
-    expect(res.alumni.map((a: Alum) => a.company)).toEqual(["Amazon", "Freshworks", "Infosys", "TCS", "Texas Instruments", "Zoho"]);
+    // With last year's graduates who joined the list themselves (IIT Madras, PhonePe, Wipro).
+    expect(res.alumni.map((a: Alum) => a.company)).toEqual(["Amazon", "Freshworks", "IIT Madras (M.Tech)", "Infosys", "PhonePe", "TCS", "Texas Instruments", "Wipro", "Zoho"]);
     expect(JSON.stringify(res.alumni)).not.toContain("@");
     freshworks = res.alumni.find((a: Alum) => a.company === "Freshworks");
     neha = res.alumni.find((a: Alum) => a.company === "TCS");
