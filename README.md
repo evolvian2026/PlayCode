@@ -242,6 +242,12 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - Drill answers are now kept, once per question, so checking the same question again doesn't count twice. They are included in the student's data export and erased with the account. Graduates can't drill, as before.
 - Fixed: a computed "1" no longer comes out as "1 days" or "1 hours" in any aptitude question, its options or its working.
 
+**Phase 42 additions**
+- Mistakes to retry (student app Aptitude, Your topics; `/play/aptitude/mistakes`): every aptitude question the student got wrong in the last 90 days, from finished tests, homework and drills, newest first. Each shows the question as they saw it (with its table), their answer, the right answer and the working. "Try a similar one" gives a fresh question on the same topic and level; getting it right clears the original, and a wrong try shows the working and offers another. A test's questions only appear once the test is finished, so this can't be used to see answers mid-test.
+- Pace by topic: speed matters as much as accuracy in placement tests. Each topic in Your topics shows the middle time a question, from adaptive tests and drills, and is marked slow when that is more than a quarter over what the test allows (1m 30s for quantitative ability, 1m 12s for reasoning). Staff see the same under "Where the batch struggles", from adaptive tests. At least three timed answers are needed before a pace is shown; answers over 10 minutes are left out as questions left open.
+- Drills now record the option chosen and the time taken. Both are included in the data export, as are the mistakes put right, and are erased with the account.
+- Fixed: the AI coach availability check used the server's clock instead of the app's, so it could disagree with the rest of the app around the turn of a month.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -468,6 +474,9 @@ Other operations:
 - **Homework draws each student's questions once, on first opening**, and keeps them: reopening shows the same questions, and a student can't skip one to fish for an easier draw. Answers are checked on the server from the stored seed, so the right option never reaches the browser before the student answers.
 - **Drills count for the student, not for staff**: a student's own topic view includes their drill answers, but "Where the batch struggles" still uses only adaptive tests and homework. Students choose what to drill, often their weak topics, so counting drills would make the batch look worse at exactly the topics it is practising.
 - **The new topics' questions stay in English**, like the rest of the question bank, and so do data-interpretation tables and blood-relation codes. Topic names and buttons are translated.
+- **Homework isn't timed**: students do it in sittings that can stretch over a day, so the time between answers says nothing about pace. Pace comes from adaptive tests and drills only.
+- **Drill time is measured on the phone**, from the question appearing to Check. It feeds only the student's own pace and is capped at an hour, so a wrong clock can mislead only the student who sent it.
+- **A mistake is cleared by a similar question, not the same one**: the same question again tests memory of the answer. A similar question uses the same topic and level with new numbers.
 - **The SAML key pair is one per server**, from the environment, rather than one per institution: IdPs only need PlayCode's certificate, and rotating it is a deploy, not a per-college task.
 
 Not built yet: screen-reader testing by people who use them (the automated check covers WCAG rules it can test), PostgreSQL row-level security, Tamil for the placement pages and languages beyond English, Hindi and Tamil, and native mobile apps (the web app is an installable PWA).
