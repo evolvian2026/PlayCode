@@ -264,6 +264,18 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - Practice for a drive (Mock interview, or Mock interview on a registered drive's card): for a drive the student registered for that hasn't happened yet, the interviewer runs a technical or HR round as that company's panel would. A technical round takes the company's kind (service or product). The interviewer is given what students from the college reported in their published interview experiences of that company (rounds, what was asked, tips, difficulty), without names, and pitches its questions at that. Past interviews show the company, and so does the transcript teachers read.
 - The company, role, reports and resume entries are saved with the interview when it starts, so later edits to the resume or new reports don't change an interview under way.
 
+**Phase 46 additions**
+- Your prep plan for a drive (student app, "Your prep plan" on a registered drive's card; `/play/placements/<drive>/prep`): the steps that matter for this drive, each ticked off by itself from what PlayCode already records.
+  - Pass the drive's practice mission.
+  - A mock interview for this drive (Phase 45).
+  - An official aptitude score that meets the drive's minimum.
+  - A resume headline and summary.
+  - The documents the placement cell asked for.
+  - On duty asked for the drive day.
+
+  Steps that don't apply to this drive are left out: no mission picked, no minimum score, a weekend drive, nothing asked for. Each step has a button to go and do it. The page counts down to the drive day, lists the rounds, and links to seniors' interview experiences of the company when there are any.
+- Getting ready (console, a drive's page, until the drive day): every registered student against the same steps, furthest behind first, with how many have done each step. "Remind the N behind" sends each student a notification naming the steps they're missing, linking to their plan; a student is reminded at most once a day per drive.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -487,6 +499,7 @@ Other operations:
 - **Eligibility reasons are translated by template, not sent as codes**: the API, its tests and the staff console use the English sentences, so the student app translates them on the way in. Sending a code and values instead would be cleaner, but it changes the API for every client.
 - **Drive practice uses published experiences only, and never names**: unpublished write-ups haven't been read by the placement cell, and the interviewer doesn't need to know who said what. The reports shape the questions; the interviewer is told not to quote them.
 - **The project round takes the resume as written**: it asks about what the student listed rather than checking it, and a description that tries to instruct the interviewer is treated as part of the resume. Certifications are left out, since they come with a course rather than something the student built.
+- **A drive's plan is worked out, not ticked by hand**: every step is read from records PlayCode already keeps (certificates, interviews, aptitude sittings, the resume, document uploads, on-duty requests), so a student can't tick a step they haven't done, and staff don't have to keep anything up to date. Reading seniors' interview experiences is offered but not counted, because opening a page doesn't show anything was learned.
 - **The adaptive test scores with a Rasch model and a posterior mean**, not a running percentage: ability and question difficulty share one scale, and the estimate starts from a standard normal prior, so a lucky first answer can't send a score to 900. Template levels stand in for calibrated item difficulties; once enough students have answered, levels could be recalibrated from the answers, as item analysis already does for the question bank.
 - **The adaptive test and drills don't change mastery or XP**, like mock tests: the questions aren't in the question bank, and a score that measures shouldn't also be farmed.
 - **Only a sitting's score counts**: practice is unlimited, so a best-of score would reward retakes, not ability. A sitting gives one attempt in a window the placement cell chooses, which is what lets a drive set a minimum on it. Sittings aren't proctored by PlayCode; colleges run them in a lab, as they do online drive tests.
