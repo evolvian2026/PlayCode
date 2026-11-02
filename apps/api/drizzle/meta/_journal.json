@@ -519,6 +519,13 @@
       "when": 1793620454581,
       "tag": "0073_speaking_drills",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1793621655642,
+      "tag": "0074_practice_tasks",
+      "breakpoints": true
     }
   ]
 }

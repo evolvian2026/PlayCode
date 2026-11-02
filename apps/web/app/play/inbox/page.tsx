@@ -27,6 +27,7 @@ const LABEL: Record<string, string> = {
   training: "Training",
   circular: "Circular",
   weekly_summary: "Your week",
+  practice_task: "From your trainer",
 };
 
 export default function InboxPage() {

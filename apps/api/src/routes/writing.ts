@@ -4,6 +4,7 @@ import { db } from "../db/client";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { getMyJam, jamHome, submitJam } from "../services/jam";
 import { drillsHome, getMyDrill, submitDrill } from "../services/speaking-drills";
+import { myPracticeTasks } from "../services/practice-tasks";
 import { getMyWriting, submitWriting, writingHome } from "../services/writing";
 
 /** Written and spoken English practice in the student app. */
@@ -42,6 +43,9 @@ export async function writingRoutes(app: FastifyInstance) {
     );
     return submitJam(db, ctx(req), body);
   });
+
+  // Speaking and writing practice set by trainers, done through the pages above.
+  app.get("/student/practice-tasks", async (req) => myPracticeTasks(db, ctx(req)));
 
   // Speaking drills: read aloud, and listen and repeat. Scored without AI.
   app.get("/student/speaking-drills", async (req) => drillsHome(db, ctx(req)));

@@ -24,6 +24,7 @@ import { gdForStaff, gdsFor } from "../services/gd";
 import { writingFor, writingForStaff } from "../services/writing";
 import { jamFor, jamForStaff } from "../services/jam";
 import { drillsFor } from "../services/speaking-drills";
+import { createPracticeTask, deletePracticeTask, practiceTaskForStaff, practiceTasksForStaff } from "../services/practice-tasks";
 import { interviewForStaff, interviewsFor } from "../services/interviews";
 import { assertUnitsInScope, descendants, scopedUnitIds, studentIdsInUnits, tenantUnits } from "../services/scope";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
@@ -208,6 +209,30 @@ export async function consoleRoutes(app: FastifyInstance) {
     const { unitId } = parse(unitQuery, req.query);
     return drillsFor(db, (await resolveScope(req, unitId)).studentIds);
   });
+
+  // ---------- Communication tasks: speaking and writing practice set for batches ----------
+  app.get("/practice-tasks", { preHandler: requirePermission("assignments.manage") }, async (req) => practiceTasksForStaff(db, req.auth));
+  app.get("/practice-tasks/:id", { preHandler: requirePermission("assignments.manage") }, async (req) =>
+    practiceTaskForStaff(db, req.auth, parse(z.object({ id: z.string().uuid() }), req.params).id),
+  );
+  app.post("/practice-tasks", { preHandler: requirePermission("assignments.manage") }, async (req) => {
+    const body = parse(
+      z.object({
+        kind: z.enum(["jam", "read", "repeat", "writing"]),
+        ref: z.string().max(60).nullable().default(null),
+        note: z.string().trim().max(500).nullable().default(null).transform((n) => n || null),
+        unitIds: z.array(z.string().uuid()).min(1, "Choose at least one batch or section"),
+        openAt: z.coerce.date().optional(),
+        closeAt: z.coerce.date(),
+      }),
+      req.body,
+    );
+    const now = app.now();
+    return createPracticeTask(db, req.auth, { ...body, openAt: body.openAt ?? now }, now);
+  });
+  app.delete("/practice-tasks/:id", { preHandler: requirePermission("assignments.manage") }, async (req) =>
+    deletePracticeTask(db, req.auth, parse(z.object({ id: z.string().uuid() }), req.params).id),
+  );
 
   // ---------- Speaking practice (JAM) ----------
   app.get("/jam", { preHandler: anyAnalytics }, async (req) => {

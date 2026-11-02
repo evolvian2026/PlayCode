@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { DrillItemResult, DrillKind, Answer, BenchmarkValues, DataTable, InterviewContext, InterviewTrack, NotifyPrefs, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, ExitItem, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, OnDutyPart, OnDutyReason, OnDutyStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { DrillItemResult, DrillKind, PracticeTaskKind, Answer, BenchmarkValues, DataTable, InterviewContext, InterviewTrack, NotifyPrefs, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, ExitItem, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, OnDutyPart, OnDutyReason, OnDutyStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -809,7 +809,7 @@ export const contestSubmissions = pgTable(
 
 // ---------- Notifications ----------
 
-export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest" | "squad" | "doubt" | "interview_slot" | "class_test" | "training" | "circular" | "weekly_summary";
+export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest" | "squad" | "doubt" | "interview_slot" | "class_test" | "training" | "circular" | "weekly_summary" | "practice_task";
 
 export const notifications = pgTable(
   "notifications",
@@ -1814,6 +1814,26 @@ export const speakingDrills = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("speaking_drills_user_idx").on(t.userId, t.createdAt)],
+);
+
+/** Speaking or writing practice a trainer set for batches, done by the student's own attempt before the due date. */
+export const practiceTasks = pgTable(
+  "practice_tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<PracticeTaskKind>().notNull(),
+    /** The JAM topic or writing task id; null for drills. */
+    ref: text("ref"),
+    /** What the trainer wants students to focus on, shown with the task. */
+    note: text("note"),
+    orgUnitIds: jsonb("org_unit_ids").$type<string[]>().notNull(),
+    openAt: timestamp("open_at", { withTimezone: true }).notNull(),
+    closeAt: timestamp("close_at", { withTimezone: true }).notNull(),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("practice_tasks_tenant_idx").on(t.tenantId, t.closeAt)],
 );
 
 // ---------- Question papers ----------

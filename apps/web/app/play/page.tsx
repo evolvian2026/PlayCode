@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { DIVISION_LABELS, type Division } from "@playcode/core";
+import { DIVISION_LABELS, PRACTICE_TASK_KINDS, type Division, type PracticeTaskKind } from "@playcode/core";
 import { useMe } from "@/components/Auth";
 import { Icon } from "@/components/Icon";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
@@ -141,6 +141,35 @@ function TrainingCard() {
       </div>
       <Icon name="arrow" />
     </Link>
+  );
+}
+
+/** Speaking and writing practice a trainer set, not yet done. */
+function PracticeTasksCard() {
+  const t = useT();
+  const locale = useLocale();
+  const { data } = useApi<{ tasks: { id: string; kind: PracticeTaskKind; subject: string | null; note: string | null; closeAt: string; open: boolean; path: string; done: unknown }[] }>("/student/practice-tasks");
+  const todo = data?.tasks.filter((x) => x.open && !x.done) ?? [];
+  if (todo.length === 0) return null;
+  return (
+    <div className="card stack" style={{ gap: 8, borderColor: "var(--accent)" }}>
+      <b>{t("From your trainer")}</b>
+      {todo.map((x) => (
+        <Link key={x.id} href={x.path} className="spread" style={{ color: "inherit" }}>
+          <div>
+            <div style={{ fontWeight: 600 }}>
+              {t(PRACTICE_TASK_KINDS[x.kind])}
+              {x.subject && `: ${x.subject}`}
+            </div>
+            <div className="small muted">
+              {t("Due {when}", { when: new Date(x.closeAt).toLocaleString(intlLocale(locale), { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) })}
+              {x.note && ` · ${x.note}`}
+            </div>
+          </div>
+          <Icon name="arrow" />
+        </Link>
+      ))}
+    </div>
   );
 }
 
@@ -350,6 +379,7 @@ function StudentHome() {
         </div>
       )}
 
+      <PracticeTasksCard />
       <CircularCard />
       <DocumentsCard />
       <TrainingCard />

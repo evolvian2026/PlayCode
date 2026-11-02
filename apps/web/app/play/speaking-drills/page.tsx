@@ -301,6 +301,9 @@ function DrillsPage() {
     );
   if (home.error) return <ErrorBox message={home.error.message} onRetry={home.reload} />;
   if (!home.data) return <Loading />;
+  // Set by a trainer: the kind of drill comes from the link.
+  const start = params.get("start");
+  const assigned = start === "read" || start === "repeat" ? start : null;
 
   return (
     <div className="stack">
@@ -313,6 +316,17 @@ function DrillsPage() {
           {t("Short drills like the automated English tests some companies use (Versant, SVAR). Each sentence is scored by how many of its words came through clearly.")}
         </p>
       </div>
+      {assigned && (
+        <div className="card spread" style={{ borderColor: "var(--accent)" }}>
+          <div>
+            <div className="small muted">{t("From your trainer")}</div>
+            <b>{t(DRILL_KINDS[assigned].label)}</b>
+          </div>
+          <button className="btn primary small" disabled={!support.input || (assigned === "repeat" && !support.output)} onClick={() => setRunning(assigned)}>
+            {t("Start")}
+          </button>
+        </div>
+      )}
       {!support.input && <div className="card">{t("Speaking practice needs a browser that turns speech into text, such as Chrome on Android or on a computer.")}</div>}
       {home.data.kinds.map(({ kind, best, sittings }) => {
         const needsVoice = kind === "repeat" && !support.output;

@@ -1846,4 +1846,10 @@ export const TA: Record<string, string> = {
   "Clear: almost every word came through": "தெளிவு: கிட்டத்தட்ட எல்லாச் சொற்களும் கேட்டன",
   "Mostly clear: some words were missed": "பெரும்பாலும் தெளிவு: சில சொற்கள் தவறின",
   "Hard to follow: many words were missed": "புரிந்துகொள்வது கடினம்: பல சொற்கள் தவறின",
+  // Speaking and writing tasks from trainers
+  "From your trainer": "உங்கள் பயிற்சியாளரிடமிருந்து",
+  "Due {when}": "கடைசி நாள் {when}",
+  "JAM talk": "JAM பேச்சு",
+  "From your trainer: {what}": "உங்கள் பயிற்சியாளரிடமிருந்து: {what}",
+  "{kind}. Do it by {date}.": "{kind}. {date} க்குள் செய்து முடியுங்கள்.",
 };

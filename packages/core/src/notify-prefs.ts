@@ -27,6 +27,7 @@ const CATEGORY_OF: Record<string, NotifyCategory> = {
   class_test: "tests",
   training: "tests",
   interview_slot: "tests",
+  practice_task: "tests",
   streak_at_risk: "practice",
   review_due: "practice",
   weekly_summary: "practice",

@@ -20,6 +20,7 @@ import { circularReminders } from "../services/circulars";
 import { documentReminders } from "../services/documents";
 import { reviewPendingSnapshots } from "../services/snapshot-review";
 import { weeklySummaries } from "../services/weekly-summary";
+import { practiceTaskReminders } from "../services/practice-tasks";
 
 // Hourly job: queue automatic nudges (streaks, due assignments, open tests)
 // and deliver everything pending; also catch up on webcam snapshots of
@@ -37,6 +38,7 @@ try {
     await recordJob(db, "nudges", now, async () => ({
       queued: await runNudges(db, now),
       weeklySummaries: await weeklySummaries(db, now),
+      practiceTaskReminders: await practiceTaskReminders(db, now),
       contestsFinalized: (await finalizeContests(db, now)).finalized,
       mocksFinalized: (await finalizeExpiredMocks(db, now)).finalized,
       squadReminders: await squadReminders(db, now),

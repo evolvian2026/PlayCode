@@ -18,6 +18,7 @@ const NAV: NavItem[] = [
   { href: "/console/mentoring", label: "Mentor assignment", icon: "users", perm: ["users.manage", "placements.manage", "analytics.department"], noCompany: true },
   { href: "/console/assignments", label: "Assignments", icon: "clipboard", perm: "assignments.manage" },
   { href: "/console/papers", label: "Question papers", icon: "clipboard", perm: "assignments.manage" },
+  { href: "/console/practice-tasks", label: "Speaking & writing tasks", icon: "mic", perm: "assignments.manage", noCompany: true },
   { href: "/console/paths", label: "Learning paths", icon: "map", perm: "assignments.manage", feature: "learning_paths" },
   { href: "/console/tests", label: "Tests", icon: "flag", perm: "assessments.proctor" },
   { href: "/console/doubts", label: "Doubts", icon: "chat", perm: "doubts.answer", noCompany: true },

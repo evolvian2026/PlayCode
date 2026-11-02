@@ -1853,4 +1853,10 @@ export const HI: Record<string, string> = {
   "Clear: almost every word came through": "साफ़: लगभग हर शब्द सुनाई दिया",
   "Mostly clear: some words were missed": "ज़्यादातर साफ़: कुछ शब्द छूट गए",
   "Hard to follow: many words were missed": "समझना मुश्किल: कई शब्द छूट गए",
+  // Speaking and writing tasks from trainers
+  "From your trainer": "आपके ट्रेनर की ओर से",
+  "Due {when}": "जमा करने की तारीख {when}",
+  "JAM talk": "JAM बात",
+  "From your trainer: {what}": "आपके ट्रेनर की ओर से: {what}",
+  "{kind}. Do it by {date}.": "{kind}। {date} तक कर लें।",
 };

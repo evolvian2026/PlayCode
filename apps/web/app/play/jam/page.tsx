@@ -351,6 +351,8 @@ function JamPage() {
   const data = home.data;
   const canStart = data.available && data.leftToday > 0 && supported;
   const shown = data.topics.filter((x) => category === "all" || x.category === category);
+  // Set by a trainer: the topic comes from the link.
+  const assigned = data.topics.find((x) => x.id === params.get("topic"));
 
   return (
     <div className="stack">
@@ -363,6 +365,17 @@ function JamPage() {
           {t("JAM (Just A Minute): see a topic, think for {prep} seconds, then speak for a minute. You get feedback on your ideas, structure and language, and on your pace and filler words.", { prep: JAM_PREP_SECONDS })}
         </p>
       </div>
+      {assigned && (
+        <div className="card stack" style={{ gap: 6, borderColor: "var(--accent)" }}>
+          <div className="small muted">{t("From your trainer")}</div>
+          <div className="spread">
+            <b>{assigned.topic}</b>
+            <button className="btn primary small" disabled={!canStart} onClick={() => setTopic(assigned)}>
+              {t("Speak")}
+            </button>
+          </div>
+        </div>
+      )}
       {!supported && <div className="card">{t("Speaking practice needs a browser that turns speech into text, such as Chrome on Android or on a computer.")}</div>}
       {!data.available && data.reason && <div className="card">{t(data.reason)}</div>}
       {data.available && (

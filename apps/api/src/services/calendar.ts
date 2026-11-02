@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gte, lte } from "drizzle-orm";
-import { toIcs, type CalendarEvent } from "@playcode/core";
+import { PRACTICE_TASK_KINDS, toIcs, type CalendarEvent } from "@playcode/core";
 import type { Db } from "../db/client";
 import { assignments, users } from "../db/schema";
 import { env } from "../env";
@@ -13,6 +13,7 @@ import { studentSlots } from "./interview-slots";
 import { appLink } from "./notifications";
 import { studentPlacements } from "./placements";
 import { studentUnitIdsWithAncestors } from "./scope";
+import { myPracticeTasks } from "./practice-tasks";
 import { myTraining } from "./training";
 
 // One calendar for everything dated in a student's PlayCode: training
@@ -47,6 +48,12 @@ export async function calendarEvents(db: Db, ctx: Ctx, from: Date, to: Date): Pr
   const due = (await db.select().from(assignments).where(and(eq(assignments.tenantId, ctx.tenantId), gte(assignments.closeAt, from), lte(assignments.closeAt, to)))).filter((a) => isAssignedTo(a, myUnits, ctx.userId));
   for (const a of due) {
     events.push({ uid: `assignment-${a.id}@playcode`, kind: "assignment", title: `Due: ${a.title}`, start: iso(a.closeAt), end: null, allDay: false, location: null, detail: `${a.questionIds.length} questions`, url: appLink("/play") });
+  }
+
+  for (const p of (await myPracticeTasks(db, ctx)).tasks) {
+    if (p.done || !inRange(p.closeAt, null)) continue;
+    const what = p.subject ? `${PRACTICE_TASK_KINDS[p.kind]}: ${p.subject}` : PRACTICE_TASK_KINDS[p.kind];
+    events.push({ uid: `practice-${p.id}@playcode`, kind: "assignment", title: `Due: ${what}`, start: iso(p.closeAt), end: null, allDay: false, location: null, detail: p.note, url: appLink(p.path) });
   }
 
   for (const c of (await studentContests(db, ctx)).contests) {
