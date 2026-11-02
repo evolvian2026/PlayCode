@@ -89,7 +89,7 @@ function EntryForm({ initial, onSaved, onCancel }: { initial?: Entry; onSaved: (
       </div>
       <div>
         <label htmlFor="e-link">{t(cert ? "Credential link" : "Link (optional)")}</label>
-        <input id="e-link" type="url" value={f.link} onChange={(e) => setF({ ...f, link: e.target.value })} maxLength={300} placeholder="https://" />
+        <input id="e-link" type="url" value={f.link} onChange={(e) => setF({ ...f, link: e.target.value })} maxLength={300} placeholder="https://" /* i18n-ignore */ />
       </div>
       {initial?.verification === "verified" && <div className="small">{t("This is verified. Changing it means asking your college to verify it again.")}</div>}
       {msg && <ErrorBox message={msg} />}

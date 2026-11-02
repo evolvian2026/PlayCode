@@ -4,6 +4,7 @@
 // translated into one language isn't left half in English in the other.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import ts from "typescript";
 import { HI } from "../../../packages/core/src/i18n/hi.ts";
 import { TA } from "../../../packages/core/src/i18n/ta.ts";
 // Drive eligibility reasons come from the core package in English and are translated by template.
@@ -79,6 +80,87 @@ for (const [name, dict] of [["Hindi", HI], ["Tamil", TA]])
     console.log(`${name}: no translation for the eligibility reason "${k}"`);
     problems++;
   }
+// Student screens: every page under app/play and every component they use
+// (directly or through other components) must pass its text through t(), and
+// every t("...") there must have Hindi and Tamil. Text that stays English on
+// purpose (an acronym such as XP or CGPA, a sample in English) is either all
+// capitals or marked with an "i18n-ignore" comment on its line or the line before.
+const web = new URL("..", import.meta.url).pathname;
+const tsxFiles = (dir) => readdirSync(dir).flatMap((f) => (statSync(join(dir, f)).isDirectory() ? tsxFiles(join(dir, f)) : f.endsWith(".tsx") ? [join(dir, f)] : []));
+const studentFiles = new Set(tsxFiles(join(web, "app/play")));
+for (let grew = true; grew; ) {
+  grew = false;
+  for (const file of [...studentFiles]) {
+    const src = readFileSync(file, "utf8");
+    for (const m of src.matchAll(/from "(?:@\/components\/|\.\/)(\w+)"/g)) {
+      const dep = join(web, "components", `${m[1]}.tsx`);
+      if (!studentFiles.has(dep) && (m[0].includes("@/") || file.startsWith(join(web, "components"))) && statSync(dep, { throwIfNoEntry: false })) {
+        studentFiles.add(dep);
+        grew = true;
+      }
+    }
+  }
+}
+const TEXT_ATTRS = new Set(["aria-label", "placeholder", "title", "alt", "label"]);
+const T_CALLS = new Set(["t", "tr"]);
+const hasWords = (s) => /[A-Za-z]{2}/.test(s) && !/^[^a-z]*$/.test(s);
+const screenKeys = new Set();
+let untranslated = 0;
+for (const file of [...studentFiles].sort()) {
+  const src = readFileSync(file, "utf8");
+  const lines = src.split("\n");
+  const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const at = (n) => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line;
+  const ignored = (n) => /i18n-ignore/.test(lines[at(n)] ?? "") || /i18n-ignore/.test(lines[at(n) - 1] ?? "");
+  const report = (n, text, what = "not translated") => {
+    if (ignored(n)) return;
+    console.log(`${file.slice(web.length)}:${at(n) + 1}: ${what}: ${JSON.stringify(text.slice(0, 70))}`);
+    untranslated++;
+  };
+  const visit = (n) => {
+    // A component only staff see, in a file students also use, is marked "i18n: staff only" and skipped.
+    if (ts.isFunctionDeclaration(n) && /i18n: staff only/.test(src.slice(n.getFullStart(), n.getStart(sf)))) return;
+    if (ts.isCallExpression(n) && T_CALLS.has(n.expression.getText(sf)) && n.arguments[0] && ts.isStringLiteral(n.arguments[0])) screenKeys.add(n.arguments[0].text);
+    // Dates in the student's language: useDates() or toLocale...String(intlLocale(locale), ...), not the
+    // console's English helpers or the browser's default. "en-CA" gives a YYYY-MM-DD key, not text.
+    if (ts.isCallExpression(n) && !file.endsWith("components/ui.tsx")) {
+      const callee = n.expression.getText(sf);
+      const first = n.arguments[0];
+      if (callee === "timeAgo" || callee === "formatDate") report(n, `${callee}()`, "English date; use useDates()");
+      else if (/\.toLocale(Date|Time)?String$/.test(callee) && (!first || first.getText(sf) === "undefined" || (ts.isStringLiteral(first) && first.text !== "en-CA")))
+        report(n, `${callee.split(".").pop()}(${first ? first.getText(sf) : ""})`, "date not in the student's language");
+    }
+    if (ts.isJsxText(n)) {
+      const text = n.getText(sf).replace(/\s+/g, " ").trim();
+      if (hasWords(text)) report(n, text);
+    } else if (ts.isJsxAttribute(n) && n.initializer && ts.isStringLiteral(n.initializer) && TEXT_ATTRS.has(n.name.getText(sf))) {
+      if (hasWords(n.initializer.text)) report(n, n.initializer.text);
+    } else if (ts.isTemplateExpression(n) && [n.head, ...n.templateSpans.map((x) => x.literal)].some((part) => hasWords(part.text))) {
+      // `${n} hearts` as text or in an aria-label: the words need t("{n} hearts", { n }).
+      const p = n.parent;
+      if (ts.isJsxExpression(p) && (ts.isJsxElement(p.parent) || ts.isJsxFragment(p.parent) || (ts.isJsxAttribute(p.parent) && TEXT_ATTRS.has(p.parent.name.getText(sf))))) report(n, n.getText(sf));
+    } else if ((ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) && hasWords(n.text)) {
+      // A string literal shown as text: {cond ? "Passed" : "Failed"}, {label ?? "None"}.
+      let p = n.parent;
+      while (p && (ts.isConditionalExpression(p) || ts.isParenthesizedExpression(p) || ts.isBinaryExpression(p))) {
+        if (ts.isConditionalExpression(p) && p.condition === n) p = null;
+        else if (ts.isBinaryExpression(p) && ![ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(p.operatorToken.kind)) p = null;
+        else p = p.parent;
+      }
+      if (p && ts.isJsxExpression(p) && (ts.isJsxElement(p.parent) || ts.isJsxFragment(p.parent) || (ts.isJsxAttribute(p.parent) && TEXT_ATTRS.has(p.parent.name.getText(sf))))) report(n, n.text);
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+}
+problems += untranslated;
+for (const [name, dict] of [["Hindi", HI], ["Tamil", TA]])
+  for (const k of [...screenKeys].filter((k) => !(k in dict) && hasWords(k))) {
+    console.log(`${name}: no translation for "${k}" (used on a student screen)`);
+    problems++;
+  }
+console.log(`Student screens: ${studentFiles.size} files, ${screenKeys.size} texts.`);
+
 console.log(`Hindi ${Object.keys(HI).length} entries; Tamil ${Object.keys(TA).length}.`);
 if (problems) {
   console.log(`${problems} problems`);

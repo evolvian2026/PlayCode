@@ -51,3 +51,19 @@ describe("labels that notifications pass in as values", () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe("labels the student app shows", () => {
+  it("are translated in Hindi and Tamil", async () => {
+    const core = await import("../src");
+    const { HI } = await import("../src/i18n/hi");
+    const { TA } = await import("../src/i18n/ta");
+    const labels = [
+      ...Object.values(core.DIVISION_LABELS),
+      ...Object.values(core.QUESTION_TYPE_LABELS),
+      ...Object.values(core.INTERVIEW_TRACK_LABELS),
+      ...Object.values(core.NOTIFY_CATEGORIES).flatMap((c) => [c.label, c.detail]),
+    ];
+    const missing = labels.filter((l) => !(l in HI) || !(l in TA));
+    expect(missing).toEqual([]);
+  });
+});

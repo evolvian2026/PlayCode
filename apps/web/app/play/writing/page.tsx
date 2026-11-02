@@ -224,6 +224,7 @@ function Editor({ task, leftToday, onMarked, onBack }: { task: WritingTask; left
         onChange={(e) => setText(e.target.value)}
         maxLength={6000}
         spellCheck={false}
+        // i18n-ignore: the email is written in English, so its sample is too
         placeholder={task.kind === "email" ? "Subject: ...\n\nDear ...," : t("Write your essay here.")}
         disabled={busy}
       />

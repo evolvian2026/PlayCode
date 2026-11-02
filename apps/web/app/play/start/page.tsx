@@ -5,9 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ErrorBox, Loading } from "@/components/ui";
 import { startAndOpen } from "@/lib/start";
+import { useT } from "@/lib/i18n";
 
 // Deep link into an assignment (used by LMS launches): start or resume it and open the player.
 function Start() {
+  const t = useT();
   const router = useRouter();
   const assignmentId = useSearchParams().get("assignment");
   const [error, setError] = useState<string | null>(null);
@@ -18,12 +20,12 @@ function Start() {
     }
     void startAndOpen({ kind: "assignment", assignmentId }, router.replace).then(setError);
   }, [assignmentId, router]);
-  if (!error) return <Loading label="Opening your assignment" />;
+  if (!error) return <Loading label={t("Opening your assignment")} />;
   return (
     <div className="stack">
       <ErrorBox message={error} />
       <Link className="btn" href="/play">
-        Go to PlayCode home
+        {t("Go to PlayCode home")}
       </Link>
     </div>
   );

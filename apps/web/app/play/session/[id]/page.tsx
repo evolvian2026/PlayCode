@@ -228,7 +228,7 @@ export default function SessionPlayer() {
           <Bar value={progress} tone="good" />
         </div>
         {session.usesHearts && (
-          <span className="stat-heart row" style={{ gap: 4, fontWeight: 700 }} aria-label={`${profile?.hearts ?? 0} hearts`}>
+          <span className="stat-heart row" style={{ gap: 4, fontWeight: 700 }} aria-label={t("{n} hearts", { n: profile?.hearts ?? 0 })}>
             <Icon name="heart" size={18} /> {profile?.hearts ?? ""}
           </span>
         )}

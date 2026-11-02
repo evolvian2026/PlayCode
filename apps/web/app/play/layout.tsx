@@ -53,9 +53,9 @@ function TopBar() {
   if (isFullScreen(path)) return <div style={{ height: 12 }} />;
   if (!profile) return <div className="play-top" style={{ height: 52 }} />;
   return (
-    <div className="play-top spread" aria-label="Your stats">
+    <div className="play-top spread" aria-label={t("Your stats")}>
       <span className="pill accent" title={t("Weekly league division")}>
-        <Icon name="trophy" size={14} /> {DIVISION_LABELS[profile.division]}
+        <Icon name="trophy" size={14} /> {t(DIVISION_LABELS[profile.division])}
       </span>
       <div className="row" style={{ gap: 14, fontWeight: 700 }}>
         <span className="stat-streak row" style={{ gap: 4 }} title={t(profile.streak.atRisk ? "Practise today to keep your streak" : "Day streak")}>
@@ -78,7 +78,7 @@ function BottomNav() {
   const path = usePathname();
   if (isFullScreen(path)) return null;
   return (
-    <nav className="play-nav" aria-label="Main">
+    <nav className="play-nav" aria-label={t("Main")}>
       <div className="play-nav-inner">
         {NAV.map((n) => {
           const active = n.href === "/play" ? path === "/play" : path.startsWith(n.href);

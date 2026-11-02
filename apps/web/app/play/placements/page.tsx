@@ -142,6 +142,7 @@ function Joining({ drive, joining, onChange }: { drive: Drive; joining: NonNulla
   );
 }
 
+// i18n-ignore: rupee amounts keep Indian digit grouping (12,00,000) in every language
 const rupees = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
 interface Checklist {

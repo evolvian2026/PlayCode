@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/lib/i18n";
+
 /** Code with line numbers. With `onLineClick`, lines become tappable (spot the bug). */
 export function CodeBlock({
   code,
@@ -12,6 +14,7 @@ export function CodeBlock({
   onLineClick?: (line: number) => void;
   label?: string;
 }) {
+  const t = useT();
   const lines = code.split("\n");
   return (
     // Read-only code is a focusable region, so keyboard users can scroll long lines on a phone.
@@ -19,7 +22,7 @@ export function CodeBlock({
       className="code"
       role={onLineClick ? "listbox" : "region"}
       tabIndex={onLineClick ? undefined : 0}
-      aria-label={label ?? "Code"}
+      aria-label={label ?? t("Code")}
       aria-multiselectable={onLineClick ? true : undefined}
     >
       {lines.map((text, i) => {

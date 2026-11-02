@@ -5,6 +5,7 @@ import { CODE_LANGUAGE_LABELS, type CodeLanguage } from "@playcode/core";
 import { CodeBlock } from "./CodeBlock";
 import { CodeEditor } from "./CodeEditor";
 import type { Evaluation, QuestionView, SqlResult, TestResult } from "@/lib/types";
+import { useT } from "@/lib/i18n";
 
 const STATUS_LABEL: Record<TestResult["status"], string> = {
   ok: "Ran",
@@ -16,8 +17,9 @@ const STATUS_LABEL: Record<TestResult["status"], string> = {
 };
 
 export function ResultTable({ result }: { result: SqlResult }) {
-  if (!result.ok) return <div className="error">{result.error ?? "The query failed"}</div>;
-  if (result.rows.length === 0) return <p className="muted small">No rows.</p>;
+  const t = useT();
+  if (!result.ok) return <div className="error">{result.error ?? t("The query failed")}</div>;
+  if (result.rows.length === 0) return <p className="muted small">{t("No rows.")}</p>;
   return (
     <div className="table-wrap card tight" style={{ padding: 0 }}>
       <table className="result-table">
@@ -44,6 +46,7 @@ export function ResultTable({ result }: { result: SqlResult }) {
 
 /** Test-by-test results for code, or the result table for SQL. */
 export function EvaluationView({ evaluation, title }: { evaluation: Evaluation; title?: string }) {
+  const t = useT();
   if (evaluation.kind === "sql") {
     return (
       <div className="stack" style={{ gap: 6 }}>
@@ -52,47 +55,47 @@ export function EvaluationView({ evaluation, title }: { evaluation: Evaluation; 
       </div>
     );
   }
-  const hidden = evaluation.tests.filter((t) => t.hidden);
+  const hidden = evaluation.tests.filter((test) => test.hidden);
   return (
     <div className="stack" style={{ gap: 6 }}>
       <div className="spread small">
-        <span className="muted">{title ?? "Tests"}</span>
+        <span className="muted">{title ?? t("Tests")}</span>
         <b>
-          {evaluation.passed}/{evaluation.total} passed
+          {t("{n}/{total} passed", { n: evaluation.passed, total: evaluation.total })}
         </b>
       </div>
       {evaluation.compileError && (
         <div className="test-row fail">
-          <b>Compilation error</b>
+          <b>{t("Compilation error")}</b>
           <pre>{evaluation.compileError}</pre>
         </div>
       )}
       {!evaluation.compileError &&
         evaluation.tests
-          .filter((t) => !t.hidden)
-          .map((t, i) => (
-            <div key={i} className={`test-row ${t.passed ? "pass" : "fail"}`}>
+          .filter((test) => !test.hidden)
+          .map((test, i) => (
+            <div key={i} className={`test-row ${test.passed ? "pass" : "fail"}`}>
               <div className="spread">
-                <b>Sample {i + 1}</b>
-                <span>{t.passed ? "Passed" : t.status === "ok" ? "Wrong output" : STATUS_LABEL[t.status]}</span>
+                <b>{t("Sample {n}", { n: i + 1 })}</b>
+                <span>{t(test.passed ? "Passed" : test.status === "ok" ? "Wrong output" : STATUS_LABEL[test.status])}</span>
               </div>
-              {!t.passed && (
+              {!test.passed && (
                 <>
-                  <div className="small muted">Input</div>
-                  <pre>{t.input || "(empty)"}</pre>
-                  <div className="small muted">Expected</div>
-                  <pre>{t.expected || "(nothing)"}</pre>
-                  <div className="small muted">Your output</div>
-                  <pre>{t.actual || "(nothing)"}</pre>
-                  {t.stderr && <pre style={{ color: "var(--bad-ink)" }}>{t.stderr}</pre>}
+                  <div className="small muted">{t("Input")}</div>
+                  <pre>{test.input || t("(empty)")}</pre>
+                  <div className="small muted">{t("Expected")}</div>
+                  <pre>{test.expected || t("(nothing)")}</pre>
+                  <div className="small muted">{t("Your output")}</div>
+                  <pre>{test.actual || t("(nothing)")}</pre>
+                  {test.stderr && <pre style={{ color: "var(--bad-ink)" }}>{test.stderr}</pre>}
                 </>
               )}
             </div>
           ))}
       {hidden.length > 0 && !evaluation.compileError && (
         <div className="test-row">
-          Hidden tests: {hidden.filter((t) => t.passed).length}/{hidden.length} passed
-          {hidden.some((t) => t.status === "timeout") && " (some hit the time limit)"}
+          {t("Hidden tests: {n}/{total} passed", { n: hidden.filter((test) => test.passed).length, total: hidden.length })}
+          {hidden.some((test) => test.status === "timeout") && ` ${t("(some hit the time limit)")}`}
         </div>
       )}
     </div>
@@ -108,24 +111,25 @@ export interface CodeDraft {
 }
 
 export function CodeQuestion({ question, draft, onChange, locked }: { question: QuestionView; draft: CodeDraft; onChange: (d: CodeDraft) => void; locked: boolean }) {
+  const t = useT();
   const languages = question.body.languages ?? ["python"];
   return (
     <div className="stack">
-      {question.body.sampleTests?.map((t, i) => (
+      {question.body.sampleTests?.map((sample, i) => (
         <div key={i} className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           <div>
-            <div className="small muted">Sample input {i + 1}</div>
-            <CodeBlock code={t.input || " "} />
+            <div className="small muted">{t("Sample input {n}", { n: i + 1 })}</div>
+            <CodeBlock code={sample.input || " "} />
           </div>
           <div>
-            <div className="small muted">Expected output</div>
-            <CodeBlock code={t.output || " "} />
+            <div className="small muted">{t("Expected output")}</div>
+            <CodeBlock code={sample.output || " "} />
           </div>
         </div>
       ))}
       <div className="spread">
         <label htmlFor="lang" style={{ margin: 0 }}>
-          Language
+          {t("Language")}
         </label>
         <select
           id="lang"
@@ -147,22 +151,23 @@ export function CodeQuestion({ question, draft, onChange, locked }: { question: 
         readOnly={locked}
         onChange={(v) => onChange({ ...draft, sources: { ...draft.sources, [draft.language]: v } })}
       />
-      {draft.language === "java" && <p className="muted small" style={{ margin: 0 }}>Keep the class name Main.</p>}
+      {draft.language === "java" && <p className="muted small" style={{ margin: 0 }}>{t("Keep the class name Main.")}</p>}
     </div>
   );
 }
 
 export function SqlQuestion({ question, query, onChange, locked }: { question: QuestionView; query: string; onChange: (q: string) => void; locked: boolean }) {
+  const t = useT();
   const [showSchema, setShowSchema] = useState(true);
   return (
     <div className="stack">
       <div>
         <button className="btn ghost small" style={{ paddingLeft: 0 }} onClick={() => setShowSchema(!showSchema)} aria-expanded={showSchema}>
-          {showSchema ? "Hide" : "Show"} tables
+          {t(showSchema ? "Hide tables" : "Show tables")}
         </button>
-        {showSchema && <CodeBlock code={question.body.schema ?? ""} label="Tables" />}
+        {showSchema && <CodeBlock code={question.body.schema ?? ""} label={t("Tables")} />}
       </div>
-      <CodeEditor language="sql" value={query} readOnly={locked} onChange={onChange} minHeight={120} label="SQL query" wrap />
+      <CodeEditor language="sql" value={query} readOnly={locked} onChange={onChange} minHeight={120} label={t("SQL query")} wrap />
     </div>
   );
 }

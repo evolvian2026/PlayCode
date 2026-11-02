@@ -4,6 +4,7 @@ import type { Answer, StudentResponse } from "@playcode/core";
 import { CodeBlock } from "./CodeBlock";
 import { CodeQuestion, SqlQuestion, type CodeDraft } from "./CodeAnswer";
 import type { QuestionView } from "@/lib/types";
+import { useT } from "@/lib/i18n";
 
 /** The in-progress answer, before it becomes a StudentResponse. */
 export type Draft =
@@ -80,6 +81,7 @@ interface Props {
 }
 
 export function QuestionInput({ question, draft, onChange, onSubmit, answer }: Props) {
+  const t = useT();
   const { body } = question;
   const locked = answer !== null;
 
@@ -92,7 +94,7 @@ export function QuestionInput({ question, draft, onChange, onSubmit, answer }: P
       <div className="stack">
         <CodeBlock
           code={body.code ?? ""}
-          label="Code: tap the line with the bug"
+          label={t("Code: tap the line with the bug")}
           onLineClick={
             locked
               ? undefined
@@ -107,7 +109,7 @@ export function QuestionInput({ question, draft, onChange, onSubmit, answer }: P
             return draft.lines.includes(n) ? "picked" : "";
           }}
         />
-        {!locked && <p className="muted small">Tap a line to select it. Tap again to unselect.</p>}
+        {!locked && <p className="muted small">{t("Tap a line to select it. Tap again to unselect.")}</p>}
       </div>
     );
   }
@@ -118,8 +120,8 @@ export function QuestionInput({ question, draft, onChange, onSubmit, answer }: P
       <table>
         <thead>
           <tr>
-            <th>Call</th>
-            <th>Returns</th>
+            <th>{t("Call")}</th>
+            <th>{t("Returns")}</th>
           </tr>
         </thead>
         <tbody>
@@ -140,7 +142,7 @@ export function QuestionInput({ question, draft, onChange, onSubmit, answer }: P
       <div className="stack">
         {codeBlock}
         {examples}
-        <div className="stack" role="radiogroup" aria-label="Answer options" style={{ gap: 8 }}>
+        <div className="stack" role="radiogroup" aria-label={t("Answer options")} style={{ gap: 8 }}>
           {body.options?.map((o) => {
             let cls = "option";
             if (correctId) {
@@ -170,8 +172,8 @@ export function QuestionInput({ question, draft, onChange, onSubmit, answer }: P
       <div className="stack">
         {codeBlock}
         <input
-          aria-label="Your answer"
-          placeholder={body.inputHint ?? "Type your answer"}
+          aria-label={t("Your answer")}
+          placeholder={body.inputHint ?? t("Type your answer")}
           value={draft.value}
           disabled={locked}
           autoComplete="off"
@@ -195,17 +197,17 @@ export function QuestionInput({ question, draft, onChange, onSubmit, answer }: P
     <div className="stack">
       <div>
         <div className="muted small" style={{ marginBottom: 4 }}>
-          Your program
+          {t("Your program")}
         </div>
-        <div className="dropzone" aria-label="Your program">
-          {draft.ids.length === 0 && <span className="muted small">Tap lines below to place them here, in order.</span>}
+        <div className="dropzone" aria-label={t("Your program")}>
+          {draft.ids.length === 0 && <span className="muted small">{t("Tap lines below to place them here, in order.")}</span>}
           {draft.ids.map((id, i) => (
             <button
               key={id}
               className="option parsons-line"
               disabled={locked}
               onClick={() => onChange({ kind: "order", ids: draft.ids.filter((x) => x !== id) })}
-              aria-label={`Line ${i + 1}: ${byId.get(id)?.text.trim()}. Tap to remove.`}
+              aria-label={t("Line {n}: {code}. Tap to remove.", { n: i + 1, code: byId.get(id)?.text.trim() ?? "" })}
             >
               {byId.get(id)?.text}
             </button>
@@ -215,7 +217,7 @@ export function QuestionInput({ question, draft, onChange, onSubmit, answer }: P
       {!locked && pool.length > 0 && (
         <div>
           <div className="muted small" style={{ marginBottom: 4 }}>
-            Available lines
+            {t("Available lines")}
           </div>
           <div className="stack" style={{ gap: 6 }}>
             {pool.map((l) => (

@@ -10,13 +10,14 @@ import { Icon } from "@/components/Icon";
 import { PrivacyCard } from "@/components/PrivacyCard";
 import { PushCard } from "@/components/PushCard";
 import { DevicesCard } from "@/components/SecurityPanel";
-import { Bar, ErrorBox, Loading, masteryTone } from "@/components/ui";
+import { Bar, ErrorBox, Loading, masteryTone, useDates } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { LOCALES, storeLocale, useLocale, useT, type Locale } from "@/lib/i18n";
 import type { StudentDetail } from "@/lib/types";
 
 function Certificates() {
   const t = useT();
+  const dates = useDates();
   const { data } = useApi<{ certificates: { code: string; title: string; scorePct: number; issuedAt: string; revokedAt: string | null }[] }>("/student/certificates");
   if (!data?.certificates.length) return null;
   return (
@@ -27,7 +28,7 @@ function Certificates() {
           <div>
             <b>{c.title}</b>
             <div className="muted small">
-              {c.scorePct}% · {new Date(c.issuedAt).toLocaleDateString()} · code {c.code}
+              {c.scorePct}% · {dates.day(c.issuedAt)} · {t("code {code}", { code: c.code })}
             </div>
           </div>
           <Link href={`/verify/${c.code}`} className="btn small">
@@ -54,6 +55,7 @@ function LanguageCard() {
   }
   return (
     <div className="card stack">
+      {/* i18n-ignore: "Language" in English too, so someone who can't read the current language can find this card */}
       <h2 style={{ margin: 0 }}>{t("Language")} / Language</h2>
       <p className="muted small" style={{ margin: 0 }}>
         {t("Choose the language for menus and buttons. Questions and code stay in English, as in placement tests.")}
@@ -399,7 +401,7 @@ export default function MePage() {
       <div className="card stack">
         <div className="spread">
           <h2 style={{ margin: 0 }}>{tr("Badges")}</h2>
-          <span className="muted small">{tr("{division} division", { division: DIVISION_LABELS[data.division] })}</span>
+          <span className="muted small">{tr("{division} division", { division: tr(DIVISION_LABELS[data.division]) })}</span>
         </div>
         {data.badges.length === 0 ? (
           <p className="muted">{tr("Answer your first question to earn a badge.")}</p>

@@ -59,6 +59,7 @@ export function AuthGate({ area, children }: { area: "play" | "console"; childre
       .catch(() => router.replace("/login"));
   }, [area, router]);
 
+  // i18n-ignore: shown before the account, and so its language, is known
   if (!me) return <p className="muted center" style={{ paddingTop: 80 }}>Loading...</p>;
   // The student app follows the account's language; the console stays in English.
   return (

@@ -198,6 +198,7 @@ function OfflineCard() {
 /** A contest that is running, or starts within a week. */
 function ContestCard() {
   const t = useT();
+  const locale = useLocale();
   const { data } = useApi<{ contests: { id: string; title: string; state: string; startsAt: string }[] }>("/student/contests");
   const soon = (data?.contests ?? []).filter((c) => c.state === "live" || c.state === "frozen" || (c.state === "upcoming" && new Date(c.startsAt).getTime() - Date.now() < 7 * 86_400_000));
   const c = soon.find((x) => x.state !== "upcoming") ?? soon[soon.length - 1];
@@ -207,7 +208,7 @@ function ContestCard() {
       <div>
         <div className="muted small">{t("Coding contest")}</div>
         <b>{c.title}</b>
-        <div className="small muted">{c.state === "upcoming" ? t("Starts {when}", { when: new Date(c.startsAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) }) : t("Live now")}</div>
+        <div className="small muted">{c.state === "upcoming" ? t("Starts {when}", { when: new Date(c.startsAt).toLocaleString(intlLocale(locale), { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) }) : t("Live now")}</div>
       </div>
       <Icon name="trophy" />
     </Link>
@@ -455,7 +456,7 @@ function StudentHome() {
 
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <button className="card tight stack" style={{ textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit" }} onClick={() => router.push("/play/league")}>
-          <span className="muted small">{t("{division} league", { division: DIVISION_LABELS[data.league.division] })}</span>
+          <span className="muted small">{t("{division} league", { division: t(DIVISION_LABELS[data.league.division]) })}</span>
           <span className="kpi">{data.league.rank ? `#${data.league.rank}` : "-"}</span>
           <span className="muted small">{data.league.rank ? t("of {size} · {xp} XP this week", { size: data.league.groupSize, xp: data.league.weeklyXp }) : t("Earn XP to join this week")}</span>
         </button>

@@ -1,11 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 export function Bar({ value, tone, label = "Progress" }: { value: number; tone?: "good" | "warn" | "bad"; label?: string }) {
+  const t = useT();
   const v = Math.max(0, Math.min(100, value));
   return (
-    <div className={`bar ${tone ?? ""}`} role="progressbar" aria-label={label} aria-valuenow={Math.round(v)} aria-valuemin={0} aria-valuemax={100}>
+    <div className={`bar ${tone ?? ""}`} role="progressbar" aria-label={t(label)} aria-valuenow={Math.round(v)} aria-valuemin={0} aria-valuemax={100}>
       <span style={{ width: `${v}%` }} />
     </div>
   );
@@ -19,16 +21,19 @@ export function masteryTone(v: number): "good" | "warn" | "bad" | undefined {
 }
 
 export function Loading({ label = "Loading" }: { label?: string }) {
-  return <p className="muted">{label}...</p>;
+  const t = useT();
+  return <p className="muted">{t(label)}...</p>;
 }
 
 export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const t = useT();
   return (
     <div className="error spread" role="alert">
-      <span>{message}</span>
+      {/* Messages from the API arrive in English; the common ones have translations. */}
+      <span>{t(message)}</span>
       {onRetry && (
         <button className="btn small" onClick={onRetry}>
-          Retry
+          {t("Retry")}
         </button>
       )}
     </div>
@@ -64,6 +69,22 @@ export function relativeTime(iso: string, intl: string): string {
   const h = Math.round(min / 60);
   if (Math.abs(h) < 24) return rtf.format(h, "hour");
   return rtf.format(Math.round(h / 24), "day");
+}
+
+/**
+ * Dates on student screens, in the student's language: "5 minutes ago",
+ * "24 Oct, 2:30 pm", "24 Oct". (timeAgo and formatDate are for the console,
+ * which is in English.)
+ */
+export function useDates() {
+  const locale = useLocale();
+  const t = useT();
+  const intl = intlLocale(locale);
+  return {
+    ago: (iso: string | null) => (iso ? relativeTime(iso, intl) : t("never")),
+    when: (iso: string) => new Date(iso).toLocaleString(intl, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }),
+    day: (iso: string) => new Date(iso).toLocaleDateString(intl, { day: "numeric", month: "short", year: "numeric" }),
+  };
 }
 
 export function formatDate(iso: string): string {

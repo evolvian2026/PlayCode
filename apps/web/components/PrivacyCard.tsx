@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { signOut } from "@/components/Auth";
-import { ErrorBox } from "@/components/ui";
+import { ErrorBox, useDates } from "@/components/ui";
 import { api, errorMessage, fetchObjectUrl, useApi } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 
@@ -29,6 +29,7 @@ export function PrivacyCard() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
   const [reason, setReason] = useState("");
+  const dates = useDates();
 
   async function run(fn: () => Promise<void>) {
     setBusy(true);
@@ -64,11 +65,10 @@ export function PrivacyCard() {
       {!data.noticeAccepted && (
         <div className="stack" style={{ gap: 8, padding: 12, borderRadius: 10, background: "var(--accent-soft)" }}>
           <div className="small">
-            Your institution uses PlayCode to track practice and run tests. We keep your answers, scores and activity to show your progress to you and your trainers.
-            Tests may record tab switches and webcam snapshots, kept only for the review window. You can download or delete your data at any time.
+            {t("Your institution uses PlayCode to track practice and run tests. We keep your answers, scores and activity to show your progress to you and your trainers. Tests may record tab switches and webcam snapshots, kept only for the review window. You can download or delete your data at any time.")}
           </div>
           <button className="btn small primary" style={{ alignSelf: "flex-start" }} disabled={busy} onClick={() => run(async () => setData({ ...data, ...(await api<PrivacyState>("/privacy/notice", { body: { accept: true } })) }))}>
-            I have read this
+            {t("I have read this")}
           </button>
         </div>
       )}
@@ -78,16 +78,16 @@ export function PrivacyCard() {
         </button>
         {data.canRequestErasure && !pending && (
           <button className="btn small ghost" disabled={busy} onClick={() => setAsking(true)}>
-            Delete my account...
+            {t("Delete my account...")}
           </button>
         )}
       </div>
       {asking && !pending && (
         <div className="stack" style={{ gap: 8 }}>
           <div className="small">
-            Your institution will review the request. Once approved, your practice history, test attempts, certificates and account are erased and cannot be recovered.
+            {t("Your institution will review the request. Once approved, your practice history, test attempts, certificates and account are erased and cannot be recovered.")}
           </div>
-          <input aria-label="Reason (optional)" placeholder="Reason (optional)" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+          <input aria-label={t("Reason (optional)")} placeholder={t("Reason (optional)")} value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
           <div className="row">
             <button
               className="btn small danger"
@@ -100,10 +100,10 @@ export function PrivacyCard() {
                 })
               }
             >
-              Request deletion
+              {t("Request deletion")}
             </button>
             <button className="btn small ghost" onClick={() => setAsking(false)}>
-              Keep my account
+              {t("Keep my account")}
             </button>
           </div>
         </div>
@@ -112,33 +112,33 @@ export function PrivacyCard() {
         <div className="small">
           {pending && (
             <span className="row wrap" style={{ gap: 8 }}>
-              <span className="pill warn">Deletion requested {new Date(data.erasure.createdAt).toLocaleDateString()}</span>
+              <span className="pill warn">{t("Deletion requested {date}", { date: dates.day(data.erasure.createdAt) })}</span>
               <button className="btn ghost small" disabled={busy} onClick={() => run(async () => { await api("/privacy/erasure/cancel", { body: {} }); reload(); })}>
-                Cancel request
+                {t("Cancel request")}
               </button>
             </span>
           )}
           {data.erasure.status === "rejected" && (
             <span className="muted">
-              Your deletion request was declined: {data.erasure.resolution}
+              {t("Your deletion request was declined: {reason}", { reason: data.erasure.resolution ?? "" })}
             </span>
           )}
           {data.erasure.status === "completed" && (
             <button className="btn ghost small" onClick={signOut}>
-              Your data has been erased. Sign out
+              {t("Your data has been erased. Sign out")}
             </button>
           )}
         </div>
       )}
       {actionError && <ErrorBox message={actionError} />}
-      {msg && <span className="small muted">{msg}</span>}
+      {msg && <span className="small muted">{t(msg)}</span>}
       {data.history.length > 0 && (
         <details>
-          <summary className="small muted">Consent history</summary>
+          <summary className="small muted">{t("Consent history")}</summary>
           <ul className="small" style={{ margin: "8px 0 0", paddingLeft: 18 }}>
             {data.history.map((h, i) => (
               <li key={i}>
-                {PURPOSE[h.purpose]}: {h.granted ? "agreed" : "withdrawn"} on {new Date(h.at).toLocaleString()} (notice {h.noticeVersion})
+                {t(h.granted ? "{purpose}: agreed on {when} (notice {version})" : "{purpose}: withdrawn on {when} (notice {version})", { purpose: t(PURPOSE[h.purpose]), when: dates.when(h.at), version: h.noticeVersion })}
               </li>
             ))}
           </ul>

@@ -2,9 +2,9 @@
 
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
-import { ErrorBox } from "@/components/ui";
+import { ErrorBox, useDates } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { useT } from "@/lib/i18n";
+import { type Translate, useT } from "@/lib/i18n";
 
 interface Session {
   id: string;
@@ -19,16 +19,17 @@ interface Session {
 const METHOD: Record<string, string> = { password: "Password", otp: "Sign-in code", sso: "Single sign-on", saml: "SAML", lti: "From your LMS", apply: "Drive application" };
 
 /** A short device name from a user agent string. */
-function device(ua: string | null): string {
-  if (!ua) return "Unknown device";
+function device(ua: string | null, t: Translate): string {
+  if (!ua) return t("Unknown device");
   const os = /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iPhone" : /Windows/.test(ua) ? "Windows" : /Mac OS/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "";
-  const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "Browser";
-  return os ? `${browser} on ${os}` : browser;
+  const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : t("Browser");
+  return os ? t("{browser} on {os}", { browser, os }) : browser;
 }
 
 export function DevicesCard() {
   const t = useT();
   const { data, error, reload } = useApi<{ sessions: Session[] }>("/auth/sessions");
+  const dates = useDates();
   const [busy, setBusy] = useState(false);
   if (error) return <ErrorBox message={error.message} onRetry={reload} />;
   if (!data) return null;
@@ -53,15 +54,15 @@ export function DevicesCard() {
         <div key={s.id} className="spread" style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
           <div>
             <div style={{ fontWeight: 600 }}>
-              {device(s.userAgent)} {s.current && <span className="pill good">{t("This device")}</span>}
+              {device(s.userAgent, t)} {s.current && <span className="pill good">{t("This device")}</span>}
             </div>
             <div className="small muted">
-              {METHOD[s.method] ?? s.method} · signed in {new Date(s.createdAt).toLocaleString()} · last active {new Date(s.lastSeenAt).toLocaleString()}
+              {t(METHOD[s.method] ?? s.method)} · {t("signed in {when}", { when: dates.when(s.createdAt) })} · {t("last active {when}", { when: dates.when(s.lastSeenAt) })}
             </div>
           </div>
           {!s.current && (
             <button className="btn small ghost" disabled={busy} onClick={() => act(`/auth/sessions/${s.id}/revoke`)}>
-              Sign out
+              {t("Sign out")}
             </button>
           )}
         </div>
@@ -70,6 +71,7 @@ export function DevicesCard() {
   );
 }
 
+// i18n: staff only (two-factor sign-in is for console accounts), so it stays in English like the console.
 export function TwoFactorCard({ onEnabled }: { onEnabled?: () => void }) {
   const { data, error, reload } = useApi<{ enabled: boolean; required: boolean; recoveryCodesLeft: number }>("/auth/2fa");
   const [setup, setSetup] = useState<{ secret: string; otpauthUrl: string } | null>(null);

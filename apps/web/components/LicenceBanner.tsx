@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMe } from "@/components/Auth";
-import { useT } from "@/lib/i18n";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
-const fmt = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const date = (d: string, intl: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString(intl, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 /**
  * Licence warnings. Admins see the renewal reminder before the end date;
@@ -14,6 +14,9 @@ const fmt = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-IN"
 export function LicenceBanner({ area }: { area: "console" | "play" }) {
   const me = useMe();
   const t = useT();
+  const locale = useLocale();
+  // Staff read the console in English; students read the banner in their language.
+  const fmt = (d: string) => date(d, area === "console" ? "en-IN" : intlLocale(locale));
   const l = me.licence;
   if (!l || l.state === "active" || !l.validUntil) return null;
   const admin = me.permissions.includes("tenant.settings");
@@ -39,6 +42,7 @@ export function LicenceBanner({ area }: { area: "console" | "play" }) {
       {area === "console" && admin && (
         <>
           {" "}
+          {/* i18n-ignore: staff only, and the console is in English */}
           <a href="/console/billing">Plan &amp; billing</a>
         </>
       )}

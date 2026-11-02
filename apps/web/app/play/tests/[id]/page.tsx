@@ -10,6 +10,7 @@ import { Icon } from "@/components/Icon";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import type { Evaluation, QuestionView, TestListItem } from "@/lib/types";
+import { useT } from "@/lib/i18n";
 
 interface AttemptView {
   id: string;
@@ -115,10 +116,11 @@ function useCamera(attemptId: string | null, active: boolean) {
 }
 
 function Result({ view }: { view: AttemptView }) {
+  const t = useT();
   return (
     <div className="stack center exam" style={{ paddingTop: 32 }}>
       <Icon name="check" size={56} className="stat-xp" />
-      <h1>Test submitted</h1>
+      <h1>{t("Test submitted")}</h1>
       <p className="muted">{view.assessment.title}</p>
       {view.result ? (
         <>
@@ -129,11 +131,11 @@ function Result({ view }: { view: AttemptView }) {
             <table>
               <thead>
                 <tr>
-                  <th>Section</th>
-                  <th>Score</th>
-                  <th>Right</th>
-                  <th>Wrong</th>
-                  <th>Skipped</th>
+                  <th>{t("Section")}</th>
+                  <th>{t("Score")}</th>
+                  <th>{t("Right")}</th>
+                  <th>{t("Wrong")}</th>
+                  <th>{t("Skipped")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -153,16 +155,17 @@ function Result({ view }: { view: AttemptView }) {
           </div>
         </>
       ) : (
-        <p>Your institution will release the results. You will see your score here.</p>
+        <p>{t("Your institution will release the results. You will see your score here.")}</p>
       )}
       <Link href="/play/tests" className="btn primary big">
-        Back to tests
+        {t("Back to tests")}
       </Link>
     </div>
   );
 }
 
 export default function Exam() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const list = useApi<{ assessments: TestListItem[] }>("/student/assessments");
   const item = list.data?.assessments.find((a) => a.id === id);
@@ -192,8 +195,8 @@ export default function Exam() {
   }, [item?.attemptId, view, load]);
 
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(t);
+    const tick = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(tick);
   }, []);
 
   const inProgress = view?.status === "in_progress";
@@ -207,7 +210,7 @@ export default function Exam() {
     setError(null);
     try {
       // Flush any pending saves first.
-      for (const t of Object.values(timers.current)) clearTimeout(t);
+      for (const timer of Object.values(timers.current)) clearTimeout(timer);
       load(await api<AttemptView>(`/student/attempts/${view.id}/submit`, { body: {} }));
       if (document.fullscreenElement) void document.exitFullscreen();
     } catch (e) {
@@ -266,31 +269,31 @@ export default function Exam() {
   }
 
   if (list.loading && !list.data) return <Loading />;
-  if (!item) return <ErrorBox message={list.error?.message ?? "Test not found"} />;
+  if (!item) return <ErrorBox message={list.error?.message ?? t("Test not found")} />;
   if (view && !inProgress) return <Result view={view} />;
 
   if (!view) {
     return (
       <div className="stack exam" style={{ paddingTop: 16 }}>
         <Link href="/play/tests" className="small">
-          <Icon name="back" size={16} /> Tests
+          <Icon name="back" size={16} /> {t("Tests")}
         </Link>
         <h1>{item.title}</h1>
         <div className="card stack">
           <div>
-            <b>{item.questionCount} questions</b> · <b>{item.durationMinutes} minutes</b>
+            <b>{t("{n} questions", { n: item.questionCount })}</b> · <b>{t("{n} minutes", { n: item.durationMinutes })}</b>
           </div>
           <ul style={{ margin: 0, paddingLeft: 20 }} className="small">
-            <li>The timer starts when you press Start and keeps running if you close the page.</li>
-            <li>Your answers save automatically. You can change them until you submit.</li>
-            <li>Switching tabs, leaving full screen and pasting are recorded for the proctor.</li>
-            {item.proctorLevel >= 2 && <li>Your camera takes a photo every minute. This test can only be taken on one device.</li>}
-            {item.proctorLevel >= 3 && <li>The photos are checked automatically for other people or a phone. A proctor reviews anything flagged; nothing is decided automatically.</li>}
+            <li>{t("The timer starts when you press Start and keeps running if you close the page.")}</li>
+            <li>{t("Your answers save automatically. You can change them until you submit.")}</li>
+            <li>{t("Switching tabs, leaving full screen and pasting are recorded for the proctor.")}</li>
+            {item.proctorLevel >= 2 && <li>{t("Your camera takes a photo every minute. This test can only be taken on one device.")}</li>}
+            {item.proctorLevel >= 3 && <li>{t("The photos are checked automatically for other people or a phone. A proctor reviews anything flagged; nothing is decided automatically.")}</li>}
           </ul>
         </div>
         {error && <ErrorBox message={error} />}
         <button className="btn primary big" disabled={busy || item.state === "upcoming"} onClick={start}>
-          {item.proctorLevel >= 2 ? "I agree, start the test" : "Start the test"}
+          {t(item.proctorLevel >= 2 ? "I agree, start the test" : "Start the test")}
         </button>
       </div>
     );
@@ -309,7 +312,7 @@ export default function Exam() {
         <div>
           <b>{view.assessment.title}</b>
           <div className="muted small">
-            {answeredCount}/{view.questions.length} answered · {saveState === "saving" ? "Saving..." : saveState === "error" ? "Not saved" : "All changes saved"}
+            {t("{n}/{total} answered", { n: answeredCount, total: view.questions.length })} · {t(saveState === "saving" ? "Saving..." : saveState === "error" ? "Not saved" : "All changes saved")}
           </div>
         </div>
         <div className="row">
@@ -317,37 +320,37 @@ export default function Exam() {
             {fmt(timeLeft)}
           </span>
           <button className="btn primary small" disabled={busy} onClick={() => setConfirming(true)}>
-            Submit
+            {t("Submit")}
           </button>
         </div>
       </div>
 
       {cameraProblem && <ErrorBox message={cameraProblem} />}
       {confirming && (
-        <div className="card stack" role="alertdialog" aria-label="Submit the test">
-          <b>Submit now?</b>
+        <div className="card stack" role="alertdialog" aria-label={t("Submit the test")}>
+          <b>{t("Submit now?")}</b>
           <span className="small">
-            You have answered {answeredCount} of {view.questions.length}. You cannot change answers after submitting.
+            {t("You have answered {n} of {total}. You cannot change answers after submitting.", { n: answeredCount, total: view.questions.length })}
           </span>
           <div className="row">
             <button className="btn primary" disabled={busy} onClick={submit}>
-              {busy ? "Submitting..." : "Submit test"}
+              {t(busy ? "Submitting..." : "Submit test")}
             </button>
             <button className="btn ghost" onClick={() => setConfirming(false)}>
-              Keep working
+              {t("Keep working")}
             </button>
           </div>
         </div>
       )}
 
-      <nav className="row wrap" aria-label="Questions" style={{ gap: 6 }}>
+      <nav className="row wrap" aria-label={t("Questions")} style={{ gap: 6 }}>
         {view.questions.map((x, i) => (
           <button
             key={x.question.id}
             className={`btn small ${i === current ? "primary" : ""}`}
             style={{ minWidth: 40, background: i !== current && answered(x.question.id) ? "var(--good-soft)" : undefined }}
             aria-current={i === current ? "step" : undefined}
-            aria-label={`Question ${i + 1}${answered(x.question.id) ? ", answered" : ""}`}
+            aria-label={t(answered(x.question.id) ? "Question {n}, answered" : "Question {n}", { n: i + 1 })}
             onClick={() => {
               setCurrent(i);
               setRunResult(null);
@@ -360,32 +363,32 @@ export default function Exam() {
 
       <div className="row wrap" style={{ gap: 6 }}>
         <span className="pill">{section.title}</span>
-        <span className="pill accent">{q.question.typeLabel}</span>
+        <span className="pill accent">{t(q.question.typeLabel)}</span>
         <span className="muted small">
-          {section.marks} mark{section.marks === 1 ? "" : "s"}
-          {section.negative ? `, -${section.negative} if wrong` : ""}
+          {t(section.marks === 1 ? "{n} mark" : "{n} marks", { n: section.marks })}
+          {section.negative ? `, ${t("-{n} if wrong", { n: section.negative })}` : ""}
         </span>
       </div>
       <h2 style={{ fontSize: "1.1rem", whiteSpace: "pre-line" }}>{q.question.body.stem}</h2>
       <QuestionInput key={q.question.id} question={q.question} draft={d} answer={null} onSubmit={() => {}} onChange={(nd) => change(q.question.id, nd)} />
       {executes && (
         <button className="btn" disabled={running || !draftToResponse(d)} onClick={() => run(q.question.id, d)}>
-          {running ? "Running..." : d.kind === "code" ? "Run sample tests" : "Run query"}
+          {t(running ? "Running..." : d.kind === "code" ? "Run sample tests" : "Run query")}
         </button>
       )}
-      {runResult && <EvaluationView evaluation={runResult} title="Sample tests" />}
+      {runResult && <EvaluationView evaluation={runResult} title={t("Sample tests")} />}
       {draftToResponse(d) && !executes && (
         <button className="btn ghost small" onClick={() => change(q.question.id, emptyDraft(q.question))}>
-          Clear answer
+          {t("Clear answer")}
         </button>
       )}
       {error && <ErrorBox message={error} />}
       <div className="spread">
         <button className="btn" disabled={current === 0} onClick={() => setCurrent(current - 1)}>
-          <Icon name="back" size={16} /> Previous
+          <Icon name="back" size={16} /> {t("Previous")}
         </button>
         <button className="btn" disabled={current === view.questions.length - 1} onClick={() => setCurrent(current + 1)}>
-          Next <Icon name="arrow" size={16} />
+          {t("Next")} <Icon name="arrow" size={16} />
         </button>
       </div>
     </div>

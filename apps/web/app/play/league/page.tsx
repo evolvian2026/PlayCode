@@ -5,6 +5,7 @@ import { Icon } from "@/components/Icon";
 import { EventCard, type EventItem } from "@/components/Events";
 import { ErrorBox, Loading } from "@/components/ui";
 import { useApi } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 
 interface League {
   weekKey: string;
@@ -14,22 +15,23 @@ interface League {
 }
 
 export default function LeaguePage() {
+  const t = useT();
   const { data, error, loading, reload } = useApi<League>("/student/league");
   const events = useApi<{ events: EventItem[] }>("/student/competitions");
   if (loading && !data) return <Loading />;
-  if (error || !data) return <ErrorBox message={error?.message ?? "Could not load"} onRetry={reload} />;
+  if (error || !data) return <ErrorBox message={error?.message ?? t("Could not load")} onRetry={reload} />;
 
   return (
     <div className="stack">
       <div className="spread">
         <div>
-          <h1>{DIVISION_LABELS[data.division]} league</h1>
-          <p className="muted">Week {data.weekKey.split("-W")[1]} · resets Monday. Top players move up, the bottom few move down.</p>
+          <h1>{t("{division} league", { division: t(DIVISION_LABELS[data.division]) })}</h1>
+          <p className="muted">{t("Week {n} · resets Monday. Top players move up, the bottom few move down.", { n: data.weekKey.split("-W")[1] ?? "" })}</p>
         </div>
         <Icon name="trophy" size={36} className="stat-xp" />
       </div>
       {!data.joined ? (
-        <div className="card">Answer a question this week to join a league group.</div>
+        <div className="card">{t("Answer a question this week to join a league group.")}</div>
       ) : (
         <div className="card" style={{ padding: 0 }}>
           <table>
@@ -42,10 +44,10 @@ export default function LeaguePage() {
                   <tr key={m.userId} style={{ background: m.isMe ? "var(--accent-soft)" : undefined }}>
                     <td style={{ width: 48, fontWeight: 700, borderTop: showPromoLine ? "2px solid var(--good)" : showDemoLine ? "2px solid var(--bad)" : undefined }}>{m.rank}</td>
                     <td style={{ fontWeight: m.isMe ? 700 : 500, borderTop: showPromoLine ? "2px solid var(--good)" : showDemoLine ? "2px solid var(--bad)" : undefined }}>
-                      {m.name} {m.isMe && <span className="pill accent">you</span>}
+                      {m.name} {m.isMe && <span className="pill accent">{t("you")}</span>}
                     </td>
                     <td style={{ textAlign: "right", fontWeight: 700, borderTop: showPromoLine ? "2px solid var(--good)" : showDemoLine ? "2px solid var(--bad)" : undefined }} className="stat-xp">
-                      {m.weeklyXp} XP
+                      {t("{n} XP", { n: m.weeklyXp })}
                     </td>
                   </tr>
                 );
@@ -56,7 +58,7 @@ export default function LeaguePage() {
       )}
       {events.data?.events.map((ev) => <EventCard key={ev.id} ev={ev} highlight={ev.myTeam?.name} />)}
       <p className="muted small">
-        <span style={{ color: "var(--good-ink)" }}>Green line</span>: promotion zone. <span style={{ color: "var(--bad-ink)" }}>Red line</span>: demotion zone.
+        <span style={{ color: "var(--good-ink)" }}>{t("Green line")}</span>: {t("promotion zone.")} <span style={{ color: "var(--bad-ink)" }}>{t("Red line")}</span>: {t("demotion zone.")}
       </p>
     </div>
   );
