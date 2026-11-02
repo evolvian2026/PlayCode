@@ -369,7 +369,8 @@ function JamPage() {
         <div className="small muted">{t(data.leftToday === 1 ? "1 talk can be marked today" : "{n} talks can be marked today", { n: data.leftToday })}</div>
       )}
       <p className="muted small" style={{ margin: 0 }}>
-        {t("Your browser turns your speech into text. PlayCode keeps the text and how long you spoke, never a recording.")}
+        {t("Your browser turns your speech into text. PlayCode keeps the text and how long you spoke, never a recording.")}{" "}
+        <Link href="/play/speaking-drills">{t("Warm up with read-aloud and repeat drills.")}</Link>
       </p>
       <div className="row wrap" role="group" aria-label={t("Kinds of topic")} style={{ gap: 6 }}>
         {(["all", ...Object.keys(JAM_CATEGORIES)] as (JamCategory | "all")[]).map((c) => (

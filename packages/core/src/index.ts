@@ -19,6 +19,7 @@ export * from "./licence";
 export * from "./items";
 export * from "./speech";
 export * from "./jam";
+export * from "./speaking-drills";
 export * from "./benchmarks";
 export * from "./contest";
 export * from "./study-plan";

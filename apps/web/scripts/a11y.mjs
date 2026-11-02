@@ -55,6 +55,7 @@ const PAGES = [
   { as: "student@demo.edu", path: "/play/writing", mobile: true },
   { as: "student@demo.edu", path: "/play/writing?task=email-contest", mobile: true },
   { as: "student@demo.edu", path: "/play/jam", mobile: true },
+  { as: "student@demo.edu", path: "/play/speaking-drills", mobile: true },
   { as: "faculty@demo.edu", path: "/console/papers", mobile: false },
   { as: "faculty@demo.edu", path: "/console/papers?new=1", mobile: false },
   { as: "faculty@demo.edu", path: "/console/gd", mobile: false },

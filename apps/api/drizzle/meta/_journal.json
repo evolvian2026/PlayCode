@@ -512,6 +512,13 @@
       "when": 1793618916473,
       "tag": "0072_jam_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1793620454581,
+      "tag": "0073_speaking_drills",
+      "breakpoints": true
     }
   ]
 }

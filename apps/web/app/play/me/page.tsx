@@ -310,6 +310,14 @@ export default function MePage() {
         <Icon name="arrow" />
       </Link>
 
+      <Link href="/play/speaking-drills" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Speaking drills")}</b>
+          <div className="small muted">{tr("Read aloud and repeat sentences, scored like automated English tests")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
       <Link href="/play/gd" className="card spread" style={{ color: "inherit" }}>
         <div>
           <b>{tr("Group discussion")}</b>

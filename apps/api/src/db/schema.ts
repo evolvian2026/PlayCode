@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, DataTable, InterviewContext, InterviewTrack, NotifyPrefs, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, ExitItem, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, OnDutyPart, OnDutyReason, OnDutyStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { DrillItemResult, DrillKind, Answer, BenchmarkValues, DataTable, InterviewContext, InterviewTrack, NotifyPrefs, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, ExitItem, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, OnDutyPart, OnDutyReason, OnDutyStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -1796,6 +1796,24 @@ export const jamAttempts = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("jam_attempts_user_idx").on(t.userId, t.createdAt), index("jam_attempts_tenant_idx").on(t.tenantId, t.createdAt)],
+);
+
+/** A sitting of speaking drills (read aloud, or listen and repeat), scored by matching what was heard to each sentence. */
+export const speakingDrills = pgTable(
+  "speaking_drills",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<DrillKind>().notNull(),
+    items: jsonb("items").$type<DrillItemResult[]>().notNull(),
+    /** Mean accuracy, 0-100. */
+    accuracy: integer("accuracy").notNull(),
+    /** Reading pace, for read-aloud sittings. */
+    wpm: integer("wpm"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("speaking_drills_user_idx").on(t.userId, t.createdAt)],
 );
 
 // ---------- Question papers ----------

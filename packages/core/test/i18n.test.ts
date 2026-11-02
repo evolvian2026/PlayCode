@@ -65,6 +65,8 @@ describe("labels the student app shows", () => {
       ...Object.values(core.JAM_CATEGORIES),
       ...core.JAM_DIMENSIONS.map(([, label]) => label),
       ...Object.values(core.JAM_TIPS),
+      ...Object.values(core.DRILL_KINDS).flatMap((k) => [k.label, k.detail]),
+      ...Object.values(core.DRILL_BANDS),
     ];
     const missing = labels.filter((l) => !(l in HI) || !(l in TA));
     expect(missing).toEqual([]);

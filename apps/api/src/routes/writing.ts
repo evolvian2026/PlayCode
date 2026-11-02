@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "../db/client";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { getMyJam, jamHome, submitJam } from "../services/jam";
+import { drillsHome, getMyDrill, submitDrill } from "../services/speaking-drills";
 import { getMyWriting, submitWriting, writingHome } from "../services/writing";
 
 /** Written and spoken English practice in the student app. */
@@ -40,5 +41,22 @@ export async function writingRoutes(app: FastifyInstance) {
       req.body,
     );
     return submitJam(db, ctx(req), body);
+  });
+
+  // Speaking drills: read aloud, and listen and repeat. Scored without AI.
+  app.get("/student/speaking-drills", async (req) => drillsHome(db, ctx(req)));
+  app.get("/student/speaking-drills/:id", async (req) => getMyDrill(db, ctx(req), parse(z.object({ id: z.string().uuid() }), req.params).id));
+  app.post("/student/speaking-drills", async (req) => {
+    const body = parse(
+      z.object({
+        kind: z.enum(["read", "repeat"]),
+        items: z
+          .array(z.object({ sentenceId: z.string().max(10), heard: z.string().max(600), spokenMs: z.number().int().min(0).max(60_000) }))
+          .min(1, "Answer at least one sentence")
+          .max(20),
+      }),
+      req.body,
+    );
+    return submitDrill(db, ctx(req), body);
   });
 }

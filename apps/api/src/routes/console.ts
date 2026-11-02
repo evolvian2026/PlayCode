@@ -23,6 +23,7 @@ import { activityCsv, activityPdf, activityReport } from "../services/activity-r
 import { gdForStaff, gdsFor } from "../services/gd";
 import { writingFor, writingForStaff } from "../services/writing";
 import { jamFor, jamForStaff } from "../services/jam";
+import { drillsFor } from "../services/speaking-drills";
 import { interviewForStaff, interviewsFor } from "../services/interviews";
 import { assertUnitsInScope, descendants, scopedUnitIds, studentIdsInUnits, tenantUnits } from "../services/scope";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
@@ -201,6 +202,11 @@ export async function consoleRoutes(app: FastifyInstance) {
     const attempt = await writingForStaff(db, tenantOf(req), id);
     if (!(await resolveScope(req)).studentIds.includes(attempt.userId)) throw notFound("Answer");
     return attempt;
+  });
+
+  app.get("/speaking-drills", { preHandler: anyAnalytics }, async (req) => {
+    const { unitId } = parse(unitQuery, req.query);
+    return drillsFor(db, (await resolveScope(req, unitId)).studentIds);
   });
 
   // ---------- Speaking practice (JAM) ----------

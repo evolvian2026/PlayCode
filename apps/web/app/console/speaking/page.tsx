@@ -13,6 +13,68 @@ interface Data {
 
 const tone = (n: number) => (n >= 4 ? "good" : n === 3 ? "warn" : "bad");
 
+interface Drills {
+  students: { userId: string; name: string; rollNo: string | null; sittings: number; lastAt: string; read: { latest: number; best: number } | null; repeat: { latest: number; best: number } | null }[];
+  averages: { students: number; sittings: number; read: number | null; repeat: number | null } | null;
+}
+
+const pct = (x: { latest: number; best: number } | null) => (x ? `${x.latest}% (best ${x.best}%)` : "-");
+
+/** Read-aloud and repeat drills: each student's latest and best. */
+function DrillsSection({ unitId }: { unitId: string }) {
+  const { data, error, reload } = useApi<Drills>(`/console/speaking-drills${unitId ? `?unitId=${unitId}` : ""}`);
+  if (error) return <ErrorBox message={error.message} onRetry={reload} />;
+  if (!data) return null;
+  return (
+    <section className="stack" aria-label="Speaking drills" style={{ gap: 8 }}>
+      <h2 style={{ margin: 0 }}>Speaking drills</h2>
+      <p className="muted small" style={{ margin: 0 }}>
+        Read aloud and listen-and-repeat, scored by the share of each sentence&apos;s words the speech recogniser heard: a rough measure of clarity, like the automated tests (Versant, SVAR) some recruiters use. 85% and above is clear; under 60% is hard to follow.
+      </p>
+      {!data.averages ? (
+        <div className="card muted">No drills yet.</div>
+      ) : (
+        <>
+          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
+            <Stat label="Students" value={data.averages.students} sub={`${data.averages.sittings} ${data.averages.sittings === 1 ? "sitting" : "sittings"}`} />
+            <Stat label="Read aloud (latest, average)" value={data.averages.read === null ? "-" : `${data.averages.read}%`} />
+            <Stat label="Listen and repeat (latest, average)" value={data.averages.repeat === null ? "-" : `${data.averages.repeat}%`} />
+          </div>
+          <div className="card" style={{ padding: 0 }}>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Read aloud</th>
+                    <th>Listen and repeat</th>
+                    <th>Sittings</th>
+                    <th>Last</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.students.map((s) => (
+                    <tr key={s.userId}>
+                      <td>
+                        <Link href={`/console/students/${s.userId}`}>{s.name}</Link>
+                        <div className="small muted">{s.rollNo}</div>
+                      </td>
+                      <td className="small">{pct(s.read)}</td>
+                      <td className="small">{pct(s.repeat)}</td>
+                      <td className="small">{s.sittings}</td>
+                      <td className="small">{new Date(s.lastAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function ConsoleSpeaking() {
   const units = useApi<{ units: { id: string; name: string }[] }>("/console/org-units");
   const [unitId, setUnitId] = useState("");
@@ -24,7 +86,7 @@ export default function ConsoleSpeaking() {
         <div>
           <h1 style={{ margin: 0 }}>Speaking practice</h1>
           <p className="muted" style={{ margin: 0 }}>
-            One-minute JAM talks: what students said (as their browser heard it), the AI&apos;s marks, and delivery measured from the transcript. No audio is recorded.
+            One-minute JAM talks: what students said (as their browser heard it), the AI&apos;s marks, and delivery measured from the transcript. Below them, the read-aloud and repeat drills. No audio is recorded.
           </p>
         </div>
         <select aria-label="Batch or section" value={unitId} onChange={(e) => setUnitId(e.target.value)} style={{ width: "auto" }}>
@@ -40,7 +102,7 @@ export default function ConsoleSpeaking() {
       {loading && !data ? (
         <Loading />
       ) : !avg ? (
-        <div className="card muted">No talks yet. Students find Speaking practice on their profile.</div>
+        <div className="card muted">No JAM talks yet. Students find Speaking practice on their profile.</div>
       ) : (
         <>
           <section className="stack" aria-label="Averages" style={{ gap: 8 }}>
@@ -98,6 +160,7 @@ export default function ConsoleSpeaking() {
           </div>
         </>
       )}
+      <DrillsSection unitId={unitId} />
     </div>
   );
 }
