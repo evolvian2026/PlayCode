@@ -1028,7 +1028,7 @@ export const erasureRequests = pgTable(
 
 // ---------- AI ----------
 
-export type AiFeature = "coach_hint" | "question_draft" | "snapshot_review" | "mock_interview" | "weekly_insights" | "code_review" | "group_discussion" | "writing_feedback";
+export type AiFeature = "coach_hint" | "question_draft" | "snapshot_review" | "mock_interview" | "weekly_insights" | "code_review" | "group_discussion" | "writing_feedback" | "jam_feedback";
 
 /** Token use per call, for cost reporting per institution. */
 export const aiUsage = pgTable(
@@ -1763,6 +1763,39 @@ export const writingAttempts = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("writing_attempts_user_idx").on(t.userId, t.createdAt), index("writing_attempts_tenant_idx").on(t.tenantId, t.createdAt)],
+);
+
+// ---------- Speaking practice (JAM) ----------
+
+export interface JamFeedback {
+  /** 1-5 for ideas, structure and language (core JAM_DIMENSIONS). */
+  scores: Record<string, number>;
+  overall: number;
+  strengths: string[];
+  improvements: string[];
+  /** A stronger first sentence for the same talk. */
+  betterOpening: string;
+  /** Three points a strong one-minute talk on the topic could make. */
+  outline: string[];
+}
+
+/** A one-minute talk: the browser's transcript and how long the student spoke. No audio is kept. */
+export const jamAttempts = pgTable(
+  "jam_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    topicId: text("topic_id").notNull(),
+    transcript: text("transcript").notNull(),
+    spokenMs: integer("spoken_ms").notNull(),
+    words: integer("words").notNull(),
+    wpm: integer("wpm").notNull(),
+    fillers: integer("fillers").notNull(),
+    feedback: jsonb("feedback").$type<JamFeedback>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("jam_attempts_user_idx").on(t.userId, t.createdAt), index("jam_attempts_tenant_idx").on(t.tenantId, t.createdAt)],
 );
 
 // ---------- Question papers ----------

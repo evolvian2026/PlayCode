@@ -194,6 +194,7 @@ describe("proctored assessments", () => {
       gdTurn: async () => { throw new Error("not used"); },
       gdScorecard: async () => { throw new Error("not used"); },
       writingFeedback: async () => { throw new Error("not used"); },
+      jamFeedback: async () => { throw new Error("not used"); },
       coachHint: async () => { throw new Error("not used"); },
       draftQuestions: async () => { throw new Error("not used"); },
       draftCodingProblems: async () => { throw new Error("not used"); },

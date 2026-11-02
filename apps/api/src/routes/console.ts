@@ -22,6 +22,7 @@ import { renderResumePdf, resumeData } from "../services/resume";
 import { activityCsv, activityPdf, activityReport } from "../services/activity-report";
 import { gdForStaff, gdsFor } from "../services/gd";
 import { writingFor, writingForStaff } from "../services/writing";
+import { jamFor, jamForStaff } from "../services/jam";
 import { interviewForStaff, interviewsFor } from "../services/interviews";
 import { assertUnitsInScope, descendants, scopedUnitIds, studentIdsInUnits, tenantUnits } from "../services/scope";
 import { getTenant, streakRules, tenantToday } from "../services/tenant";
@@ -200,6 +201,19 @@ export async function consoleRoutes(app: FastifyInstance) {
     const attempt = await writingForStaff(db, tenantOf(req), id);
     if (!(await resolveScope(req)).studentIds.includes(attempt.userId)) throw notFound("Answer");
     return attempt;
+  });
+
+  // ---------- Speaking practice (JAM) ----------
+  app.get("/jam", { preHandler: anyAnalytics }, async (req) => {
+    const { unitId } = parse(unitQuery, req.query);
+    return jamFor(db, (await resolveScope(req, unitId)).studentIds);
+  });
+
+  app.get("/jam/:id", { preHandler: anyAnalytics }, async (req) => {
+    const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+    const talk = await jamForStaff(db, tenantOf(req), id);
+    if (!(await resolveScope(req)).studentIds.includes(talk.userId)) throw notFound("Talk");
+    return talk;
   });
 
   // A student's resume, for the placement cell sending CVs to companies.

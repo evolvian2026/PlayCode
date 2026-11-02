@@ -2,9 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client";
 import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
+import { getMyJam, jamHome, submitJam } from "../services/jam";
 import { getMyWriting, submitWriting, writingHome } from "../services/writing";
 
-/** Written English practice in the student app. */
+/** Written and spoken English practice in the student app. */
 export async function writingRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
   app.addHook("preHandler", requirePermission("practice.play"));
@@ -23,5 +24,21 @@ export async function writingRoutes(app: FastifyInstance) {
       req.body,
     );
     return submitWriting(db, ctx(req), body);
+  });
+
+  // Speaking practice: one-minute JAM talks.
+  app.get("/student/jam", async (req) => jamHome(db, ctx(req)));
+  app.get("/student/jam/:id", async (req) => getMyJam(db, ctx(req), parse(z.object({ id: z.string().uuid() }), req.params).id));
+  app.post("/student/jam", async (req) => {
+    const body = parse(
+      z.object({
+        topicId: z.string().max(60),
+        transcript: z.string().trim().min(1, "We didn't hear anything. Check your microphone and try again.").max(4000),
+        // Microphone time; the page stops at a minute, so a little over allows for the browser's delay.
+        spokenMs: z.number().int().min(1000).max(90_000),
+      }),
+      req.body,
+    );
+    return submitJam(db, ctx(req), body);
   });
 }

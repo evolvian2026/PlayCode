@@ -14,6 +14,7 @@ const fake: AiProvider = {
   gdTurn: async () => { throw new Error("not used"); },
   gdScorecard: async () => { throw new Error("not used"); },
   writingFeedback: async () => { throw new Error("not used"); },
+  jamFeedback: async () => { throw new Error("not used"); },
   async coachHint(input) {
     calls.push(input);
     return { value: nextHints.shift() ?? `Look closely at the code (hint ${calls.length}).`, usage };

@@ -17,6 +17,7 @@ const fakeAi: AiProvider = {
   gdTurn: notUsed,
   gdScorecard: notUsed,
   writingFeedback: notUsed,
+  jamFeedback: notUsed,
   coachHint: notUsed,
   draftQuestions: notUsed,
   draftCodingProblems: notUsed,

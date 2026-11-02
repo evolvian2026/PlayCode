@@ -44,6 +44,7 @@ const NAV: NavItem[] = [
   { href: "/console/interview-slots", label: "Interview slots", icon: "users", perm: ["placements.manage", "assignments.manage"], noCompany: true },
   { href: "/console/interviews", label: "Mock interviews", icon: "chat", perm: ["analytics.institution", "analytics.department", "analytics.own_units"], feature: "ai_interviews" },
   { href: "/console/writing", label: "Written English", icon: "book", perm: ["analytics.institution", "analytics.department", "analytics.own_units"], feature: "ai_coach" },
+  { href: "/console/speaking", label: "Speaking practice", icon: "mic", perm: ["analytics.institution", "analytics.department", "analytics.own_units"], feature: "ai_coach" },
   { href: "/console/gd", label: "Group discussions", icon: "users", perm: ["analytics.institution", "analytics.department", "analytics.own_units"], feature: "ai_interviews" },
   { href: "/console/drives", label: "Hiring drives", icon: "users", perm: "drives.manage", feature: "hiring_drives" },
   { href: "/console/talent", label: "Talent pool", icon: "user", perm: "drives.manage", feature: "talent_search", company: true },

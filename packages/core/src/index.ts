@@ -18,6 +18,7 @@ export * from "./health";
 export * from "./licence";
 export * from "./items";
 export * from "./speech";
+export * from "./jam";
 export * from "./benchmarks";
 export * from "./contest";
 export * from "./study-plan";

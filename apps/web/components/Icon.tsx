@@ -30,6 +30,7 @@ const PATHS: Record<string, string> = {
   calendar: "M3 5h18v16H3zM3 10h18M8 3v4M16 3v4",
   chat: "M4 5h16v11H9l-5 4z",
   megaphone: "M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1zm13-3a5 5 0 0 1 0 8",
+  mic: "M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zm-7 9a7 7 0 0 0 14 0m-7 7v3",
 };
 
 export function Icon({ name, size = 20, className }: { name: keyof typeof PATHS | string; size?: number; className?: string }) {
