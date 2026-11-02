@@ -248,6 +248,12 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - Drills now record the option chosen and the time taken. Both are included in the data export, as are the mistakes put right, and are erased with the account.
 - Fixed: the AI coach availability check used the server's clock instead of the app's, so it could disagree with the rest of the app around the turn of a month.
 
+**Phase 43 additions**
+- Progress between two sittings (console Aptitude scores, Progress): pick an earlier and a later sitting to compare the students in your scope who took both. You see how many took each, the average score and each section's average before and after, and how many went up, stayed about the same or went down. There is a table of students from band to band, the same figures by class, and every student with their change, biggest gain first, downloadable as CSV. In the CSV, a fall in score stays a plain negative number: the guard against spreadsheet formulas applies only to text. Faculty see their own sections. A change counts only when it is 30 points or more. Graduates are included, so an old pair of sittings still shows what the training did.
+- Your score over time (student app Aptitude, Your scores): a chart of every adaptive test, practice and official, with the band lines behind it and official sittings filled in. Underneath it says how far the latest score is from the first ("+60 since your first test"), or "about the same" when the difference is under 30 points.
+- Drives that ask for a score (student app Aptitude): open drives for the student's branch with a minimum aptitude score, each showing whether their official score meets it, how far short it is, or that they have no official score yet. Anything else that would stop them registering is listed too, so nobody works for a score that wouldn't be enough on its own.
+- The demo data has an August sitting before the October one, for most of the October group, and an open LTIMindtree drive that asks for 500.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -477,6 +483,8 @@ Other operations:
 - **Homework isn't timed**: students do it in sittings that can stretch over a day, so the time between answers says nothing about pace. Pace comes from adaptive tests and drills only.
 - **Drill time is measured on the phone**, from the question appearing to Check. It feeds only the student's own pace and is capped at an hour, so a wrong clock can mislead only the student who sent it.
 - **A mistake is cleared by a similar question, not the same one**: the same question again tests memory of the answer. A similar question uses the same topic and level with new numbers.
+- **Progress compares only students who took both sittings**: averages over different groups of students would measure who turned up, not what they learnt.
+- **A change of under 30 points counts as "about the same"**: each section's score is an estimate with a likely range of 30 to 40 points either way, so smaller moves can't be told apart from noise. The number is in `SCORE_CHANGE_MARGIN` in `packages/core/src/adaptive.ts`.
 - **The SAML key pair is one per server**, from the environment, rather than one per institution: IdPs only need PlayCode's certificate, and rotating it is a deploy, not a per-college task.
 
 Not built yet: screen-reader testing by people who use them (the automated check covers WCAG rules it can test), PostgreSQL row-level security, Tamil for the placement pages and languages beyond English, Hindi and Tamil, and native mobile apps (the web app is an installable PWA).
