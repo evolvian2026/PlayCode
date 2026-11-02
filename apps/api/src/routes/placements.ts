@@ -1,3 +1,4 @@
+import { drivePrep, myDrivePrep, remindDrivePrep } from "../services/drive-prep";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client";
@@ -194,6 +195,12 @@ export async function placementRoutes(app: FastifyInstance) {
   // ---------- Rounds taken as PlayCode tests ----------
   const roundParam = z.object({ id: z.string().uuid(), round: z.coerce.number().int().min(0).max(7) });
   const staffOf = (req: FastifyRequest) => ({ tenantId: tenantOf(req), userId: req.auth.userId });
+  // Getting ready for a drive: the registrants against its steps, and a reminder to those behind.
+  app.get("/console/placements/:id/prep", { preHandler: manage }, async (req) => drivePrep(db, tenantOf(req), parse(idParam, req.params).id, app.now()));
+  app.post("/console/placements/:id/prep/remind", { preHandler: manage }, async (req) => remindDrivePrep(db, tenantOf(req), parse(idParam, req.params).id, req.auth.userId, app.now()));
+  app.get("/student/placements/:id/prep", { preHandler: [requirePermission("practice.play"), requireFeature("placements")] }, async (req) =>
+    myDrivePrep(db, { tenantId: tenantOf(req), userId: req.auth.userId, now: app.now() }, parse(idParam, req.params).id),
+  );
   app.get("/console/placements/:id/round-tests", { preHandler: manage }, async (req) => roundTests(db, tenantOf(req), parse(idParam, req.params).id, app.now()));
   app.put("/console/placements/:id/round-tests/:round", { preHandler: manage }, async (req) => {
     const p = parse(roundParam, req.params);

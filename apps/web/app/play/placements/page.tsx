@@ -459,7 +459,7 @@ function DriveCard({ drive, experiences, onChange }: { drive: Drive; experiences
           </button>
         )}
         {(app?.status === "registered" || app?.status === "shortlisted") && drive.pack && (
-          <button className="btn primary small" disabled={busy} onClick={prepare}>
+          <button className="btn small" disabled={busy} onClick={prepare}>
             {t("Prepare: {mission}", { mission: drive.pack.title })}
           </button>
         )}
@@ -474,6 +474,11 @@ function DriveCard({ drive, experiences, onChange }: { drive: Drive; experiences
         {experiences > 0 && (
           <Link className="btn small" href={`/play/experiences?company=${encodeURIComponent(drive.company)}`}>
             {t("Interview experiences ({n})", { n: experiences })}
+          </Link>
+        )}
+        {(app?.status === "registered" || app?.status === "shortlisted") && (
+          <Link className="btn primary small" href={`/play/placements/${drive.id}/prep`}>
+            {t("Your prep plan")}
           </Link>
         )}
         {(app?.status === "registered" || app?.status === "shortlisted") && (

@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { COMPANY_TYPE_LABELS, formatLpa, type CompanyType, type OfferDetails } from "@playcode/core";
 import { DriveUpdates, OfferDetailsEditor, RecruiterFeedbackCard, ReportingDesk } from "@/components/DriveDay";
+import { DrivePrep } from "@/components/DrivePrep";
 import { DriveSchedules } from "@/components/DriveSchedules";
 import { RoundTests } from "@/components/RoundTests";
 import { ErrorBox, Loading, Stat } from "@/components/ui";
@@ -285,6 +286,8 @@ export default function PlacementDrive() {
           </div>
         )}
       </div>
+      {/* Preparation matters until the drive day. */}
+      {drive.driveDate >= new Date().toLocaleDateString("en-CA") && <DrivePrep driveId={drive.id} />}
       <OfferDetailsEditor driveId={drive.id} ctcRupees={drive.ctcRupees} initial={drive.offerDetails} />
       {/* Feedback is for after the drive. */}
       {drive.driveDate <= new Date().toLocaleDateString("en-CA") && <RecruiterFeedbackCard driveId={drive.id} company={drive.company} />}
