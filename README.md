@@ -319,6 +319,18 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
   Text that stays English on purpose is marked `i18n-ignore` with the reason: the sample email in written-English practice, a URL placeholder, a staff-only link, rupee grouping. All-capital acronyms (XP, CGPA) pass. A component only staff see, in a file students also use (two-factor sign-in), is marked "i18n: staff only".
 - A core test checks the labels the app shows from the core package (divisions, question types, interview kinds, notification categories) have Hindi and Tamil.
 
+**Phase 50 additions**
+- Speaking practice: JAM (Just A Minute), the one-minute talk of campus communication rounds and of the speaking part of English tests. Students find it on Me, Speaking practice.
+  - A student picks one of 25 topics in five kinds (everyday life, college and career, technology, for or against, abstract) or asks for a surprise topic. Topics are as JAM rounds set them, such as "How UPI changed the way we pay" or "Silence".
+  - The topic appears, the student has 15 seconds to think, and the microphone starts. A minute later it stops.
+  - The browser turns speech into text, as in spoken interviews. The student sees their words appear as they speak.
+  - Delivery is measured from the transcript and the time spoken (`jamDelivery` in core): words a minute against the comfortable 110-170 range, filler words per 100 words, and how much of the minute was used, with one tip for each.
+  - The AI marks ideas and examples, structure, and grammar and vocabulary out of 5. It lists what went well and what to work on, writes a stronger opening line, and suggests three points a strong talk could make.
+  - Five talks can be marked a day. It uses the AI coach plan feature and the institution's AI switch, like written English.
+  - The screens are in Hindi and Tamil; the topics, the talk and the feedback are in English, since this is English practice.
+- Staff see the batch's talks in the console (Speaking practice, next to Written English). They see averages for each mark, pace and fillers, a table by student, and each talk with its transcript and feedback, within their scope.
+- Talks are in the student's data export and are deleted with the account.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -562,6 +574,9 @@ Other operations:
 - **Your week skips students who stopped practising a month ago**: a weekly "0 answers" to someone who has left is noise. The streak and review reminders are for bringing people back.
 - **Questions, skill names, mission titles and people's names stay as written**: the check covers the app's own words. Content is in English as in placement tests, and a skill called "Recursion" is what the student will meet in an interview.
 - **The translation check reads the code rather than the rendered pages**: rendering every screen in every state in both languages would miss states a walkthrough doesn't reach (an expired duel, a failed SQL query). Reading the source sees them all. What it can't see is text built far from the JSX (a label in a lookup table); those go through `t()` where they're shown, and the core test covers the shared labels.
+- **No audio is recorded for speaking practice**: the browser's transcript and the time spoken are enough to mark what was said and to measure pace and fillers, and nothing as personal as a student's voice is stored. The cost is that pronunciation and intonation aren't assessed; the feedback says so by never marking accent.
+- **The JAM transcript can't be edited**, unlike a spoken interview answer: it's speaking practice, and an editable transcript would turn it into writing. The marker is told to ignore what look like transcription errors instead.
+- **Under 30 words isn't marked**: a quarter of a minute of speech can't show structure or examples, and marking it would spend a daily try on nothing. The student still sees their delivery numbers and can try again.
 - **The SAML key pair is one per server**, from the environment, rather than one per institution: IdPs only need PlayCode's certificate, and rotating it is a deploy, not a per-college task.
 
 Not built yet: screen-reader testing by people who use them (the automated check covers WCAG rules it can test), PostgreSQL row-level security, languages beyond English, Hindi and Tamil, the staff console in anything but English, and native mobile apps (the web app is an installable PWA).
