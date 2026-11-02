@@ -515,6 +515,31 @@ Other operations:
 - Schema changes: edit `apps/api/src/db/schema.ts`, then `pnpm --filter @playcode/api db:generate` and commit the migration in `apps/api/drizzle`.
 - Content updates: edit `apps/api/src/content/*`, run `pnpm verify:content`, then `pnpm db:seed` (content upserts keep calibration data and bump the question version).
 
+## Deploying on Render and Supabase
+
+`render.yaml` is a Render Blueprint for a hosted setup: Supabase for Postgres and file storage, Render for the API, the web app and the scheduled jobs, all in Singapore so the app and the database are close together (Render has no Indian region).
+
+1. **Supabase**: create a project in Singapore (`ap-southeast-1`). From its settings take:
+   - the session pooler connection string (port 5432; it works over IPv4 and supports the `LISTEN` that live events need) for `DATABASE_URL`;
+   - the project URL for `SUPABASE_URL`;
+   - the service role key for `SUPABASE_SERVICE_ROLE_KEY`. This key bypasses row-level security, so it lives only in Render's environment.
+
+   The private bucket `playcode-files` is created on the first deploy.
+2. **Render**: create the services from the Blueprint (New, Blueprint, this repository) and enter the `sync: false` values:
+   - the Supabase values above;
+   - `PUBLIC_APP_URL` and `CORS_ORIGIN`: the web app's address;
+   - `API_PUBLIC_URL` and the web app's `NEXT_PUBLIC_API_URL`: the API's address. The web app reads it at build time, so redeploy the web app if it changes.
+
+   Every API deploy first runs `pnpm --filter @playcode/api db:deploy`: migrations, the question bank, skills and mission packs, and the storage bucket. It never creates the demo college.
+3. **First admin**: in the API service's shell, run `pnpm --filter @playcode/api admin:create you@example.com "Your Name"`. It prints a random password once. Sign in at `/login`, set up two-factor sign-in when asked, then create institutions under Admin. Running it for an existing email changes nothing.
+4. **Optional services**: set `ANTHROPIC_API_KEY` (AI features), `SMTP_URL` and `MAIL_FROM` (email), the VAPID keys (push) and the WhatsApp settings when you have them. Coding and SQL questions need a Judge0 server (see Code execution above). Render can't host Judge0, which needs privileged containers, so run it on a separate VM and set `EXECUTION_BACKEND=judge0` and `JUDGE0_URL` on the API.
+
+Notes:
+- **Database connections**: the API keeps at most 6 connections (`DATABASE_POOL_MAX`) plus one for live events, and each job at most 2, which keeps the total inside a small Supabase plan's pooler.
+- **Scheduled jobs**: four cron jobs (hourly, webhook retries every 5 minutes, nightly, and Monday's league close). They record their runs under System status like any other scheduler.
+- **Backups**: Supabase's daily backups come with its paid plans. On the free plan, run `ops/backup.sh` from a machine with `pg_dump`. Files in Supabase Storage aren't in the database dump.
+- **Branch**: the Blueprint deploys `main`. Until the first pull request is merged, services created by hand can point at the feature branch instead.
+
 ## Choices that differ from the spec, and what comes next
 
 - **Fastify instead of NestJS**: lighter for a modular monolith of this size; modules live in `apps/api/src/routes` and `services`.

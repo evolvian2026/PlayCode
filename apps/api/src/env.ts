@@ -17,8 +17,15 @@ const schema = z.object({
   JUDGE0_URL: z.string().url().optional(),
   JUDGE0_TOKEN: z.string().optional(),
   JUDGE0_LANGUAGE_IDS: z.string().optional(),
-  /** Local folder for uploaded files (proctoring snapshots). Swap for object storage in production. */
+  /** Local folder for uploaded files when STORAGE_DRIVER=local (one server with a disk). */
   STORAGE_DIR: z.string().default(".storage"),
+  /** Where uploads (snapshots, logos, documents) live: this server's disk, or a private Supabase Storage bucket that every service can reach. */
+  STORAGE_DRIVER: z.enum(["local", "supabase"]).default("local"),
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  STORAGE_BUCKET: z.string().default("playcode-files"),
+  /** Connections this process keeps open; keep the total across services under the database's limit. */
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   /** WhatsApp Cloud API. Without these, nudges are in-app only. */
   WHATSAPP_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_ID: z.string().optional(),
@@ -49,6 +56,9 @@ export const env = schema.parse(process.env);
 
 if (env.NODE_ENV === "production" && env.JWT_SECRET === "dev-only-secret-change-me-please") {
   throw new Error("Set JWT_SECRET in production");
+}
+if (env.STORAGE_DRIVER === "supabase" && (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY)) {
+  throw new Error("STORAGE_DRIVER=supabase needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY");
 }
 if (env.NODE_ENV === "production" && env.ALLOW_PRIVATE_URLS) {
   throw new Error("ALLOW_PRIVATE_URLS is for development only");
