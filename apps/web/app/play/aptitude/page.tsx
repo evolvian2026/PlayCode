@@ -6,6 +6,8 @@ import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
+import { scoreMove } from "@playcode/core";
+import { ScoreTrend } from "@/components/ScoreTrend";
 import { BAND_TONE, duration } from "@/lib/aptitude";
 import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
@@ -14,6 +16,7 @@ interface Hub {
   sittings: { id: string; title: string; closesAt: string; attempt: { id: string; status: "in_progress" | "finished" } | null }[];
   official: { score: number; scores: Record<string, number>; at: string; band: string; bandLabel: string } | null;
   attempts: { id: string; official: boolean; score: number; scores: Record<string, number>; band: string; bandLabel: string; finishedAt: string }[];
+  trend: { at: string; score: number; official: boolean }[];
   sections: { key: string; title: string; items: number; minutes: number }[];
   templates: { id: string; topic: "quant" | "reasoning"; label: string }[];
 }
@@ -53,6 +56,66 @@ function TopicRow({ x }: { x: MyTopic }) {
       </div>
       <Bar value={x.accuracyPct} tone={x.accuracyPct < 50 ? "bad" : x.accuracyPct < 70 ? "warn" : "good"} label={t("{label}: {pct}% right", { label: t(x.label), pct: x.accuracyPct })} />
     </div>
+  );
+}
+
+interface ScoreDrive {
+  id: string;
+  company: string;
+  roleTitle: string;
+  registerBy: string;
+  minAptitude: number;
+  meets: boolean;
+  short: number | null;
+  registered: boolean;
+  otherReasons: string[];
+}
+
+/** Open drives that ask for a minimum score, against the student's official score. */
+function DrivesForScore() {
+  const t = useT();
+  const locale = useLocale();
+  const { data } = useApi<{ official: { score: number } | null; drives: ScoreDrive[] }>("/student/aptitude/drives");
+  if (!data?.drives.length) return null;
+  return (
+    <section className="card stack" aria-labelledby="h-score-drives">
+      <div>
+        <h2 id="h-score-drives" style={{ margin: 0 }}>
+          {t("Drives that ask for a score")}
+        </h2>
+        <p className="small muted" style={{ margin: 0 }}>
+          {data.official ? t("Checked against your official score, {score}.", { score: data.official.score }) : t("Only a score from an official sitting counts. Practice tests don't.")}
+        </p>
+      </div>
+      {data.drives.map((d) => (
+        <div key={d.id} className="stack" style={{ gap: 4, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+          <div className="spread wrap" style={{ gap: 8 }}>
+            <div>
+              <b>{d.company}</b> <span className="small muted">· {d.roleTitle}</span>
+              <div className="small muted">
+                {t("Needs {score}", { score: d.minAptitude })} · {t("Register by {date}", { date: new Date(d.registerBy).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" }) })}
+              </div>
+            </div>
+            {d.meets ? (
+              <span className="pill good">{t("Your score meets it")}</span>
+            ) : d.short !== null ? (
+              <span className="pill warn">{t("{n} short", { n: d.short })}</span>
+            ) : (
+              <span className="pill">{t("No official score yet")}</span>
+            )}
+          </div>
+          {d.otherReasons.length > 0 && (
+            <div className="small" style={{ color: "var(--bad-ink)" }}>
+              {t("Also stopping you:")} {d.otherReasons.join("; ")}
+            </div>
+          )}
+          {d.registered && <span className="small muted">{t("You've registered")}</span>}
+        </div>
+      ))}
+      <Link href="/play/placements" className="small">
+        {t("All drives")}
+      </Link>
+    </section>
   );
 }
 
@@ -202,6 +265,8 @@ export default function AptitudeHub() {
         </section>
       )}
 
+      <DrivesForScore />
+
       {data.official && (
         <div className="card spread wrap" style={{ gap: 8 }}>
           <div>
@@ -240,6 +305,28 @@ export default function AptitudeHub() {
           <h2 id="h-scores" style={{ margin: 0 }}>
             {t("Your scores")}
           </h2>
+          {data.trend.length >= 2 && (
+            <div className="stack" style={{ gap: 4 }}>
+              <ScoreTrend
+                points={data.trend}
+                label={t("Your scores over time: {list}", { list: data.trend.map((p) => p.score).join(", ") })}
+                bandLines={[
+                  { at: 400, label: t("Developing") },
+                  { at: 525, label: t("Good") },
+                  { at: 650, label: t("Strong") },
+                ]}
+                dateLabel={date}
+              />
+              <div className="small muted">
+                {(() => {
+                  const [first, last] = [data.trend[0]!.score, data.trend.at(-1)!.score];
+                  const move = scoreMove(first, last);
+                  return move === "same" ? t("About the same as your first test ({score})", { score: first }) : t("{change} since your first test ({score})", { change: `${last > first ? "+" : ""}${last - first}`, score: first });
+                })()}{" "}
+                · {t("Filled dots are official sittings.")}
+              </div>
+            </div>
+          )}
           {data.attempts.map((a) => (
             <Link key={a.id} href={`/play/aptitude/test/${a.id}`} className="spread" style={{ color: "inherit", borderTop: "1px solid var(--border)", paddingTop: 8 }}>
               <div>

@@ -25,7 +25,7 @@ describe("company relations", () => {
   it("lists companies with their drives and the follow-ups due", async () => {
     const res = await t.get(tpo, "/console/recruiters");
     expect(res.status).toBe(200);
-    expect(res.body.recruiters.map((r: { name: string }) => r.name)).toEqual(["Accenture", "Deloitte", "Freshworks", "Infosys", "Juspay", "TCS", "Wipro", "Zoho"]);
+    expect(res.body.recruiters.map((r: { name: string }) => r.name)).toEqual(["Accenture", "Deloitte", "Freshworks", "Infosys", "Juspay", "LTIMindtree", "TCS", "Wipro", "Zoho"]);
     const tcs = res.body.recruiters.find((r: { name: string }) => r.name === "TCS");
     expect(tcs).toMatchObject({ stage: "visited", owner: "Rajesh Sharma (TPO)", drives: { drives: 1, offers: 9, lastDrive: "2026-08-27", highestCtc: 336_000 } });
     // Overdue first, then due today; upcoming ones aren't "due".
@@ -142,7 +142,7 @@ describe("season targets", () => {
     expect(season.topRecruiters.map((r: { company: string }) => r.company).sort()).toEqual(["Infosys", "TCS", "Zoho"]);
     expect(season.topRecruiters.reduce((n: number, r: { hired: number }) => n + r.hired, 0)).toBe(placed);
     expect(season.topRecruiters[0]).toMatchObject({ company: "TCS", hired: 9, medianCtc: 336_000 });
-    expect(season.openDrives).toBe(2);
+    expect(season.openDrives).toBe(3);
   });
 
   it("lets the placement cell change targets, and heads of department see their own", async () => {

@@ -102,5 +102,48 @@ export function paceVerdict(seconds: number, target: number): "slow" | "on_pace"
   return seconds > target * 1.25 ? "slow" : "on_pace";
 }
 
+/**
+ * How far two scores must differ to count as a change. A score is an
+ * estimate with a likely range of about 30 to 40 points either way, so a
+ * smaller difference between two sittings may be nothing but that.
+ */
+export const SCORE_CHANGE_MARGIN = 30;
+
+export function scoreMove(from: number, to: number): "up" | "same" | "down" {
+  return to - from >= SCORE_CHANGE_MARGIN ? "up" : from - to >= SCORE_CHANGE_MARGIN ? "down" : "same";
+}
+
+export const BAND_ORDER = ["needs_work", "developing", "good", "strong"] as const;
+type Band = (typeof BAND_ORDER)[number];
+
+export interface ScorePair {
+  from: { score: number; scores: Record<string, number> };
+  to: { score: number; scores: Record<string, number> };
+}
+
+/** Two sittings compared over the students who took both: averages, who moved, and band to band. */
+export function compareScores(pairs: ScorePair[]) {
+  const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
+  const moves = pairs.map((p) => scoreMove(p.from.score, p.to.score));
+  const bands = Object.fromEntries(BAND_ORDER.map((f) => [f, Object.fromEntries(BAND_ORDER.map((t) => [t, 0]))])) as Record<Band, Record<Band, number>>;
+  for (const p of pairs) bands[scoreBand(p.from.score)][scoreBand(p.to.score)]++;
+  return {
+    students: pairs.length,
+    from: avg(pairs.map((p) => p.from.score)),
+    to: avg(pairs.map((p) => p.to.score)),
+    change: avg(pairs.map((p) => p.to.score - p.from.score)),
+    up: moves.filter((m) => m === "up").length,
+    same: moves.filter((m) => m === "same").length,
+    down: moves.filter((m) => m === "down").length,
+    sections: Object.fromEntries(
+      ADAPTIVE_SECTIONS.map((s) => {
+        const both = pairs.filter((p) => p.from.scores[s.key] != null && p.to.scores[s.key] != null);
+        return [s.key, { from: avg(both.map((p) => p.from.scores[s.key]!)), to: avg(both.map((p) => p.to.scores[s.key]!)), change: avg(both.map((p) => p.to.scores[s.key]! - p.from.scores[s.key]!)) }];
+      }),
+    ) as Record<AptitudeTopic, { from: number | null; to: number | null; change: number | null }>,
+    bands,
+  };
+}
+
 /** An official score counts for this long: after a year it no longer reflects the student. */
 export const OFFICIAL_SCORE_MONTHS = 12;

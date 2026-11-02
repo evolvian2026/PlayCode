@@ -214,6 +214,7 @@ export async function seedRecruiters(args: { tenantId: string; tpoId: string; de
     { name: "Accenture", sector: "IT services", stage: "confirmed", website: "https://www.accenture.com", log: [["email", -6, "Drive confirmed, registration open on PlayCode.", null]] },
     { name: "Wipro", sector: "IT services", stage: "in_talks", website: "https://www.wipro.com", contact: ["Sanjay Gupta", "University relations", "sanjay.gupta@wipro.example", "+91 99000 44556"], log: [["call", -8, "Interested in an Elite NTH drive in December. Wants last year's numbers and the brochure.", 0]] },
     { name: "Freshworks", sector: "Product (SaaS)", stage: "confirmed", website: "https://www.freshworks.com", log: [["meeting", -9, "Drive confirmed for CSE; they will share the test link a day before.", null]] },
+    { name: "LTIMindtree", sector: "IT services", stage: "confirmed", website: "https://www.ltimindtree.com", log: [["email", -4, "Drive confirmed. They shortlist on our aptitude scores: 500 or more from a sitting.", null]] },
     { name: "Juspay", sector: "Product (fintech)", stage: "prospect", website: "https://juspay.in", log: [["email", -12, "Sent the brochure to their campus team.", -2]] },
     { name: "Deloitte", sector: "Consulting", stage: "not_interested", website: null, log: [["call", -30, "Hiring only from tier-1 colleges this year. Try again in July.", null]] },
   ];
@@ -521,12 +522,44 @@ export async function seedGraduates(args: { tenantId: string; unitId: string; ad
  * scores spread the way a real batch's would. A third took theirs in an
  * official sitting ten days ago, so they have scores that count.
  */
+/** A finished adaptive attempt at a given ability, with answer times that run on from the start. */
+function simulatedAttempt(r: () => number, ability: number, finishedAt: Date) {
+  // Answer times run on from the start: harder questions and tables take longer.
+  let clock = finishedAt.getTime() - 30 * 60_000;
+  const sections: AdaptiveSectionState[] = ADAPTIVE_SECTIONS.map((sec, k) => {
+    const state: AdaptiveSectionState = { key: sec.key, items: [], theta: 0, se: 1, startedAt: new Date(clock).toISOString(), deadline: finishedAt.toISOString(), done: true };
+    const own = ability + (k === 0 ? 0.3 : -0.3) * (r() - 0.5) * 2;
+    for (let n = 0; n < sec.items; n++) {
+      const q = generateQuestion(nextTemplate(sec.key, state.items.map((x) => x.template), r), nextLevel(state.theta), Math.floor(r() * 2 ** 30));
+      const correct = r() < 1 / (1 + Math.exp(-(own - levelDifficulty(q.level))));
+      const chosen = correct ? q.answer : (q.answer + 1 + Math.floor(r() * 3)) % 4;
+      const seconds = 25 + q.level * 10 + Math.floor(r() * 40) + (q.table ? 30 : 0);
+      state.items.push({ ...q, chosen, correct, askedAt: new Date(clock).toISOString(), answeredAt: new Date(clock + seconds * 1000).toISOString() });
+      clock += seconds * 1000;
+      Object.assign(state, estimateAbility(state.items.map((x) => ({ level: x.level, correct: x.correct! }))));
+    }
+    return state;
+  });
+  const scores = Object.fromEntries(sections.map((x) => [x.key, scaledScore(x.theta)]));
+  const values = Object.values(scores);
+  return { sections, status: "finished" as const, scores, score: Math.round(values.reduce((a, b) => a + b, 0) / values.length / 5) * 5, startedAt: new Date(finishedAt.getTime() - 30 * 60_000), finishedAt };
+}
+
+/**
+ * Adaptive test attempts: practice ones, an October sitting most of the
+ * batch took, and an August one before the training term, so staff can see
+ * the progress between them. And an open drive that asks for a minimum score.
+ */
 export async function seedAptitude(args: { tenantId: string; tpoId: string; students: { id: string; skill: number }[]; now: Date }) {
-  const opensAt = new Date(args.now.getTime() - 10 * DAY_MS);
-  const [sitting] = await db
-    .insert(aptitudeSittings)
-    .values({ tenantId: args.tenantId, title: "October aptitude sitting", unitIds: [], opensAt, closesAt: new Date(opensAt.getTime() + 4 * 3_600_000), createdBy: args.tpoId, createdAt: new Date(opensAt.getTime() - 2 * DAY_MS) })
-    .returning();
+  const sitting = async (title: string, daysAgo: number) =>
+    (
+      await db
+        .insert(aptitudeSittings)
+        .values({ tenantId: args.tenantId, title, unitIds: [], opensAt: new Date(args.now.getTime() - daysAgo * DAY_MS), closesAt: new Date(args.now.getTime() - daysAgo * DAY_MS + 4 * 3_600_000), createdBy: args.tpoId, createdAt: new Date(args.now.getTime() - (daysAgo + 2) * DAY_MS) })
+        .returning()
+    )[0]!;
+  const october = await sitting("October aptitude sitting", 10);
+  const august = await sitting("August aptitude sitting", 70);
   const rows = [];
   for (const [i, s] of args.students.entries()) {
     if (i === 0 || i % 3 === 2) continue;
@@ -534,28 +567,31 @@ export async function seedAptitude(args: { tenantId: string; tpoId: string; stud
     // Practice skill (about 0.35 to 0.9) to ability around the middle of the scale.
     const ability = (s.skill - 0.6) * 5 + (r() - 0.5);
     const official = i % 3 === 0;
-    const finishedAt = official ? new Date(opensAt.getTime() + (1 + (i % 3)) * 3_600_000) : new Date(args.now.getTime() - (1 + (i % 14)) * DAY_MS);
-    // Answer times run on from the start: harder questions and tables take longer.
-    let clock = finishedAt.getTime() - 30 * 60_000;
-    const sections: AdaptiveSectionState[] = ADAPTIVE_SECTIONS.map((sec, k) => {
-      const state: AdaptiveSectionState = { key: sec.key, items: [], theta: 0, se: 1, startedAt: new Date(clock).toISOString(), deadline: finishedAt.toISOString(), done: true };
-      const own = ability + (k === 0 ? 0.3 : -0.3) * (r() - 0.5) * 2;
-      for (let n = 0; n < sec.items; n++) {
-        const q = generateQuestion(nextTemplate(sec.key, state.items.map((x) => x.template), r), nextLevel(state.theta), Math.floor(r() * 2 ** 30));
-        const correct = r() < 1 / (1 + Math.exp(-(own - levelDifficulty(q.level))));
-        const chosen = correct ? q.answer : (q.answer + 1 + Math.floor(r() * 3)) % 4;
-        const seconds = 25 + q.level * 10 + Math.floor(r() * 40) + (q.table ? 30 : 0);
-        state.items.push({ ...q, chosen, correct, askedAt: new Date(clock).toISOString(), answeredAt: new Date(clock + seconds * 1000).toISOString() });
-        clock += seconds * 1000;
-        Object.assign(state, estimateAbility(state.items.map((x) => ({ level: x.level, correct: x.correct! }))));
-      }
-      return state;
-    });
-    const scores = Object.fromEntries(sections.map((x) => [x.key, scaledScore(x.theta)]));
-    const values = Object.values(scores);
-    rows.push({ tenantId: args.tenantId, userId: s.id, sittingId: official ? sitting!.id : null, sections, status: "finished" as const, scores, score: Math.round(values.reduce((a, b) => a + b, 0) / values.length / 5) * 5, startedAt: new Date(finishedAt.getTime() - 30 * 60_000), finishedAt });
+    const finishedAt = official ? new Date(october.opensAt.getTime() + (1 + (i % 3)) * 3_600_000) : new Date(args.now.getTime() - (1 + (i % 14)) * DAY_MS);
+    rows.push({ tenantId: args.tenantId, userId: s.id, sittingId: official ? october.id : null, ...simulatedAttempt(r, ability, finishedAt) });
+    // Most of the October group sat in August too, before the term's training: most were weaker then.
+    if (official && i % 9 !== 3) {
+      const before = seededRandom(800 + i);
+      rows.push({ tenantId: args.tenantId, userId: s.id, sittingId: august.id, ...simulatedAttempt(before, ability - 0.2 - before() * 0.8, new Date(august.opensAt.getTime() + 2 * 3_600_000)) });
+    }
   }
   if (rows.length) await db.insert(adaptiveAttempts).values(rows);
+  await createDrive(db, {
+    tenantId: args.tenantId,
+    actorId: args.tpoId,
+    now: args.now,
+    company: "LTIMindtree",
+    companyType: "service",
+    roleTitle: "Graduate Engineer Trainee",
+    description: "Online assessment (aptitude, verbal and coding) and one interview. Shortlisting uses the college's aptitude scores.",
+    ctcRupees: 400_000,
+    location: "Mumbai, Pune, Chennai",
+    driveDate: new Date(args.now.getTime() + 18 * DAY_MS).toISOString().slice(0, 10),
+    registerBy: new Date(args.now.getTime() + 7 * DAY_MS),
+    criteria: { unitIds: [], minCgpa: 6, maxBacklogs: 0, graduationYears: [2027], minAptitude: 500 },
+    rounds: ["Online assessment", "Interview"],
+    packId: null,
+  });
   return rows.length;
 }
 

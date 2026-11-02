@@ -3,6 +3,7 @@ import { and, desc, eq, gt, gte, inArray, isNotNull, lte } from "drizzle-orm";
 import {
   ADAPTIVE_SECTIONS,
   APTITUDE_TEMPLATES,
+  compareScores,
   estimateAbility,
   generateQuestion,
   nextLevel,
@@ -11,6 +12,7 @@ import {
   scaledScore,
   SCORE_BANDS,
   scoreBand,
+  scoreMove,
 } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { adaptiveAttempts, aptitudeDrillAnswers, aptitudeSittings, memberships, users, type AdaptiveItem, type AdaptiveSectionState } from "../db/schema";
@@ -148,6 +150,11 @@ export async function myAdaptive(db: Db, ctx: Ctx) {
       .sort((a, b) => b.finishedAt!.getTime() - a.finishedAt!.getTime())
       .slice(0, 10)
       .map((r) => ({ id: r.id, official: Boolean(r.sittingId), score: r.score!, scores: r.scores!, band: scoreBand(r.score!), bandLabel: SCORE_BANDS[scoreBand(r.score!)], finishedAt: r.finishedAt })),
+    // Every finished attempt in the last 20, oldest first, for the chart.
+    trend: rows
+      .filter((r) => r.status === "finished")
+      .sort((a, b) => a.finishedAt!.getTime() - b.finishedAt!.getTime())
+      .map((r) => ({ at: r.finishedAt!, score: r.score!, official: Boolean(r.sittingId) })),
     sections: ADAPTIVE_SECTIONS,
     templates: APTITUDE_TEMPLATES,
   };
@@ -429,6 +436,65 @@ export async function sittingResults(db: Db, auth: AuthContext, id: string) {
     })
     .sort((x, y) => (y.score ?? -1) - (x.score ?? -1) || (x.rollNo ?? x.name).localeCompare(y.rollNo ?? y.name, "en", { numeric: true }));
   return { sitting: { id: sitting.id, title: sitting.title, opensAt: sitting.opensAt, closesAt: sitting.closesAt }, students };
+}
+
+/**
+ * Two sittings compared over the students in scope who finished both: how
+ * the averages moved, who went up or down by more than the score's margin,
+ * band to band, and by class. Graduates count: an old pair of sittings is
+ * still a record of the training.
+ */
+export async function compareSittings(db: Db, auth: AuthContext, fromId: string, toId: string) {
+  if (fromId === toId) throw badRequest("Pick two different sittings");
+  const tenantId = auth.tenantId!;
+  const [from, to] = await Promise.all([loadSitting(db, auth, fromId), loadSitting(db, auth, toId)]);
+  if (from.opensAt >= to.opensAt) throw badRequest("Pick the earlier sitting first");
+  const scoped = new Set(await studentIdsInUnits(db, tenantId, await scopedUnitIds(db, auth), { graduated: true }));
+  const attempts = await db
+    .select({ userId: adaptiveAttempts.userId, sittingId: adaptiveAttempts.sittingId, score: adaptiveAttempts.score, scores: adaptiveAttempts.scores })
+    .from(adaptiveAttempts)
+    .where(and(eq(adaptiveAttempts.tenantId, tenantId), inArray(adaptiveAttempts.sittingId, [fromId, toId]), eq(adaptiveAttempts.status, "finished")));
+  const take = (id: string) => new Map(attempts.filter((a) => a.sittingId === id && scoped.has(a.userId)).map((a) => [a.userId, { score: a.score!, scores: a.scores! }]));
+  const [before, after] = [take(fromId), take(toId)];
+  const both = [...before.keys()].filter((u) => after.has(u));
+  const [people, places, units] = await Promise.all([
+    both.length ? db.select({ id: users.id, name: users.name, rollNo: users.rollNo }).from(users).where(inArray(users.id, both)) : [],
+    both.length ? db.select({ userId: memberships.userId, unitId: memberships.orgUnitId }).from(memberships).where(and(eq(memberships.tenantId, tenantId), eq(memberships.role, "student"), inArray(memberships.userId, both))) : [],
+    tenantUnits(db, tenantId),
+  ]);
+  const unitName = new Map(units.map((u) => [u.id, u.name]));
+  const unitOf = new Map(places.map((p) => [p.userId, unitName.get(p.unitId ?? "") ?? ""]));
+  const students = people
+    .map((p) => {
+      const [a, b] = [before.get(p.id)!, after.get(p.id)!];
+      return { id: p.id, name: p.name, rollNo: p.rollNo, unit: unitOf.get(p.id) ?? "", from: a.score, to: b.score, change: b.score - a.score, move: scoreMove(a.score, b.score), fromBand: scoreBand(a.score), toBand: scoreBand(b.score), sections: Object.fromEntries(ADAPTIVE_SECTIONS.map((s) => [s.key, (b.scores[s.key] ?? 0) - (a.scores[s.key] ?? 0)])) };
+    })
+    .sort((x, y) => y.change - x.change || (x.rollNo ?? x.name).localeCompare(y.rollNo ?? y.name, "en", { numeric: true }));
+  const pairs = both.map((u) => ({ from: before.get(u)!, to: after.get(u)! }));
+  const byUnit = [...new Set(students.map((s) => s.unit))]
+    .sort()
+    .map((unit) => ({ unit, ...compareScores(pairs.filter((_, i) => unitOf.get(both[i]!) === unit)) }))
+    .map(({ unit, students: n, from: f, to: t, change, up, same, down }) => ({ unit, students: n, from: f, to: t, change, up, same, down }));
+  return {
+    from: { id: from.id, title: from.title, opensAt: from.opensAt, took: before.size },
+    to: { id: to.id, title: to.title, opensAt: to.opensAt, took: after.size },
+    summary: compareScores(pairs),
+    byUnit,
+    students,
+    bandLabels: SCORE_BANDS,
+  };
+}
+
+export function comparisonCsv(r: Awaited<ReturnType<typeof compareSittings>>): string {
+  // Numbers can't carry a formula, and a fall in score is negative: only text is guarded.
+  const cell = (v: unknown) => {
+    const t = String(v ?? "");
+    return `"${(typeof v !== "number" && /^[=+\-@\t\r]/.test(t) ? `'${t}` : t).replace(/"/g, '""')}"`;
+  };
+  return [
+    ["roll_no", "name", "class", `score_${r.from.title}`, `score_${r.to.title}`, "change", "quantitative_change", "reasoning_change", "from_band", "to_band"].map(cell).join(","),
+    ...r.students.map((s) => [s.rollNo, s.name, s.unit, s.from, s.to, s.change, s.sections.quant, s.sections.reasoning, SCORE_BANDS[s.fromBand], SCORE_BANDS[s.toBand]].map(cell).join(",")),
+  ].join("\n");
 }
 
 export function sittingCsv(r: Awaited<ReturnType<typeof sittingResults>>): string {

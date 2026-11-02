@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import {
   checkEligibility,
   DEFAULT_PLACEMENT_POLICY,
@@ -442,6 +442,42 @@ export async function updateApplications(db: Db, args: { tenantId: string; actor
 }
 
 // ---------- Students ----------
+
+/**
+ * Open drives for the student's branch that ask for a minimum aptitude
+ * score, with the student's official score against it and anything else
+ * that would stop them registering.
+ */
+export async function aptitudeDrives(db: Db, ctx: { tenantId: string; userId: string; now: Date }) {
+  const [check, official, units, mine] = await Promise.all([
+    eligibilityChecker(db, ctx.tenantId, ctx.userId, ctx.now),
+    officialAptitude(db, ctx.tenantId, [ctx.userId], ctx.now).then((m) => m.get(ctx.userId) ?? null),
+    studentUnitIdsWithAncestors(db, ctx.tenantId, ctx.userId),
+    db.select({ driveId: placementApplications.driveId, status: placementApplications.status }).from(placementApplications).where(and(eq(placementApplications.tenantId, ctx.tenantId), eq(placementApplications.userId, ctx.userId))),
+  ]);
+  const myUnits = new Set(units);
+  const drives = await db.select().from(placementDrives).where(and(eq(placementDrives.tenantId, ctx.tenantId), eq(placementDrives.status, "open"), gt(placementDrives.registerBy, ctx.now))).orderBy(placementDrives.registerBy);
+  return {
+    official: official ? { score: official.score, at: official.at } : null,
+    drives: drives
+      .filter((d) => d.criteria.minAptitude != null && (d.criteria.unitIds.length === 0 || d.criteria.unitIds.some((u) => myUnits.has(u))))
+      .map((d) => {
+        const min = d.criteria.minAptitude!;
+        return {
+          id: d.id,
+          company: d.company,
+          roleTitle: d.roleTitle,
+          registerBy: d.registerBy,
+          minAptitude: min,
+          meets: official !== null && official.score >= min,
+          short: official === null ? null : Math.max(0, min - official.score),
+          registered: mine.some((a) => a.driveId === d.id && active(a.status)),
+          // Anything else in the way, so a student doesn't work for a score that wouldn't be enough.
+          otherReasons: check(d.criteria, d.ctcRupees).reasons.filter((r) => !/aptitude/i.test(r)),
+        };
+      }),
+  };
+}
 
 export async function studentPlacements(db: Db, ctx: { tenantId: string; userId: string; now: Date }) {
   const [record, mine, units, offers, attendance, policy, slots, noShows, tests, updates, aptitude] = await Promise.all([

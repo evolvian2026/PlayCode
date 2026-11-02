@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APTITUDE_TEMPLATES, estimateAbility, generateQuestion, nextLevel, nextTemplate, medianSeconds, paceTarget, paceVerdict, scaledScore, seededRandom, suggestedDrillLevel } from "../src";
+import { APTITUDE_TEMPLATES, estimateAbility, generateQuestion, nextLevel, nextTemplate, compareScores, medianSeconds, paceTarget, scoreMove, paceVerdict, scaledScore, seededRandom, suggestedDrillLevel } from "../src";
 
 describe("generated aptitude questions", () => {
   it("always have four distinct options, one of them right, at every level", () => {
@@ -102,6 +102,20 @@ describe("adaptive scoring", () => {
     expect(suggestedDrillLevel(90, 4.4)).toBe(5);
     expect(suggestedDrillLevel(0, 1)).toBe(1);
     expect(suggestedDrillLevel(100, 5)).toBe(5);
+  });
+
+  it("compare two sittings, counting only changes bigger than the score's margin", () => {
+    expect(scoreMove(500, 529)).toBe("same");
+    expect(scoreMove(500, 530)).toBe("up");
+    expect(scoreMove(500, 470)).toBe("down");
+    const pair = (a: number, b: number) => ({ from: { score: a, scores: { quant: a + 10, reasoning: a - 10 } }, to: { score: b, scores: { quant: b + 20, reasoning: b - 20 } } });
+    const c = compareScores([pair(380, 450), pair(520, 540), pair(600, 560), pair(450, 660)]);
+    expect(c).toMatchObject({ students: 4, from: 488, to: 553, change: 65, up: 2, same: 1, down: 1 });
+    expect(c.sections.quant).toEqual({ from: 498, to: 573, change: 75 });
+    expect(c.bands.needs_work.developing).toBe(1);
+    expect(c.bands.developing.strong).toBe(1);
+    expect(c.bands.good.good).toBe(1);
+    expect(compareScores([])).toMatchObject({ students: 0, from: null, change: null });
   });
 
   it("judge pace against the time the test allows, on the middle answer time", () => {

@@ -2,8 +2,9 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { db } from "../db/client";
 import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
-import { adaptiveView, answerAdaptive, aptitudeScores, checkDrill, closeSitting, createSitting, drillQuestion, listSittings, myAdaptive, sittingCsv, sittingResults, startAdaptive } from "../services/adaptive";
+import { adaptiveView, answerAdaptive, aptitudeScores, checkDrill, closeSitting, compareSittings, comparisonCsv, createSitting, drillQuestion, listSittings, myAdaptive, sittingCsv, sittingResults, startAdaptive } from "../services/adaptive";
 import { requireFeature } from "../services/plan";
+import { aptitudeDrives } from "../services/placements";
 import { answerHomework, createHomework, homeworkResults, listHomework, myHomework, openHomework } from "../services/aptitude-homework";
 import { myMistakes, myTopics, topicAccuracy } from "../services/aptitude-practice";
 
@@ -25,6 +26,7 @@ export async function adaptiveRoutes(app: FastifyInstance) {
   );
   app.get("/student/aptitude/topics", { preHandler: play }, async (req) => myTopics(db, ctx(req)));
   app.get("/student/aptitude/mistakes", { preHandler: play }, async (req) => myMistakes(db, ctx(req)));
+  app.get("/student/aptitude/drives", { preHandler: play }, async (req) => aptitudeDrives(db, ctx(req)));
   app.get("/student/aptitude/drill", { preHandler: play }, async (req) => {
     const q = parse(z.object({ template: z.string().max(40), level: level.default(2) }), req.query);
     return drillQuestion(q.template, q.level);
@@ -56,6 +58,18 @@ export async function adaptiveRoutes(app: FastifyInstance) {
     const r = await sittingResults(db, auth(req), parse(idParam, req.params).id);
     reply.header("content-type", "text/csv; charset=utf-8").header("content-disposition", `attachment; filename="aptitude-${r.sitting.title.replace(/[^\w]+/g, "-").toLowerCase()}.csv"`);
     return sittingCsv(r);
+  });
+  // Progress between two sittings: the students in scope who took both.
+  const pair = z.object({ from: z.string().uuid(), to: z.string().uuid() });
+  app.get("/console/aptitude/compare", { preHandler: staff }, async (req) => {
+    const q = parse(pair, req.query);
+    return compareSittings(db, auth(req), q.from, q.to);
+  });
+  app.get("/console/aptitude/compare/csv", { preHandler: staff }, async (req, reply) => {
+    const q = parse(pair, req.query);
+    const r = await compareSittings(db, auth(req), q.from, q.to);
+    reply.header("content-type", "text/csv; charset=utf-8").header("content-disposition", `attachment; filename="aptitude-progress.csv"`);
+    return comparisonCsv(r);
   });
   // Homework: teachers set it for their sections; students each get their own numbers.
   const teach = requirePermission("assignments.manage");

@@ -528,9 +528,236 @@ function SittingsTab({ manage }: { manage: boolean }) {
   );
 }
 
+type BandKey = "needs_work" | "developing" | "good" | "strong";
+const BAND_KEYS: BandKey[] = ["needs_work", "developing", "good", "strong"];
+interface Comparison {
+  from: { id: string; title: string; took: number };
+  to: { id: string; title: string; took: number };
+  summary: { students: number; from: number | null; to: number | null; change: number | null; up: number; same: number; down: number; sections: Record<string, { from: number | null; to: number | null; change: number | null }>; bands: Record<BandKey, Record<BandKey, number>> };
+  byUnit: { unit: string; students: number; from: number | null; to: number | null; change: number | null; up: number; same: number; down: number }[];
+  students: { id: string; name: string; rollNo: string | null; unit: string; from: number; to: number; change: number; move: "up" | "same" | "down"; fromBand: BandKey; toBand: BandKey; sections: Record<string, number> }[];
+  bandLabels: Record<BandKey, string>;
+}
+
+const signed = (n: number | null) => (n === null ? "-" : n > 0 ? `+${n}` : String(n));
+const MOVE_TONE = { up: "var(--good-ink)", same: undefined, down: "var(--bad-ink)" } as const;
+
+/** Progress between two sittings, over the students who took both. */
+function ProgressTab() {
+  const list = useApi<{ sittings: Sitting[] }>("/console/aptitude/sittings");
+  const withResults = (list.data?.sittings ?? []).filter((x) => x.finished > 0);
+  const [pick, setPick] = useState<{ from: string; to: string } | null>(null);
+  // Newest two with results, earlier first, until someone picks.
+  const from = pick?.from ?? withResults[1]?.id ?? "";
+  const to = pick?.to ?? withResults[0]?.id ?? "";
+  const { data, error, loading, reload } = useApi<Comparison>(from && to ? `/console/aptitude/compare?from=${from}&to=${to}` : null);
+  async function csv() {
+    const a = document.createElement("a");
+    a.href = await fetchObjectUrl(`/console/aptitude/compare/csv?from=${from}&to=${to}`);
+    a.download = "aptitude-progress.csv";
+    a.click();
+  }
+  if (list.loading && !list.data) return <Loading />;
+  if (withResults.length < 2)
+    return (
+      <p className="card muted" style={{ margin: 0 }}>
+        Progress needs two sittings with results. Open another sitting for the same batches, and their scores can be compared here.
+      </p>
+    );
+  const picker = (label: string, value: string, set: (id: string) => void) => (
+    <label className="small stack" style={{ gap: 4 }}>
+      {label}
+      <select value={value} onChange={(e) => set(e.target.value)}>
+        {withResults.map((x) => (
+          <option key={x.id} value={x.id}>
+            {x.title}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+  const sum = data?.summary;
+  return (
+    <div className="stack" style={{ gap: 12 }}>
+      <div className="row wrap" style={{ gap: 12, alignItems: "flex-end" }}>
+        {picker("Earlier sitting", from, (id) => setPick({ from: id, to }))}
+        {picker("Later sitting", to, (id) => setPick({ from, to: id }))}
+        {data && (
+          <button className="btn small" onClick={csv}>
+            Download CSV
+          </button>
+        )}
+      </div>
+      {error ? (
+        <ErrorBox message={error.message} onRetry={reload} />
+      ) : loading && !data ? (
+        <Loading />
+      ) : !data || !sum ? null : sum.students === 0 ? (
+        <p className="card muted" style={{ margin: 0 }}>
+          No student in your scope took both. {data.from.took} took {data.from.title}; {data.to.took} took {data.to.title}.
+        </p>
+      ) : (
+        <>
+          <section className="card stack" aria-labelledby="h-progress">
+            <h2 id="h-progress" style={{ margin: 0, fontSize: 18 }}>
+              {sum.students} students took both
+            </h2>
+            <p className="small muted" style={{ margin: 0 }}>
+              {data.from.took} took {data.from.title} and {data.to.took} took {data.to.title}; only those who took both are compared. A change counts when it is 30 points or more: a score is an estimate, and smaller differences may be nothing but that.
+            </p>
+            <div className="row wrap" style={{ gap: 24 }}>
+              <div>
+                <div className="small muted">Average score</div>
+                <b style={{ fontSize: 22 }}>
+                  {sum.from} → {sum.to}
+                </b>{" "}
+                <span style={{ color: (sum.change ?? 0) >= 0 ? "var(--good-ink)" : "var(--bad-ink)" }}>({signed(sum.change)})</span>
+              </div>
+              {Object.entries(sum.sections).map(([k, v]) => (
+                <div key={k}>
+                  <div className="small muted">{k === "quant" ? "Quantitative" : "Reasoning"}</div>
+                  <b>
+                    {v.from} → {v.to}
+                  </b>{" "}
+                  <span className="small">({signed(v.change)})</span>
+                </div>
+              ))}
+              <div>
+                <div className="small muted">Students</div>
+                <span style={{ color: "var(--good-ink)" }}>{sum.up} up</span> · {sum.same} about the same · <span style={{ color: "var(--bad-ink)" }}>{sum.down} down</span>
+              </div>
+            </div>
+          </section>
+
+          <div className="row wrap" style={{ gap: 12, alignItems: "flex-start" }}>
+            <section className="card stack" style={{ flex: "1 1 380px" }} aria-labelledby="h-bands">
+              <h2 id="h-bands" style={{ margin: 0, fontSize: 16 }}>
+                Band to band
+              </h2>
+              <div className="table-wrap">
+                <table className="small">
+                  <caption className="sr-only">
+                    Students by band in {data.from.title} (rows) and {data.to.title} (columns)
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{data.from.title.replace(/ aptitude sitting$/i, "")} ↓ / {data.to.title.replace(/ aptitude sitting$/i, "")} →</th>
+                      {BAND_KEYS.map((b) => (
+                        <th key={b} scope="col">
+                          {data.bandLabels[b]}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {BAND_KEYS.map((f) => (
+                      <tr key={f}>
+                        <th scope="row">{data.bandLabels[f]}</th>
+                        {BAND_KEYS.map((tb) => {
+                          const n = sum.bands[f][tb];
+                          const better = BAND_KEYS.indexOf(tb) > BAND_KEYS.indexOf(f);
+                          const worse = BAND_KEYS.indexOf(tb) < BAND_KEYS.indexOf(f);
+                          return (
+                            <td key={tb} style={{ fontWeight: n ? 700 : undefined, color: !n ? "var(--muted)" : better ? "var(--good-ink)" : worse ? "var(--bad-ink)" : undefined }}>
+                              {n}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            <section className="card stack" style={{ flex: "1 1 380px" }} aria-labelledby="h-by-unit">
+              <h2 id="h-by-unit" style={{ margin: 0, fontSize: 16 }}>
+                By class
+              </h2>
+              <div className="table-wrap">
+                <table className="small">
+                  <thead>
+                    <tr>
+                      <th scope="col">Class</th>
+                      <th scope="col">Both</th>
+                      <th scope="col">Average</th>
+                      <th scope="col">Up / same / down</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.byUnit.map((u) => (
+                      <tr key={u.unit}>
+                        <th scope="row" style={{ textTransform: "none", letterSpacing: 0, color: "var(--text)", fontSize: "0.92rem" }}>
+                          {u.unit || "-"}
+                        </th>
+                        <td>{u.students}</td>
+                        <td>
+                          {u.from} → {u.to} <span style={{ color: (u.change ?? 0) >= 0 ? "var(--good-ink)" : "var(--bad-ink)" }}>({signed(u.change)})</span>
+                        </td>
+                        <td>
+                          {u.up} / {u.same} / {u.down}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <section className="card stack" aria-labelledby="h-each">
+            <h2 id="h-each" style={{ margin: 0, fontSize: 16 }}>
+              Each student, biggest gain first
+            </h2>
+            <div className="table-wrap">
+              <table className="small">
+                <thead>
+                  <tr>
+                    <th scope="col">Student</th>
+                    <th scope="col">Class</th>
+                    <th scope="col">Score</th>
+                    <th scope="col">Change</th>
+                    <th scope="col">Quantitative</th>
+                    <th scope="col">Reasoning</th>
+                    <th scope="col">Band</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.students.map((x) => (
+                    <tr key={x.id}>
+                      <td>
+                        {x.name} {x.rollNo && <span className="muted">({x.rollNo})</span>}
+                      </td>
+                      <td>{x.unit}</td>
+                      <td>
+                        {x.from} → {x.to}
+                      </td>
+                      <td style={{ color: MOVE_TONE[x.move], fontWeight: 600 }}>{signed(x.change)}</td>
+                      <td>{signed(x.sections.quant ?? null)}</td>
+                      <td>{signed(x.sections.reasoning ?? null)}</td>
+                      <td>
+                        {x.fromBand === x.toBand ? (
+                          data.bandLabels[x.toBand]
+                        ) : (
+                          <>
+                            {data.bandLabels[x.fromBand]} → <b>{data.bandLabels[x.toBand]}</b>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function AptitudeScores() {
   const me = useMe();
-  const [tab, setTab] = useState<"students" | "sittings" | "homework">("students");
+  const [tab, setTab] = useState<"students" | "sittings" | "progress" | "homework">("students");
   const [preset, setPreset] = useState<Part | null>(null);
   const teach = me.permissions.includes("assignments.manage");
   return (
@@ -546,6 +773,7 @@ export default function AptitudeScores() {
           [
             ["students", "Students"],
             ["sittings", "Sittings"],
+            ["progress", "Progress"],
             ["homework", "Homework"],
           ] as const
         ).map(([k, label]) => (
@@ -567,6 +795,8 @@ export default function AptitudeScores() {
         />
       ) : tab === "sittings" ? (
         <SittingsTab manage={me.permissions.includes("placements.manage")} />
+      ) : tab === "progress" ? (
+        <ProgressTab />
       ) : (
         <HomeworkTab manage={teach} preset={preset} />
       )}
