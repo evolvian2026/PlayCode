@@ -302,6 +302,23 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
   - It runs from the hourly job, once per student per week.
   - It counts as a practice reminder, so muting those mutes it on the phone too.
 
+**Phase 49 additions**
+- The rest of the student app in Hindi and Tamil. A check found screens that were still English in both languages, including four of the six bottom tabs:
+  - Learn, Missions, Duels (the lobby and the duel itself), League and Tests;
+  - the proctored test (instructions, timer bar, submit dialog, results);
+  - the mistake notebook and the question player (spot the bug, arrange the lines, coding and SQL answers with their test results);
+  - signed-in devices, the privacy card, inter-college events, "Loading" and "Retry" everywhere.
+  
+  Division names (Bronze to Diamond), interview kinds and question types are translated too.
+- Dates on student screens are in the student's language. "5 min ago", "24 Oct, 2:30 pm" and the like were English (or the browser's language) on several pages. A `useDates()` hook in `components/ui.tsx` writes them the student's way.
+- A guard keeps it that way. `pnpm --filter @playcode/web i18n:check` (run in CI) reads every student screen with the TypeScript parser: each page under `app/play` and each component they use, directly or through other components. It fails on:
+  - text in JSX that isn't passed through `t()`, including `aria-label`, `placeholder`, `title`, `alt` and `label`, strings chosen in a condition (`{done ? "Passed" : "Failed"}`) and template strings (`` `${n} hearts` ``);
+  - a `t("...")` with no Hindi or Tamil;
+  - a date written with the console's English helpers or the browser's default language.
+  
+  Text that stays English on purpose is marked `i18n-ignore` with the reason: the sample email in written-English practice, a URL placeholder, a staff-only link, rupee grouping. All-capital acronyms (XP, CGPA) pass. A component only staff see, in a file students also use (two-factor sign-in), is marked "i18n: staff only".
+- A core test checks the labels the app shows from the core package (divisions, question types, interview kinds, notification categories) have Hindi and Tamil.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -543,6 +560,8 @@ Other operations:
 - **Quiet hours hold messages rather than drop them**: a message held overnight still matters at 7 am (a test that opened, an interview booked). Staff announcements and placement messages are held too, since the student chose quiet hours. If something is urgent the college still has phone calls.
 - **Quiet hours are on by default**: most students wouldn't think to set them,. The hourly job's reminders (a test just opened, an assignment due in a day) and messages staff send late can otherwise land at 2 am.
 - **Your week skips students who stopped practising a month ago**: a weekly "0 answers" to someone who has left is noise. The streak and review reminders are for bringing people back.
+- **Questions, skill names, mission titles and people's names stay as written**: the check covers the app's own words. Content is in English as in placement tests, and a skill called "Recursion" is what the student will meet in an interview.
+- **The translation check reads the code rather than the rendered pages**: rendering every screen in every state in both languages would miss states a walkthrough doesn't reach (an expired duel, a failed SQL query). Reading the source sees them all. What it can't see is text built far from the JSX (a label in a lookup table); those go through `t()` where they're shown, and the core test covers the shared labels.
 - **The SAML key pair is one per server**, from the environment, rather than one per institution: IdPs only need PlayCode's certificate, and rotating it is a deploy, not a per-college task.
 
-Not built yet: screen-reader testing by people who use them (the automated check covers WCAG rules it can test), PostgreSQL row-level security, Tamil for the placement pages and languages beyond English, Hindi and Tamil, and native mobile apps (the web app is an installable PWA).
+Not built yet: screen-reader testing by people who use them (the automated check covers WCAG rules it can test), PostgreSQL row-level security, languages beyond English, Hindi and Tamil, the staff console in anything but English, and native mobile apps (the web app is an installable PWA).
