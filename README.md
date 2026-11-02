@@ -353,6 +353,18 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
   - Deleting a task keeps the students' attempts.
 - Fixed a typo in the Phase 48 notes.
 
+**Phase 53 additions**
+- Tell me about yourself (Me, Tell me about yourself): the one-minute introduction nearly every interview opens with.
+  - The student writes it, or has it drafted from their PlayCode profile and the role they're aiming for, then edits it. The draft uses their projects, internships, certifications and mastered skills, plus anything they add. The page shows a three-part shape: who you are now, what you've done, what you want next.
+  - The draft is told to use only those facts and never invent a project or result. The page lists the facts it used for the student to check. Marks, roll number and contact details aren't sent.
+  - Three drafts a day, under the AI coach plan feature and the institution's AI switch. Writing and practising need no AI.
+  - The editor shows the word count and roughly how long the script takes to say, against the 60-90 seconds interviewers expect.
+  - Practice: the student says it aloud, with the script on screen or hidden as in an interview. The browser transcribes it.
+  - Each run-through is scored without AI: how much of the script came through in order, with the missed words struck through. It also shows length, pace and filler words, with a tip for each problem.
+  - Only the counts and the latest and best scores are kept, never what was said.
+- Mentors and trainers see a student's introduction on the console's student page: target role, whether it was drafted or written by the student, and how practice is going.
+- The introduction is in the data export and deleted with the account. The screens are in Hindi and Tamil; the introduction itself is in English.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -602,6 +614,8 @@ Other operations:
 - **Speaking drills score what the speech recogniser understood, not pronunciation**: matching words is free, instant and works offline of any AI, and a word the recogniser caught is usually one a listener would too. It can't judge stress or intonation, and a noisy room or a poor microphone lowers the score; the page says so next to the missed words.
 - **The drill sentences have no numbers or contractions**: recognisers write "five" or "5", "don't" or "do not", and either would count as a miss against the sentence.
 - **A trainer's task is done by the student's ordinary attempt**, not a separate submission: the practice pages stay the same, a student who practised the topic before the trainer asked isn't made to repeat it in the window, and staff see the best attempt rather than the first. The window still applies, so a talk from last month doesn't count for this week's task.
+- **The self-introduction draft only restates the student's profile**: an introduction that mentions a project the student can't talk about fails at the first follow-up question, so the model is told to say less rather than invent, and the facts it used are listed back for checking.
+- **Introduction practice keeps numbers, not transcripts**: the student needs the struck-through words once, right after speaking; staff need to know whether they practise and how it's going, not to read every attempt.
 - **The SAML key pair is one per server**, from the environment, rather than one per institution: IdPs only need PlayCode's certificate, and rotating it is a deploy, not a per-college task.
 
 Not built yet: screen-reader testing by people who use them (the automated check covers WCAG rules it can test), PostgreSQL row-level security, languages beyond English, Hindi and Tamil, the staff console in anything but English, and native mobile apps (the web app is an installable PWA).
