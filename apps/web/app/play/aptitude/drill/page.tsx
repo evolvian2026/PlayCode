@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { APTITUDE_TEMPLATES, type DataTable } from "@playcode/core";
 import { QuestionTable } from "@/components/QuestionTable";
 import { ErrorBox, Loading } from "@/components/ui";
@@ -38,6 +38,8 @@ function DrillPage() {
   const [run, setRun] = useState(0);
   const [score, setScore] = useState({ right: 0, total: 0 });
   const [msg, setMsg] = useState<string | null>(null);
+  // When the question appeared, for the time taken: pace counts as much as accuracy in placement tests.
+  const shownAt = useRef(0);
 
   async function load(lvl: number) {
     setMsg(null);
@@ -45,6 +47,7 @@ function DrillPage() {
     setChecked(null);
     try {
       setQ(await api<Drill>(`/student/aptitude/drill?template=${meta.id}&level=${lvl}`));
+      shownAt.current = Date.now();
     } catch (e) {
       setMsg(errorMessage(e));
     }
@@ -59,7 +62,8 @@ function DrillPage() {
   async function check() {
     if (!q || chosen === null) return;
     try {
-      const c = await api<Checked>("/student/aptitude/drill/check", { body: { template: q.template, level: q.level, seed: q.seed, chosen } });
+      const seconds = Math.max(1, Math.round((Date.now() - shownAt.current) / 1000));
+      const c = await api<Checked>("/student/aptitude/drill/check", { body: { template: q.template, level: q.level, seed: q.seed, chosen, seconds } });
       setChecked(c);
       setScore((s) => ({ right: s.right + (c.correct ? 1 : 0), total: s.total + 1 }));
     } catch (e) {

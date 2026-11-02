@@ -2710,8 +2710,26 @@ export const aptitudeDrillAnswers = pgTable(
     template: text("template").notNull(),
     level: integer("level").notNull(),
     seed: integer("seed").notNull(),
+    /** The option picked; null on answers kept before it was recorded. */
+    chosen: integer("chosen"),
     correct: boolean("correct").notNull(),
+    /** Seconds from the question showing to the answer being checked, as the phone measured it. */
+    seconds: integer("seconds"),
     answeredAt: timestamp("answered_at", { withTimezone: true }).notNull(),
   },
   (t) => [uniqueIndex("aptitude_drill_answers_question_uq").on(t.userId, t.template, t.level, t.seed), index("aptitude_drill_answers_user_idx").on(t.userId, t.answeredAt)],
+);
+
+/** An aptitude mistake the student has put right, by getting a similar question (same topic and level) right. */
+export const aptitudeMistakeFixes = pgTable(
+  "aptitude_mistake_fixes",
+  {
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    template: text("template").notNull(),
+    level: integer("level").notNull(),
+    seed: integer("seed").notNull(),
+    fixedAt: timestamp("fixed_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.template, t.level, t.seed] })],
 );

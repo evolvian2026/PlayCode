@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Bar, ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
-import { BAND_TONE } from "@/lib/aptitude";
+import { BAND_TONE, duration } from "@/lib/aptitude";
 import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface Hub {
@@ -25,6 +25,9 @@ interface MyTopic {
   correct: number;
   accuracyPct: number;
   drillLevel: number;
+  medianSeconds: number | null;
+  targetSeconds: number;
+  pace: "slow" | "on_pace" | null;
 }
 
 function TopicRow({ x }: { x: MyTopic }) {
@@ -34,7 +37,15 @@ function TopicRow({ x }: { x: MyTopic }) {
       <div className="spread wrap" style={{ gap: 8 }}>
         <div>
           <b>{t(x.label)}</b>
-          <div className="small muted">{t("{right} of {n} right", { right: x.correct, n: x.answered })}</div>
+          <div className="small muted">
+            {t("{right} of {n} right", { right: x.correct, n: x.answered })}
+            {x.medianSeconds !== null && <> · {t("about {time} a question", { time: duration(x.medianSeconds) })}</>}
+          </div>
+          {x.pace === "slow" && (
+            <div className="small" style={{ color: "var(--warn-ink)" }}>
+              {t("Slow: tests allow about {time}", { time: duration(x.targetSeconds) })}
+            </div>
+          )}
         </div>
         <Link href={`/play/aptitude/drill?t=${x.template}&l=${x.drillLevel}`} className="btn small">
           {t("Drill at level {n}", { n: x.drillLevel })}
@@ -48,7 +59,7 @@ function TopicRow({ x }: { x: MyTopic }) {
 /** How the student has done topic by topic, weakest first, with a drill pitched at each. */
 function YourTopics() {
   const t = useT();
-  const { data } = useApi<{ topics: MyTopic[]; untried: { id: string; label: string }[] }>("/student/aptitude/topics");
+  const { data } = useApi<{ topics: MyTopic[]; untried: { id: string; label: string }[]; mistakes: number }>("/student/aptitude/topics");
   if (!data?.topics.length) return null;
   // Enough answers to say something, and not going well.
   const weak = data.topics.filter((x) => x.answered >= 3 && x.accuracyPct < 70).slice(0, 3);
@@ -62,6 +73,15 @@ function YourTopics() {
           {t("How you've done on each topic in the last 90 days, from tests, homework and drills.")}
         </p>
       </div>
+      {data.mistakes > 0 && (
+        <Link href="/play/aptitude/mistakes" className="card tight spread" style={{ color: "inherit" }}>
+          <span>
+            <b>{t("Mistakes to retry")}</b>
+            <span className="small muted"> · {t("Get a similar one right to clear it")}</span>
+          </span>
+          <span className="pill warn">{data.mistakes}</span>
+        </Link>
+      )}
       {weak.length > 0 && (
         <div className="stack" style={{ gap: 6 }}>
           <b className="small">{t("Work on these")}</b>

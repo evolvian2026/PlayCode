@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APTITUDE_TEMPLATES, estimateAbility, generateQuestion, nextLevel, nextTemplate, scaledScore, seededRandom, suggestedDrillLevel } from "../src";
+import { APTITUDE_TEMPLATES, estimateAbility, generateQuestion, nextLevel, nextTemplate, medianSeconds, paceTarget, paceVerdict, scaledScore, seededRandom, suggestedDrillLevel } from "../src";
 
 describe("generated aptitude questions", () => {
   it("always have four distinct options, one of them right, at every level", () => {
@@ -102,6 +102,16 @@ describe("adaptive scoring", () => {
     expect(suggestedDrillLevel(90, 4.4)).toBe(5);
     expect(suggestedDrillLevel(0, 1)).toBe(1);
     expect(suggestedDrillLevel(100, 5)).toBe(5);
+  });
+
+  it("judge pace against the time the test allows, on the middle answer time", () => {
+    expect(paceTarget("quant")).toBe(90);
+    expect(paceTarget("reasoning")).toBe(72);
+    expect(medianSeconds([40, 300])).toBeNull();
+    expect(medianSeconds([40, 60, 600])).toBe(60);
+    expect(medianSeconds([40, 60, 80, 100])).toBe(70);
+    expect(paceVerdict(112, 90)).toBe("on_pace");
+    expect(paceVerdict(113, 90)).toBe("slow");
   });
 
   it("scores 100 to 900, and spreads questions across the section's templates", () => {

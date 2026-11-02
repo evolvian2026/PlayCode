@@ -535,14 +535,18 @@ export async function seedAptitude(args: { tenantId: string; tpoId: string; stud
     const ability = (s.skill - 0.6) * 5 + (r() - 0.5);
     const official = i % 3 === 0;
     const finishedAt = official ? new Date(opensAt.getTime() + (1 + (i % 3)) * 3_600_000) : new Date(args.now.getTime() - (1 + (i % 14)) * DAY_MS);
+    // Answer times run on from the start: harder questions and tables take longer.
+    let clock = finishedAt.getTime() - 30 * 60_000;
     const sections: AdaptiveSectionState[] = ADAPTIVE_SECTIONS.map((sec, k) => {
-      const state: AdaptiveSectionState = { key: sec.key, items: [], theta: 0, se: 1, startedAt: finishedAt.toISOString(), deadline: finishedAt.toISOString(), done: true };
+      const state: AdaptiveSectionState = { key: sec.key, items: [], theta: 0, se: 1, startedAt: new Date(clock).toISOString(), deadline: finishedAt.toISOString(), done: true };
       const own = ability + (k === 0 ? 0.3 : -0.3) * (r() - 0.5) * 2;
       for (let n = 0; n < sec.items; n++) {
         const q = generateQuestion(nextTemplate(sec.key, state.items.map((x) => x.template), r), nextLevel(state.theta), Math.floor(r() * 2 ** 30));
         const correct = r() < 1 / (1 + Math.exp(-(own - levelDifficulty(q.level))));
         const chosen = correct ? q.answer : (q.answer + 1 + Math.floor(r() * 3)) % 4;
-        state.items.push({ ...q, chosen, correct, askedAt: finishedAt.toISOString(), answeredAt: finishedAt.toISOString() });
+        const seconds = 25 + q.level * 10 + Math.floor(r() * 40) + (q.table ? 30 : 0);
+        state.items.push({ ...q, chosen, correct, askedAt: new Date(clock).toISOString(), answeredAt: new Date(clock + seconds * 1000).toISOString() });
+        clock += seconds * 1000;
         Object.assign(state, estimateAbility(state.items.map((x) => ({ level: x.level, correct: x.correct! }))));
       }
       return state;
@@ -593,8 +597,15 @@ export async function seedAptitudeHomework(args: { tenantId: string; facultyId: 
     [0, "syllogisms", 2, 4, 3],
     ...args.students.slice(1, 9).map((_, i): [number, string, number, number, number] => [i + 1, ["boats", "pipes", "blood-relations", "ages"][i % 4]!, 2, 4 + (i % 3), 1 + (i % 4)]),
   ];
+  // Seconds a question: the demo student is slow on probability and data interpretation, quick on syllogisms.
+  const pace: Record<string, number> = { probability: 150, "data-interpretation": 125, syllogisms: 45 };
   const drills = plan.flatMap(([i, template, level, n, right]) =>
-    Array.from({ length: n }, (_, k) => ({ tenantId: args.tenantId, userId: args.students[i]!.id, template, level, seed: 7000 + i * 100 + k, correct: k < right, answeredAt: new Date(args.now.getTime() - (2 + k) * DAY_MS) })),
+    Array.from({ length: n }, (_, k) => {
+      const seed = 7000 + i * 100 + k;
+      const answer = generateQuestion(template, level, seed).answer;
+      const correct = k < right;
+      return { tenantId: args.tenantId, userId: args.students[i]!.id, template, level, seed, chosen: correct ? answer : (answer + 1) % 4, correct, seconds: Math.round((pace[template] ?? 80) * (0.8 + 0.1 * (k % 5))), answeredAt: new Date(args.now.getTime() - (2 + k) * DAY_MS) };
+    }),
   );
   if (drills.length) await db.insert(aptitudeDrillAnswers).values(drills);
 }

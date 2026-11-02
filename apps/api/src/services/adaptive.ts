@@ -16,6 +16,7 @@ import type { Db, DbOrTx } from "../db/client";
 import { adaptiveAttempts, aptitudeDrillAnswers, aptitudeSittings, memberships, users, type AdaptiveItem, type AdaptiveSectionState } from "../db/schema";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { audit } from "../lib/audit";
+import { markFixed } from "./aptitude-practice";
 import { appLink, enqueue, processOutbox } from "./notifications";
 import { descendants, scopedUnitIds, studentIdsInUnits, studentUnitIdsWithAncestors, tenantUnits, type AuthContext } from "./scope";
 
@@ -284,15 +285,18 @@ export function drillQuestion(template: string, level: number) {
 }
 
 /** Check a drill answer by rebuilding the question from its seed, and keep it for the student's topic accuracy (once per question). */
-export async function checkDrill(db: Db, ctx: Ctx, input: { template: string; level: number; seed: number; chosen: number }) {
+export async function checkDrill(db: Db, ctx: Ctx, input: { template: string; level: number; seed: number; chosen: number; seconds?: number; retryOf?: { seed: number } }) {
   if (!APTITUDE_TEMPLATES.some((t) => t.id === input.template)) throw notFound("Topic");
   const q = generateQuestion(input.template, input.level, input.seed);
   const correct = input.chosen === q.answer;
   await db
     .insert(aptitudeDrillAnswers)
-    .values({ tenantId: ctx.tenantId, userId: ctx.userId, template: q.template, level: q.level, seed: input.seed, correct, answeredAt: ctx.now })
+    .values({ tenantId: ctx.tenantId, userId: ctx.userId, template: q.template, level: q.level, seed: input.seed, chosen: input.chosen, correct, seconds: input.seconds ?? null, answeredAt: ctx.now })
     .onConflictDoNothing();
-  return { correct, answer: q.answer, explanation: q.explanation };
+  // Retrying a mistake: a similar question right puts the original right.
+  const fixed = Boolean(correct && input.retryOf && input.retryOf.seed !== input.seed);
+  if (fixed) await markFixed(db, ctx, { template: q.template, level: q.level, seed: input.retryOf!.seed });
+  return { correct, answer: q.answer, explanation: q.explanation, fixed };
 }
 
 // ---------- Staff ----------

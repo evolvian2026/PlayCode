@@ -5,7 +5,7 @@ import { APTITUDE_TEMPLATES } from "@playcode/core";
 import { useMe } from "@/components/Auth";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, fetchObjectUrl, useApi } from "@/lib/api";
-import { BAND_TONE } from "@/lib/aptitude";
+import { BAND_TONE, duration } from "@/lib/aptitude";
 
 interface Row {
   id: string;
@@ -54,7 +54,7 @@ type Part = { template: string; level: number; count: number };
 
 /** Topics the students in scope get wrong most, from tests and homework in the last 90 days. */
 function Struggles({ onAssign }: { onAssign: ((p: Part) => void) | null }) {
-  const { data } = useApi<{ topics: { template: string; label: string; answered: number; accuracyPct: number; averageLevel: number }[] }>("/console/aptitude/topics");
+  const { data } = useApi<{ topics: { template: string; label: string; answered: number; accuracyPct: number; averageLevel: number; medianSeconds: number | null; targetSeconds: number; pace: "slow" | "on_pace" | null }[] }>("/console/aptitude/topics");
   if (!data?.topics.length) return null;
   return (
     <section className="card stack" aria-labelledby="h-struggles">
@@ -63,7 +63,7 @@ function Struggles({ onAssign }: { onAssign: ((p: Part) => void) | null }) {
           Where the batch struggles
         </h2>
         <p className="small muted" style={{ margin: 0 }}>
-          Share of answers right by topic, from adaptive tests and homework in the last 90 days, lowest first.
+          Share of answers right by topic, from adaptive tests and homework in the last 90 days, lowest first. Pace is the middle time a question in adaptive tests, against what the test allows (homework isn&apos;t timed).
         </p>
       </div>
       {data.topics.slice(0, 8).map((x) => (
@@ -75,6 +75,9 @@ function Struggles({ onAssign }: { onAssign: ((p: Part) => void) | null }) {
           <b style={{ width: 44 }}>{x.accuracyPct}%</b>
           <span className="muted" style={{ width: 110 }}>
             {x.answered} answers
+          </span>
+          <span style={{ width: 150, color: x.pace === "slow" ? "var(--warn-ink)" : undefined }} className={x.pace === "slow" ? undefined : "muted"}>
+            {x.medianSeconds === null ? "" : `${duration(x.medianSeconds)} a question${x.pace === "slow" ? `, slow (${duration(x.targetSeconds)})` : ""}`}
           </span>
           {onAssign && (
             <button className="btn ghost small" onClick={() => onAssign({ template: x.template, level: Math.max(1, Math.min(5, Math.round(x.averageLevel))), count: 5 })}>

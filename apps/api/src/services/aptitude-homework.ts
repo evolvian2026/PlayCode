@@ -1,8 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { and, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
-import { APTITUDE_TEMPLATES, generateQuestion, suggestedDrillLevel } from "@playcode/core";
+import { APTITUDE_TEMPLATES, generateQuestion } from "@playcode/core";
 import type { Db } from "../db/client";
-import { adaptiveAttempts, aptitudeDrillAnswers, aptitudeHomework, aptitudeHomeworkWork, users, type HomeworkPart, type HomeworkQuestion } from "../db/schema";
+import { aptitudeHomework, aptitudeHomeworkWork, users, type HomeworkPart, type HomeworkQuestion } from "../db/schema";
 import { audit } from "../lib/audit";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { appLink, enqueue, processOutbox } from "./notifications";
@@ -234,52 +234,4 @@ export async function answerHomework(db: Db, ctx: Ctx, id: string, input: { inde
     return { ...w, questions: w.questions, correct, finishedAt: finished ? ctx.now : null };
   });
   return view(h, result, ctx.now);
-}
-
-// ---------- Where the batch struggles ----------
-
-/** Accuracy by aptitude topic over the last 90 days, from adaptive tests and homework, for students in scope. */
-/** Answers from the last 90 days, topic by topic: adaptive tests and homework, and for a student looking at their own, drills too. */
-async function accuracyByTopic(db: Db, tenantId: string, ids: string[], now: Date, drills: boolean) {
-  const since = new Date(now.getTime() - 90 * DAY);
-  const [tests, work, drilled] = await Promise.all([
-    db.select({ sections: adaptiveAttempts.sections }).from(adaptiveAttempts).where(and(eq(adaptiveAttempts.tenantId, tenantId), inArray(adaptiveAttempts.userId, ids), gte(adaptiveAttempts.startedAt, since))),
-    db.select({ questions: aptitudeHomeworkWork.questions }).from(aptitudeHomeworkWork).where(and(eq(aptitudeHomeworkWork.tenantId, tenantId), inArray(aptitudeHomeworkWork.userId, ids), gte(aptitudeHomeworkWork.startedAt, since))),
-    drills
-      ? db.select({ template: aptitudeDrillAnswers.template, level: aptitudeDrillAnswers.level, correct: aptitudeDrillAnswers.correct }).from(aptitudeDrillAnswers).where(and(eq(aptitudeDrillAnswers.tenantId, tenantId), inArray(aptitudeDrillAnswers.userId, ids), gte(aptitudeDrillAnswers.answeredAt, since)))
-      : [],
-  ]);
-  const answers = [
-    ...tests.flatMap((t) => t.sections.flatMap((s) => s.items.filter((i) => i.correct !== null).map((i) => ({ template: i.template, level: i.level, correct: i.correct! })))),
-    ...work.flatMap((w) => w.questions.filter((q) => q.correct !== null).map((q) => ({ template: q.template, level: q.level, correct: q.correct! }))),
-    ...drilled,
-  ];
-  return APTITUDE_TEMPLATES.map((t) => {
-    const qs = answers.filter((a) => a.template === t.id);
-    return {
-      template: t.id,
-      label: t.label,
-      topic: t.topic,
-      answered: qs.length,
-      correct: qs.filter((a) => a.correct).length,
-      accuracyPct: qs.length ? Math.round((qs.filter((a) => a.correct).length / qs.length) * 100) : null,
-      averageLevel: qs.length ? Math.round((qs.reduce((n, a) => n + a.level, 0) / qs.length) * 10) / 10 : null,
-    };
-  })
-    .filter((t) => t.answered > 0)
-    .sort((a, b) => a.accuracyPct! - b.accuracyPct! || b.answered - a.answered);
-}
-
-export async function topicAccuracy(db: Db, auth: AuthContext, now: Date) {
-  const tenantId = auth.tenantId!;
-  const ids = await studentIdsInUnits(db, tenantId, await scopedUnitIds(db, auth));
-  if (!ids.length) return { topics: [] };
-  return { topics: await accuracyByTopic(db, tenantId, ids, now, false) };
-}
-
-/** A student's own accuracy by topic, weakest first, each with the level to drill it at; and the topics they haven't tried. */
-export async function myTopics(db: Db, ctx: Ctx) {
-  const topics = (await accuracyByTopic(db, ctx.tenantId, [ctx.userId], ctx.now, true)).map((t) => ({ ...t, drillLevel: suggestedDrillLevel(t.accuracyPct!, t.averageLevel!) }));
-  const tried = new Set(topics.map((t) => t.template));
-  return { topics, untried: APTITUDE_TEMPLATES.filter((t) => !tried.has(t.id)) };
 }

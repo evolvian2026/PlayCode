@@ -83,5 +83,24 @@ export function suggestedDrillLevel(accuracyPct: number, averageLevel: number): 
   return Math.min(5, Math.max(1, Math.round(averageLevel) + step));
 }
 
+/** The time a test allows for one question of a section, in seconds: 90 for quantitative ability, 72 for reasoning. */
+export function paceTarget(topic: AptitudeTopic): number {
+  const s = ADAPTIVE_SECTIONS.find((x) => x.key === topic)!;
+  return Math.round((s.minutes * 60) / s.items);
+}
+
+/** The middle of a set of answer times, or null with too few to say: one slow question shouldn't label a topic. */
+export function medianSeconds(times: number[], min = 3): number | null {
+  if (times.length < min) return null;
+  const xs = [...times].sort((a, b) => a - b);
+  const mid = Math.floor(xs.length / 2);
+  return Math.round(xs.length % 2 ? xs[mid]! : (xs[mid - 1]! + xs[mid]!) / 2);
+}
+
+/** Slow when the usual answer takes more than a quarter longer than the test allows. */
+export function paceVerdict(seconds: number, target: number): "slow" | "on_pace" {
+  return seconds > target * 1.25 ? "slow" : "on_pace";
+}
+
 /** An official score counts for this long: after a year it no longer reflects the student. */
 export const OFFICIAL_SCORE_MONTHS = 12;

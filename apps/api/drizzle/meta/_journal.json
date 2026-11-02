@@ -484,6 +484,13 @@
       "when": 1793371720946,
       "tag": "0068_aptitude_drill_answers",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1793593223439,
+      "tag": "0069_aptitude_mistakes_pace",
+      "breakpoints": true
     }
   ]
 }
