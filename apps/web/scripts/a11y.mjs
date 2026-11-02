@@ -2,12 +2,15 @@
 // student and console screens of a running app, signed in as the demo users.
 // Usage: start the API and web app with the demo seed, then
 //   PW=$(npm root -g)/playwright node scripts/a11y.mjs [http://localhost:3000]
-// Exits non-zero if any serious or critical violation is found.
+// Exits non-zero if any serious or critical violation is found, or if the
+// Content Security Policy blocks anything on a page (axe itself goes in
+// through the browser's debugging channel, which the policy doesn't cover).
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW ?? "playwright");
-const axePath = require.resolve("axe-core/axe.min.js");
+const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const base = process.argv[2] ?? "http://localhost:3000";
 
 const PAGES = [
@@ -135,17 +138,24 @@ async function contextFor(as, mobile) {
 }
 
 let serious = 0;
+let blocked = 0;
 for (const pg of PAGES) {
   const ctx = await contextFor(pg.as, pg.mobile);
   const page = await ctx.newPage();
+  const csp = [];
+  page.on("console", (m) => {
+    if (m.type() === "error" && /Content Security Policy/i.test(m.text())) csp.push(m.text());
+  });
   await page.goto(`${base}${pg.path}`);
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(500);
-  await page.addScriptTag({ path: axePath });
+  await page.evaluate(axeSource);
   const result = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] } })).violations);
   const bad = result.filter((v) => v.impact === "serious" || v.impact === "critical");
   serious += bad.length;
   console.log(`${result.length === 0 ? "ok  " : bad.length ? "FAIL" : "warn"} ${pg.path}${pg.as ? ` (${pg.as})` : ""}`);
+  for (const c of csp) console.log(`     [csp] ${c.slice(0, 200)}`);
+  blocked += csp.length;
   for (const v of result) {
     console.log(`     [${v.impact}] ${v.id}: ${v.help} (${v.nodes.length})`);
     for (const n of v.nodes.slice(0, 3)) console.log(`        ${n.target.join(" ")}  ${n.failureSummary?.split("\n")[1]?.trim() ?? ""}`);
@@ -154,4 +164,5 @@ for (const pg of PAGES) {
 }
 await browser.close();
 console.log(serious ? `\n${serious} serious or critical violations` : "\nNo serious or critical violations");
-process.exit(serious ? 1 : 0);
+console.log(blocked ? `${blocked} blocked by the Content Security Policy` : "Nothing blocked by the Content Security Policy");
+process.exit(serious || blocked ? 1 : 0);
