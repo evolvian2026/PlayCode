@@ -331,6 +331,17 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - Staff see the batch's talks in the console (Speaking practice, next to Written English). They see averages for each mark, pace and fillers, a table by student, and each talk with its transcript and feedback, within their scope.
 - Talks are in the student's data export and are deleted with the account.
 
+**Phase 51 additions**
+- Speaking drills (Me, Speaking drills), like the automated English tests some recruiters use (Versant, SVAR):
+  - Read aloud: a sentence appears and the student reads it.
+  - Listen and repeat: the browser speaks a sentence, which stays hidden. The student can hear it at most twice, then says it back.
+  - A sitting is eight sentences from a bank of 36 workplace and campus sentences at three levels (`packages/core/src/speaking-drills.ts`). Reading uses the longer ones and repeating the shorter ones, easier first.
+  - Each answer is scored by the share of the sentence's words the browser's speech recognition heard, in order (longest common subsequence, ignoring case and punctuation). The missed words are shown struck through, and the student can try a sentence again before moving on.
+  - A sitting gets the mean score, a band (clear at 85% and above, mostly clear, hard to follow under 60%) and, for reading, words a minute.
+  - The API works the score out from the bank, so the page can't send its own. No AI is used, so the drills cost nothing to run and are open on every plan.
+- Staff see each student's latest and best score for each kind of drill, with averages, below the JAM talks on the console's Speaking practice page.
+- Sittings are in the data export and are deleted with the account. The screens are in Hindi and Tamil; the sentences stay English.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -577,6 +588,8 @@ Other operations:
 - **No audio is recorded for speaking practice**: the browser's transcript and the time spoken are enough to mark what was said and to measure pace and fillers, and nothing as personal as a student's voice is stored. The cost is that pronunciation and intonation aren't assessed; the feedback says so by never marking accent.
 - **The JAM transcript can't be edited**, unlike a spoken interview answer: it's speaking practice, and an editable transcript would turn it into writing. The marker is told to ignore what look like transcription errors instead.
 - **Under 30 words isn't marked**: a quarter of a minute of speech can't show structure or examples, and marking it would spend a daily try on nothing. The student still sees their delivery numbers and can try again.
+- **Speaking drills score what the speech recogniser understood, not pronunciation**: matching words is free, instant and works offline of any AI, and a word the recogniser caught is usually one a listener would too. It can't judge stress or intonation, and a noisy room or a poor microphone lowers the score; the page says so next to the missed words.
+- **The drill sentences have no numbers or contractions**: recognisers write "five" or "5", "don't" or "do not", and either would count as a miss against the sentence.
 - **The SAML key pair is one per server**, from the environment, rather than one per institution: IdPs only need PlayCode's certificate, and rotating it is a deploy, not a per-college task.
 
 Not built yet: screen-reader testing by people who use them (the automated check covers WCAG rules it can test), PostgreSQL row-level security, languages beyond English, Hindi and Tamil, the staff console in anything but English, and native mobile apps (the web app is an installable PWA).
