@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, DataTable, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, ExitItem, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, OnDutyPart, OnDutyReason, OnDutyStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, DataTable, InterviewContext, InterviewTrack, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, ExitItem, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, OnDutyPart, OnDutyReason, OnDutyStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -1485,7 +1485,7 @@ export interface InterviewTurn {
 }
 
 export interface InterviewScorecard {
-  /** 1-5 per dimension: problemSolving, fundamentals, communication and code for technical rounds; structure, evidence, communication and selfAwareness for the HR round. */
+  /** 1-5 per dimension: problemSolving, fundamentals, communication and code for technical rounds; structure, evidence, communication and selfAwareness for the HR round; explanation, ownership, depth and tradeoffs for the project round. */
   scores: Record<string, number>;
   overall: number;
   strengths: string[];
@@ -1493,7 +1493,7 @@ export interface InterviewScorecard {
   summary: string;
   /** Skill ids to practise next (technical rounds). */
   practise: string[];
-  /** HR round: questions to prepare a better answer for. */
+  /** HR and project rounds: questions to prepare a better answer for. */
   prepare?: string[];
   /** Spoken interviews: pace and filler words across the spoken answers. */
   delivery?: Delivery | null;
@@ -1505,7 +1505,11 @@ export const interviews = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    track: text("track").$type<"service" | "product" | "hr">().notNull(),
+    track: text("track").$type<InterviewTrack>().notNull(),
+    /** The drive this interview prepares for, if any. */
+    driveId: uuid("drive_id").references(() => placementDrives.id, { onDelete: "set null" }),
+    /** The company, role and past candidates' reports, or the student's projects, as they were when it started. */
+    context: jsonb("context").$type<InterviewContext>(),
     /** Voice: the interviewer is read aloud and answers are spoken (transcribed in the browser). */
     mode: text("mode").$type<"text" | "voice">().notNull().default("text"),
     /** Skill ids the interview leans on (the student's weakest relevant skills). */

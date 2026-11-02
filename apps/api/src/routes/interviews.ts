@@ -15,8 +15,11 @@ export async function interviewRoutes(app: FastifyInstance) {
   app.get("/student/interviews", async (req) => listMine(db, ctx(req)));
 
   app.post("/student/interviews", async (req) => {
-    const { track, mode } = parse(z.object({ track: z.enum(["service", "product", "hr"]), mode: z.enum(["text", "voice"]).default("text") }), req.body);
-    return startInterview(db, ctx(req), track, mode);
+    const { track, mode, driveId } = parse(
+      z.object({ track: z.enum(["service", "product", "hr", "project"]), mode: z.enum(["text", "voice"]).default("text"), driveId: z.string().uuid().nullable().default(null) }),
+      req.body,
+    );
+    return startInterview(db, ctx(req), track, mode, driveId);
   });
 
   app.get("/student/interviews/:id", async (req) => getMine(db, ctx(req), parse(idParam, req.params).id));

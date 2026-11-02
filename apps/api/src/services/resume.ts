@@ -77,7 +77,7 @@ export async function resumeData(db: Db, userId: string, now: Date) {
       .where(and(eq(responses.userId, userId), eq(responses.correct, true)))
       .groupBy(questions.type),
     // The resume shows the latest technical round; the HR round is practice for the student alone.
-    db.select().from(interviews).where(and(eq(interviews.userId, userId), eq(interviews.status, "finished"), ne(interviews.track, "hr"))).orderBy(desc(interviews.finishedAt)).limit(1),
+    db.select().from(interviews).where(and(eq(interviews.userId, userId), eq(interviews.status, "finished"), inArray(interviews.track, ["service", "product"]))).orderBy(desc(interviews.finishedAt)).limit(1),
     myEntries(db, userId),
     officialAptitude(db, user.tenantId, [userId], now).then((m) => m.get(userId) ?? null),
   ]);

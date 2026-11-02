@@ -477,7 +477,7 @@ function DriveCard({ drive, experiences, onChange }: { drive: Drive; experiences
           </Link>
         )}
         {(app?.status === "registered" || app?.status === "shortlisted") && (
-          <Link className="btn small" href={`/play/interview?track=${drive.companyType === "product" ? "product" : "service"}`}>
+          <Link className="btn small" href={`/play/interview?track=${drive.companyType === "product" ? "product" : "service"}&drive=${drive.id}`}>
             {t("Mock interview")}
           </Link>
         )}

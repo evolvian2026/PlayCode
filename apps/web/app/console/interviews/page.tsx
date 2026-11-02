@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { HR_DIMENSIONS, INTERVIEW_TRACK_LABELS, interviewDimensions, TECHNICAL_DIMENSIONS, type InterviewTrack } from "@playcode/core";
+import { HR_DIMENSIONS, INTERVIEW_TRACK_LABELS, interviewDimensions, PROJECT_DIMENSIONS, TECHNICAL_DIMENSIONS, type InterviewTrack } from "@playcode/core";
 import { ErrorBox, Loading, Stat } from "@/components/ui";
 import { useApi } from "@/lib/api";
 
@@ -22,6 +22,7 @@ interface Data {
   interviews: Row[];
   averages: Averages | null;
   hrAverages: Averages | null;
+  projectAverages: Averages | null;
 }
 
 type Averages = { count: number; overall: number } & Record<string, number>;
@@ -69,12 +70,13 @@ export default function ConsoleInterviews() {
       {error && <ErrorBox message={error.message} onRetry={reload} />}
       {loading && !data ? (
         <Loading />
-      ) : !data?.averages && !data?.hrAverages ? (
+      ) : !data?.averages && !data?.hrAverages && !data?.projectAverages ? (
         <div className="card muted">No scored interviews yet. Students start them from Placements or their profile.</div>
       ) : (
         <>
           {data.averages && <AverageStats title="Technical rounds" avg={data.averages} dims={TECHNICAL_DIMENSIONS} />}
           {data.hrAverages && <AverageStats title="HR rounds" avg={data.hrAverages} dims={HR_DIMENSIONS} />}
+          {data.projectAverages && <AverageStats title="Project rounds" avg={data.projectAverages} dims={PROJECT_DIMENSIONS} />}
           <div className="card" style={{ padding: 0 }}>
             <div className="table-wrap">
               <table>

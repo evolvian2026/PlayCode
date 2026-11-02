@@ -10,6 +10,7 @@ interface Detail {
   userId: string;
   student: { name: string; rollNo: string | null };
   track: InterviewTrack;
+  company: string | null;
   mode: "text" | "voice";
   status: string;
   focusSkills: { id: string; name: string }[];
@@ -43,7 +44,9 @@ export default function ConsoleInterview() {
           <Link href={`/console/students/${data.userId}`} style={{ color: "inherit" }}>
             {data.student.name}
           </Link>{" "}
-          <span className="muted" style={{ fontWeight: 500 }}>· {data.track === "hr" ? "HR interview" : `${data.track} company interview`}{data.mode === "voice" ? ", spoken" : ""}</span>
+          <span className="muted" style={{ fontWeight: 500 }}>· {data.track === "hr" ? "HR interview" : data.track === "project" ? "Project round" : `${data.track} company interview`}
+            {data.company ? `, practice for ${data.company}` : ""}
+            {data.mode === "voice" ? ", spoken" : ""}</span>
         </h1>
         <div className="small muted">
           {new Date(data.startedAt).toLocaleString("en-IN")}

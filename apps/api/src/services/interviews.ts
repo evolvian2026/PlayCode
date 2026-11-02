@@ -1,18 +1,21 @@
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
-import { deliverySummary, interviewDimensions, masteryFromRating, READINESS_PROFILES, spokenAnswer, type InterviewTrack } from "@playcode/core";
+import { deliverySummary, interviewDimensions, masteryFromRating, READINESS_PROFILES, spokenAnswer, type InterviewContext, type InterviewTrack } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
-import { interviews, skillRatings, skills, users, type InterviewTurn } from "../db/schema";
-import { aiProvider, AiUnavailableError, type HrScorecardOut, type InterviewInput, type TechnicalScorecardOut } from "../lib/ai";
+import { interviewExperiences, interviews, placementApplications, placementDrives, resumeEntries, skillRatings, skills, users, type InterviewTurn } from "../db/schema";
+import { aiProvider, AiUnavailableError, type HrScorecardOut, type InterviewInput, type ProjectScorecardOut, type TechnicalScorecardOut } from "../lib/ai";
 import { badRequest, conflict, HttpError, notFound } from "../lib/errors";
 import { recordAiUsage } from "./coach";
 import { aiAllowed } from "./plan";
 
 // AI mock interviews: a short text interview with Claude as the interviewer,
 // either a technical round pitched at service or product companies (leaning
-// on the student's weakest relevant skills) or an HR round scored on how well
-// answers tell a real story (situation, task, action, result). It ends in a
-// scorecard the student and their teachers can see. The server keeps the
-// transcript and enforces the limits.
+// on the student's weakest relevant skills), an HR round scored on how well
+// answers tell a real story (situation, task, action, result), or a project
+// round about the student's own projects and internships. Any of the first
+// three can be practice for a drive the student registered for, pitched with
+// what past candidates reported of that company. It ends in a scorecard the
+// student and their teachers can see. The server keeps the transcript and
+// enforces the limits.
 
 /** Answers per interview, and interviews a student may start per week. */
 export const MAX_ANSWERS = 8;
@@ -38,8 +41,8 @@ export async function interviewAvailability(db: DbOrTx, ctx: Ctx): Promise<{ ok:
 
 /** Skills in the topics this kind of company weighs most, the student's weakest first. */
 async function relevantSkills(db: DbOrTx, userId: string, track: Track) {
-  // The HR round isn't about skills.
-  if (track === "hr") return [];
+  // The HR and project rounds aren't about skills.
+  if (track === "hr" || track === "project") return [];
   const profile = READINESS_PROFILES.find((p) => p.id === track)!;
   const all = await db.select({ id: skills.id, name: skills.name, topic: skills.topic, topicName: skills.topicName }).from(skills);
   const ratings = new Map((await db.select().from(skillRatings).where(eq(skillRatings.userId, userId))).map((r) => [r.skillId, r]));
@@ -68,6 +71,10 @@ async function view(db: DbOrTx, row: Row) {
     track: row.track,
     mode: row.mode,
     status: row.status,
+    driveId: row.driveId,
+    company: row.context?.company ?? null,
+    role: row.context?.role ?? null,
+    projects: row.context?.projects?.map((p) => p.title) ?? [],
     focusSkills: row.focusSkills.map((id) => ({ id, name: name(id) })),
     turns: row.turns,
     answersLeft: row.status === "active" ? MAX_ANSWERS - answersIn(row.turns) : 0,
@@ -86,22 +93,65 @@ export async function listMine(db: Db, ctx: Ctx) {
     reason: availability.ok ? null : availability.reason,
     weeklyLeft: Math.max(0, WEEKLY_LIMIT - startedThisWeek),
     active: rows.find((r) => r.status === "active")?.id ?? null,
-    interviews: rows.map((r) => ({ id: r.id, track: r.track, mode: r.mode, status: r.status, overall: r.scorecard?.overall ?? null, answers: answersIn(r.turns), startedAt: r.startedAt, finishedAt: r.finishedAt })),
+    interviews: rows.map((r) => ({ id: r.id, track: r.track, mode: r.mode, status: r.status, company: r.context?.company ?? null, overall: r.scorecard?.overall ?? null, answers: answersIn(r.turns), startedAt: r.startedAt, finishedAt: r.finishedAt })),
+    // What the project round would ask about, and the drives there's practice for.
+    projects: (await projectsOf(db, ctx)).map((p) => p.title),
+    drives: await drivesToPractise(db, ctx),
   };
+}
+
+/** The projects and internships on the student's resume, most recent first: what the project round asks about. */
+async function projectsOf(db: DbOrTx, ctx: Ctx): Promise<NonNullable<InterviewContext["projects"]>> {
+  const rows = await db
+    .select()
+    .from(resumeEntries)
+    .where(and(eq(resumeEntries.userId, ctx.userId), eq(resumeEntries.tenantId, ctx.tenantId), inArray(resumeEntries.kind, ["project", "internship"])))
+    .orderBy(desc(resumeEntries.startMonth));
+  return rows.slice(0, 4).map((r) => ({ kind: r.kind as "project" | "internship", title: r.title, organisation: r.organisation, months: `${r.startMonth} to ${r.endMonth ?? "now"}`, description: r.description.slice(0, 1200), link: r.link }));
+}
+
+/** Drives the student is registered for that haven't happened yet. */
+async function drivesToPractise(db: DbOrTx, ctx: Ctx) {
+  const today = ctx.now.toISOString().slice(0, 10);
+  const rows = await db
+    .select({ id: placementDrives.id, company: placementDrives.company, roleTitle: placementDrives.roleTitle, companyType: placementDrives.companyType, driveDate: placementDrives.driveDate, status: placementApplications.status })
+    .from(placementApplications)
+    .innerJoin(placementDrives, eq(placementDrives.id, placementApplications.driveId))
+    .where(and(eq(placementApplications.userId, ctx.userId), eq(placementApplications.tenantId, ctx.tenantId), gte(placementDrives.driveDate, today)))
+    .orderBy(placementDrives.driveDate);
+  return rows.filter((r) => r.status === "registered" || r.status === "shortlisted").map(({ status: _, ...d }) => d);
+}
+
+/** What students reported of a company's rounds in past drives here, published ones only and without names. */
+async function experiencesOf(db: DbOrTx, tenantId: string, company: string) {
+  const rows = await db
+    .select({ rounds: interviewExperiences.rounds, tips: interviewExperiences.tips, difficulty: interviewExperiences.difficulty })
+    .from(interviewExperiences)
+    .innerJoin(placementDrives, eq(placementDrives.id, interviewExperiences.driveId))
+    .where(and(eq(interviewExperiences.tenantId, tenantId), eq(interviewExperiences.status, "published"), sql`lower(${placementDrives.company}) = lower(${company})`))
+    .orderBy(desc(interviewExperiences.publishedAt))
+    .limit(6);
+  return rows.map((r) =>
+    [...r.rounds.filter((x) => x.description.trim()).map((x) => `${x.name}: ${x.description.slice(0, 600)}`), ...(r.tips.trim() ? [`Tips: ${r.tips.slice(0, 300)}`] : []), `Difficulty ${r.difficulty} of 5`].join("\n"),
+  );
 }
 
 export async function getMine(db: Db, ctx: Ctx, id: string) {
   return view(db, await load(db, ctx.userId, id));
 }
 
-function input(row: Pick<Row, "track" | "turns" | "mode">, focus: { id: string; name: string }[]): InterviewInput {
-  return { track: row.track, mode: row.mode, focusSkills: focus, turns: row.turns.map(({ role, text }) => ({ role, text })), answersLeft: MAX_ANSWERS - answersIn(row.turns) };
+function input(row: Pick<Row, "track" | "turns" | "mode" | "context">, focus: { id: string; name: string }[]): InterviewInput {
+  return { track: row.track, mode: row.mode, context: row.context, focusSkills: focus, turns: row.turns.map(({ role, text }) => ({ role, text })), answersLeft: MAX_ANSWERS - answersIn(row.turns) };
 }
 
 const deliveryOf = (turns: InterviewTurn[]) => deliverySummary(turns.flatMap((t) => (t.role === "candidate" && t.voice ? [t.voice] : [])));
 
-/** Start an interview (or return the one already in progress). */
-export async function startInterview(db: Db, ctx: Ctx, track: Track, mode: Mode = "text") {
+/**
+ * Start an interview (or return the one already in progress). With a drive,
+ * it's practice for that company: a technical round takes the company's kind
+ * (service or product), and past candidates' reports shape the questions.
+ */
+export async function startInterview(db: Db, ctx: Ctx, requested: Track, mode: Mode = "text", driveId: string | null = null) {
   const [active] = await db.select().from(interviews).where(and(eq(interviews.userId, ctx.userId), eq(interviews.status, "active")));
   if (active) return view(db, active);
   const allowed = await interviewAvailability(db, ctx);
@@ -112,17 +162,32 @@ export async function startInterview(db: Db, ctx: Ctx, track: Track, mode: Mode 
     .where(and(eq(interviews.userId, ctx.userId), gte(interviews.startedAt, new Date(ctx.now.getTime() - 7 * DAY_MS))))) as [{ n: number }];
   if (n >= WEEKLY_LIMIT) throw badRequest(`You can start ${WEEKLY_LIMIT} mock interviews a week. Practise the skills from your last scorecard meanwhile.`);
 
+  let track = requested;
+  let context: InterviewContext | null = null;
+  if (driveId) {
+    if (requested === "project") throw badRequest("Practise for a drive in a technical or HR round");
+    const drive = (await drivesToPractise(db, ctx)).find((d) => d.id === driveId);
+    if (!drive) throw notFound("Drive you're registered for");
+    if (requested !== "hr") track = drive.companyType === "product" ? "product" : "service";
+    context = { company: drive.company, role: drive.roleTitle, experiences: await experiencesOf(db, ctx.tenantId, drive.company) };
+  }
+  if (track === "project") {
+    const projects = await projectsOf(db, ctx);
+    if (!projects.length) throw badRequest("Add a project or internship to your resume first: the project round asks about them.");
+    context = { projects };
+  }
+
   const focus = (await relevantSkills(db, ctx.userId, track)).slice(0, 3).map(({ id, name }) => ({ id, name }));
   let first;
   try {
-    first = await aiProvider()!.interviewTurn({ track, mode, focusSkills: focus, turns: [], answersLeft: MAX_ANSWERS });
+    first = await aiProvider()!.interviewTurn({ track, mode, context, focusSkills: focus, turns: [], answersLeft: MAX_ANSWERS });
   } catch (err) {
     aiError(err);
   }
   await recordAiUsage(db, { tenantId: ctx.tenantId, userId: ctx.userId, feature: "mock_interview", usage: first.usage, now: ctx.now });
   const [row] = await db
     .insert(interviews)
-    .values({ tenantId: ctx.tenantId, userId: ctx.userId, track, mode, focusSkills: focus.map((f) => f.id), turns: [{ role: "interviewer", text: first.value.message, at: ctx.now.toISOString() }], startedAt: ctx.now })
+    .values({ tenantId: ctx.tenantId, userId: ctx.userId, track, mode, driveId, context, focusSkills: focus.map((f) => f.id), turns: [{ role: "interviewer", text: first.value.message, at: ctx.now.toISOString() }], startedAt: ctx.now })
     .returning();
   return view(db, row!);
 }
@@ -166,8 +231,8 @@ async function score(db: Db, ctx: Ctx, row: Row) {
     strengths: card.strengths.slice(0, 4),
     improvements: card.improvements.slice(0, 4),
     summary: card.summary,
-    practise: row.track === "hr" ? [] : [...new Set((card as TechnicalScorecardOut).practise.filter((id) => valid.has(id)))].slice(0, 3),
-    ...(row.track === "hr" ? { prepare: ((card as HrScorecardOut).prepare ?? []).slice(0, 3) } : {}),
+    practise: row.track === "hr" || row.track === "project" ? [] : [...new Set((card as TechnicalScorecardOut).practise.filter((id) => valid.has(id)))].slice(0, 3),
+    ...(row.track === "hr" || row.track === "project" ? { prepare: ((card as HrScorecardOut | ProjectScorecardOut).prepare ?? []).slice(0, 3) } : {}),
     delivery,
   };
 }
@@ -207,7 +272,7 @@ export async function finishEarly(db: Db, ctx: Ctx, id: string) {
 
 /** Scored interviews of the given students, newest first, for teachers. */
 export async function interviewsFor(db: Db, studentIds: string[]) {
-  if (studentIds.length === 0) return { interviews: [], averages: null, hrAverages: null };
+  if (studentIds.length === 0) return { interviews: [], averages: null, hrAverages: null, projectAverages: null };
   const rows = await db
     .select({ id: interviews.id, userId: interviews.userId, name: users.name, rollNo: users.rollNo, track: interviews.track, mode: interviews.mode, scorecard: interviews.scorecard, finishedAt: interviews.finishedAt })
     .from(interviews)
@@ -215,21 +280,22 @@ export async function interviewsFor(db: Db, studentIds: string[]) {
     .where(and(inArray(interviews.userId, studentIds), eq(interviews.status, "finished")))
     .orderBy(desc(interviews.finishedAt))
     .limit(200);
-  // Technical rounds and the HR round are scored on different dimensions, so they're averaged apart.
-  const averagesOf = (kind: "technical" | "hr") => {
-    const group = rows.filter((r) => (r.track === "hr") === (kind === "hr"));
+  // Technical, HR and project rounds are scored on different dimensions, so they're averaged apart.
+  const averagesOf = (kind: "technical" | "hr" | "project") => {
+    const group = rows.filter((r) => (kind === "technical" ? r.track === "service" || r.track === "product" : r.track === kind));
     if (!group.length) return null;
     const avg = (pick: (s: NonNullable<Row["scorecard"]>) => number) => Math.round((group.reduce((a, r) => a + pick(r.scorecard!), 0) / group.length) * 10) / 10;
     return {
       count: group.length,
       overall: avg((s) => s.overall),
-      ...Object.fromEntries(interviewDimensions(kind === "hr" ? "hr" : "service").map(([key]) => [key, avg((s) => s.scores[key] ?? 0)])),
+      ...Object.fromEntries(interviewDimensions(kind === "technical" ? "service" : kind).map(([key]) => [key, avg((s) => s.scores[key] ?? 0)])),
     };
   };
   return {
     interviews: rows.map((r) => ({ id: r.id, userId: r.userId, name: r.name, rollNo: r.rollNo, track: r.track, mode: r.mode, overall: r.scorecard!.overall, scores: r.scorecard!.scores, finishedAt: r.finishedAt })),
     averages: averagesOf("technical"),
     hrAverages: averagesOf("hr"),
+    projectAverages: averagesOf("project"),
   };
 }
 

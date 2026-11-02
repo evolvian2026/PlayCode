@@ -38,6 +38,9 @@ interface Interview {
   mode: Mode;
   status: "active" | "finished" | "abandoned";
   focusSkills: { id: string; name: string }[];
+  company: string | null;
+  role: string | null;
+  projects: string[];
   turns: { role: "interviewer" | "candidate"; text: string; at: string; voice?: { wpm: number; fillers: number } }[];
   answersLeft: number;
   scorecard: Scorecard | null;
@@ -48,8 +51,20 @@ interface Mine {
   reason: string | null;
   weeklyLeft: number;
   active: string | null;
-  interviews: { id: string; track: Track; mode: Mode; status: Interview["status"]; overall: number | null; answers: number; startedAt: string }[];
+  interviews: { id: string; track: Track; mode: Mode; status: Interview["status"]; company: string | null; overall: number | null; answers: number; startedAt: string }[];
+  /** What the project round would ask about. */
+  projects: string[];
+  /** Drives the student registered for, to practise for. */
+  drives: { id: string; company: string; roleTitle: string; companyType: string; driveDate: string }[];
 }
+
+const TITLES: Record<Track, string> = { hr: "HR interview", product: "Product company interview", service: "Service company interview", project: "Project round" };
+const ABOUT: Record<Track, string> = {
+  service: "A short technical interview with an AI interviewer, about 15 minutes. It asks about the skills you are weakest in, follows up like a real panel, and ends with a scorecard.",
+  product: "A short technical interview with an AI interviewer, about 15 minutes. It asks about the skills you are weakest in, follows up like a real panel, and ends with a scorecard.",
+  hr: "A short HR round with an AI interviewer, about 15 minutes: introducing yourself, teamwork, a failure, your goals. It asks for real examples, follows up like a real panel, and ends with a scorecard on how well your answers tell a story.",
+  project: "\"Walk me through your project\": the interviewer asks about the projects and internships on your resume, digs into what you built yourself and why, and scores how well you explain them.",
+};
 
 function ScorecardView({ card, track }: { card: Scorecard; track: Track }) {
   const t = useT();
@@ -109,14 +124,18 @@ function ScorecardView({ card, track }: { card: Scorecard; track: Track }) {
       )}
       {card.prepare && card.prepare.length > 0 && (
         <div>
-          <b className="small">{t("Prepare a better story for")}</b>
+          <b className="small">{t(track === "project" ? "Prepare a better answer for" : "Prepare a better story for")}</b>
           <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
             {card.prepare.map((q) => (
               <li key={q}>{q}</li>
             ))}
           </ul>
           <div className="small muted" style={{ marginTop: 4 }}>
-            {t("Tell each one as situation, task, action, result: the context, what you had to do, what you did yourself, and how it turned out.")}
+            {t(
+              track === "project"
+                ? "Answer each one out loud: what you built, why you chose it, and what you'd change now."
+                : "Tell each one as situation, task, action, result: the context, what you had to do, what you did yourself, and how it turned out.",
+            )}
           </div>
         </div>
       )}
@@ -207,7 +226,9 @@ function Conversation({ initial, onDone }: { initial: Interview; onDone: () => v
     <div className="stack">
       <div className="spread">
         <div>
-          <h1 style={{ margin: 0 }}>{t(iv.track === "hr" ? "HR interview" : iv.track === "product" ? "Product company interview" : "Service company interview")}</h1>
+          <h1 style={{ margin: 0 }}>{t(TITLES[iv.track])}</h1>
+          {iv.company && <div className="small">{t("Practice for {company} ({role})", { company: iv.company, role: iv.role ?? "" })}</div>}
+          {iv.projects.length > 0 && <div className="small muted">{t("About: {projects}", { projects: iv.projects.join(", ") })}</div>}
           {iv.focusSkills.length > 0 && <div className="small muted">{t("Focus: {skills}", { skills: iv.focusSkills.map((s) => s.name).join(", ") })}</div>}
           {voice && iv.status === "active" && speechOutputSupported() && (
             <label className="row small" style={{ gap: 6, marginTop: 4 }}>
@@ -304,7 +325,10 @@ function InterviewHome() {
   const router = useRouter();
   const params = useSearchParams();
   const openId = params.get("id");
-  const [track, setTrack] = useState<Track>(params.get("track") === "product" ? "product" : params.get("track") === "hr" ? "hr" : "service");
+  const asked = params.get("track");
+  const [track, setTrack] = useState<Track>(asked === "product" || asked === "hr" || asked === "project" ? asked : "service");
+  // From a drive card: practise for that drive.
+  const [driveId, setDriveId] = useState<string>(params.get("drive") ?? "");
   const [mode, setMode] = useState<Mode>("text");
   const [voiceOk, setVoiceOk] = useState(false);
   useEffect(() => setVoiceOk(speechInputSupported()), []);
@@ -317,7 +341,7 @@ function InterviewHome() {
     setStarting(true);
     setError(null);
     try {
-      const iv = await api<Interview>("/student/interviews", { body: { track, mode } });
+      const iv = await api<Interview>("/student/interviews", { body: { track, mode, driveId: track !== "project" && driveId ? driveId : null } });
       router.push(`/play/interview?id=${iv.id}`);
     } catch (e) {
       setError(errorMessage(e));
@@ -342,17 +366,13 @@ function InterviewHome() {
   if (mine.loading && !mine.data) return <Loading />;
   if (mine.error || !mine.data) return <ErrorBox message={mine.error?.message ?? t("Could not load")} onRetry={mine.reload} />;
   const d = mine.data;
+  const drive = d.drives.find((x) => x.id === driveId);
+  const needsProject = track === "project" && d.projects.length === 0;
   return (
     <div className="stack">
       <h1 style={{ margin: 0 }}>{t("Mock interview")}</h1>
       <div className="card stack">
-        <p style={{ margin: 0 }}>
-          {t(
-            track === "hr"
-              ? "A short HR round with an AI interviewer, about 15 minutes: introducing yourself, teamwork, a failure, your goals. It asks for real examples, follows up like a real panel, and ends with a scorecard on how well your answers tell a story."
-              : "A short technical interview with an AI interviewer, about 15 minutes. It asks about the skills you are weakest in, follows up like a real panel, and ends with a scorecard.",
-          )}
-        </p>
+        <p style={{ margin: 0 }}>{t(ABOUT[track])}</p>
         {d.active ? (
           <button className="btn primary" onClick={() => router.push(`/play/interview?id=${d.active}`)}>
             {t("Continue your interview")}
@@ -362,12 +382,44 @@ function InterviewHome() {
         ) : (
           <>
             <div className="row wrap" role="group" aria-label={t("Kind of interview")}>
-              {(["service", "product", "hr"] as const).map((k) => (
+              {(["service", "product", "hr", "project"] as const).map((k) => (
                 <button key={k} className={`btn small ${track === k ? "primary" : ""}`} aria-pressed={track === k} onClick={() => setTrack(k)}>
                   {t(INTERVIEW_TRACK_LABELS[k])}
                 </button>
               ))}
             </div>
+            {track === "project" ? (
+              d.projects.length ? (
+                <div className="small muted">{t("About: {projects}", { projects: d.projects.join(", ") })}</div>
+              ) : (
+                <div className="small">
+                  {t("Add a project or internship to your resume first: the project round asks about them.")}{" "}
+                  <Link href="/play/resume">{t("Go to your resume")}</Link>
+                </div>
+              )
+            ) : (
+              d.drives.length > 0 && (
+                <label className="stack small" style={{ gap: 4 }}>
+                  {t("Practise for a drive you registered for")}
+                  <select value={driveId} onChange={(e) => setDriveId(e.target.value)}>
+                    <option value="">{t("No, general practice")}</option>
+                    {d.drives.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.company} · {x.roleTitle}
+                      </option>
+                    ))}
+                  </select>
+                  {drive && (
+                    <span className="muted">
+                      {t(track === "hr" ? "The HR round as {company}'s panel would run it." : "Pitched as {company}'s panel, at a {kind} company's level, using what seniors reported of their interviews.", {
+                        company: drive.company,
+                        kind: t(drive.companyType === "product" ? "product" : "service"),
+                      })}
+                    </span>
+                  )}
+                </label>
+              )
+            )}
             <div className="row wrap" role="group" aria-label={t("Answer by")}>
               {(["text", "voice"] as const).map((m) => (
                 <button key={m} className={`btn small ${mode === m ? "primary" : ""}`} aria-pressed={mode === m} disabled={m === "voice" && !voiceOk} onClick={() => setMode(m)}>
@@ -380,7 +432,7 @@ function InterviewHome() {
             ) : (
               !voiceOk && <div className="small muted">{t("Speaking answers needs Chrome, Edge or Safari.")}</div>
             )}
-            <button className="btn primary" disabled={starting || d.weeklyLeft === 0} onClick={start}>
+            <button className="btn primary" disabled={starting || d.weeklyLeft === 0 || needsProject} onClick={start}>
               {starting ? t("Starting...") : t("Start interview")}
             </button>
             <div className="small muted">{d.weeklyLeft ? t("{n} interviews left this week", { n: d.weeklyLeft }) : t("You have used this week's interviews. Practise the skills from your scorecard meanwhile.")}</div>
@@ -409,6 +461,7 @@ function InterviewHome() {
             <button key={iv.id} className="spread" style={{ all: "unset", cursor: "pointer", display: "flex", justifyContent: "space-between" }} onClick={() => router.push(`/play/interview?id=${iv.id}`)}>
               <span>
                 {t(INTERVIEW_TRACK_LABELS[iv.track])}
+                {iv.company ? ` · ${iv.company}` : ""}
                 {iv.mode === "voice" ? ` · ${t("spoken")}` : ""}{" "}
                 <span className="small muted">· {new Date(iv.startedAt).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" })}</span>
               </span>
