@@ -289,6 +289,19 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
   - On-duty decisions showed the date as 2026-11-16.
   - Document and circular deadlines likewise; they now read "24 Oct".
 
+**Phase 48 additions**
+- Notification settings (Me, Notifications): students choose which kinds of message reach their phone, as WhatsApp and push notifications. Everything still appears in Messages.
+  - The kinds are: placements and the college; tests, assignments and training; practice reminders; classmates and contests; answers to doubts.
+  - Placements can't be turned off. Drives, offers, documents, circulars and staff messages are the ones a student can't afford to miss.
+  - The phone number, the WhatsApp switch and the new choices share one card, in English, Hindi and Tamil.
+- Quiet hours: phone notifications are held from 10 pm to 7 am by default, in the college's time zone. They are sent when quiet hours end, in order.
+  - Students can change the hours or turn quiet hours off.
+  - Held messages show in Messages straight away; only the phone waits.
+  - The outbox marks a held message with the time it may go (`deliver_after`) and passes over it until then.
+- Your week: on Sunday evening (6 to 9 pm, college time), each student who practised in the last four weeks gets one note, in their language. It covers answers this week, their streak, skills mastered (same rule as the resume), and how many assignments and registered drives fall in the next seven days.
+  - It runs from the hourly job, once per student per week.
+  - It counts as a practice reminder, so muting those mutes it on the phone too.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -526,6 +539,10 @@ Other operations:
 - **A mistake is cleared by a similar question, not the same one**: the same question again tests memory of the answer. A similar question uses the same topic and level with new numbers.
 - **Progress compares only students who took both sittings**: averages over different groups of students would measure who turned up, not what they learnt.
 - **A change of under 30 points counts as "about the same"**: each section's score is an estimate with a likely range of 30 to 40 points either way, so smaller moves can't be told apart from noise. The number is in `SCORE_CHANGE_MARGIN` in `packages/core/src/adaptive.ts`.
+- **Muting stops the phone, not the inbox**: a student who mutes practice reminders still finds them in Messages. Hiding them there as well would make Messages incomplete, and a student looking for "what was due" should find it.
+- **Quiet hours hold messages rather than drop them**: a message held overnight still matters at 7 am (a test that opened, an interview booked). Staff announcements and placement messages are held too, since the student chose quiet hours. If something is urgent the college still has phone calls.
+- **Quiet hours are on by default**: most students wouldn't think to set them,. The hourly job's reminders (a test just opened, an assignment due in a day) and messages staff send late can otherwise land at 2 am.
+- **Your week skips students who stopped practising a month ago**: a weekly "0 answers" to someone who has left is noise. The streak and review reminders are for bringing people back.
 - **The SAML key pair is one per server**, from the environment, rather than one per institution: IdPs only need PlayCode's certificate, and rotating it is a deploy, not a per-college task.
 
 Not built yet: screen-reader testing by people who use them (the automated check covers WCAG rules it can test), PostgreSQL row-level security, Tamil for the placement pages and languages beyond English, Hindi and Tamil, and native mobile apps (the web app is an installable PWA).
