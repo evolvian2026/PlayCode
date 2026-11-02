@@ -216,7 +216,7 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - Exit survey: graduates rate placement training, practice and mock interviews, information about drives, help from the placement cell and the process overall, say whether they'd tell juniors to use the placement cell's help, and add a comment. The console shows each graduated batch's averages, the share who'd recommend, and the comments, once there are at least three answers; the accreditation report counts the year's answers.
 
 **Phase 37 additions**
-- Tamil for the student app (Me, Language): the everyday screens (home, practice and the question player, contests, mock tests, live quizzes, squads, offline practice, the profile, sign-in and the resume) are in Tamil, with dates in Tamil too. Placement pages not yet translated show in English, as Hindi did while it grew. The Hindi and Tamil dictionaries now sit in their own files (`apps/web/lib/i18n-hi.ts`, `i18n-ta.ts`), and `pnpm --filter @playcode/web i18n:check` (run in CI) fails if a translation drops or invents a `{placeholder}` of its English text.
+- Tamil for the student app (Me, Language): the everyday screens (home, practice and the question player, contests, mock tests, live quizzes, squads, offline practice, the profile, sign-in and the resume) are in Tamil, with dates in Tamil too. Placement pages not yet translated show in English, as Hindi did while it grew. The Hindi and Tamil dictionaries now sit in their own files (`packages/core/src/i18n/hi.ts`, `ta.ts`, moved there from the web app in Phase 47), and `pnpm --filter @playcode/web i18n:check` (run in CI) fails if a translation drops or invents a `{placeholder}` of its English text.
 - Graduate home: a graduate's home page no longer offers practice. It says when they graduated and links to what's still theirs: the alumni list and exit survey (with how many are still to do), their resume and public profile, offers and joining, and certificates.
 
 **Phase 38 additions**
@@ -275,6 +275,19 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 
   Steps that don't apply to this drive are left out: no mission picked, no minimum score, a weekend drive, nothing asked for. Each step has a button to go and do it. The page counts down to the drive day, lists the rounds, and links to seniors' interview experiences of the company when there are any.
 - Getting ready (console, a drive's page, until the drive day): every registered student against the same steps, furthest behind first, with how many have done each step. "Remind the N behind" sends each student a notification naming the steps they're missing, linking to their plan; a student is reminded at most once a day per drive.
+
+**Phase 47 additions**
+- Notifications in the student's language: everything PlayCode sends a student is now written in the language they chose (English, Hindi or Tamil). That covers drive openings, round results, offers and deadlines, interview slots, reminders, training, documents, circulars, homework, contests, squads, on duty, the helpdesk and the rest. Each notification is an English template with its values kept apart (`msg()` in `packages/core/src/i18n/message.ts`). It is written in the recipient's language when it's queued, so the inbox, push notifications and WhatsApp all carry the translated text. Values are translated too where they're labels (a step, an interview kind). Dates are written the student's way, in the college's time zone ("16 Nov" in English, Hindi or Tamil numerals and month names). What a person typed (a circular, a teacher's note, a doubt's answer, a drive update) goes as written.
+- The Hindi and Tamil dictionaries moved to `packages/core/src/i18n`, so the web app and the API use the same words.
+- The checks keep it complete:
+  - The notification's type only takes a message, so no plain string can slip through.
+  - `i18n:check` scans the API for every `msg("...")` template and fails if Hindi or Tamil is missing one, or if a template is built with backticks (which couldn't be checked).
+  - A core test checks the labels passed in as values.
+- The inbox page itself (heading, kinds of message, "5 minutes ago") is now in the student's language too.
+- Fixed while converting:
+  - The cancelled mock interview message lowercased the interviewer's name.
+  - On-duty decisions showed the date as 2026-11-16.
+  - Document and circular deadlines likewise; they now read "24 Oct".
 
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
@@ -500,6 +513,8 @@ Other operations:
 - **Drive practice uses published experiences only, and never names**: unpublished write-ups haven't been read by the placement cell, and the interviewer doesn't need to know who said what. The reports shape the questions; the interviewer is told not to quote them.
 - **The project round takes the resume as written**: it asks about what the student listed rather than checking it, and a description that tries to instruct the interviewer is treated as part of the resume. Certifications are left out, since they come with a course rather than something the student built.
 - **A drive's plan is worked out, not ticked by hand**: every step is read from records PlayCode already keeps (certificates, interviews, aptitude sittings, the resume, document uploads, on-duty requests), so a student can't tick a step they haven't done, and staff don't have to keep anything up to date. Reading seniors' interview experiences is offered but not counted, because opening a page doesn't show anything was learned.
+- **Notifications are translated when they're sent, not when they're read**: the text is stored as the student received it, so push and WhatsApp messages match the inbox. A student who changes language sees new messages in the new language; older ones stay as they were sent.
+- **Some values stay in English inside a translated sentence**: company and role names, round names, test titles and anything else staff typed, plus ordinals like "2nd" and packages like "₹4.5 LPA". Translating what people type would need a translation service and could change meaning; the sentence around it is translated.
 - **The adaptive test scores with a Rasch model and a posterior mean**, not a running percentage: ability and question difficulty share one scale, and the estimate starts from a standard normal prior, so a lucky first answer can't send a score to 900. Template levels stand in for calibrated item difficulties; once enough students have answered, levels could be recalibrated from the answers, as item analysis already does for the question bank.
 - **The adaptive test and drills don't change mastery or XP**, like mock tests: the questions aren't in the question bank, and a score that measures shouldn't also be farmed.
 - **Only a sitting's score counts**: practice is unlimited, so a best-of score would reward retakes, not ability. A sitting gives one attempt in a window the placement cell chooses, which is what lets a drive set a minimum on it. Sittings aren't proctored by PlayCode; colleges run them in a lab, as they do online drive tests.
