@@ -342,6 +342,17 @@ This covers Phases 1 to 3 of the product and architecture spec, Phase 4 (which c
 - Staff see each student's latest and best score for each kind of drill, with averages, below the JAM talks on the console's Speaking practice page.
 - Sittings are in the data export and are deleted with the account. The screens are in Hindi and Tamil; the sentences stay English.
 
+**Phase 52 additions**
+- Speaking and writing tasks (console, Speaking & writing tasks, for anyone who sets assignments). A trainer sets one for batches or sections, with a due date and an optional note: a JAM topic, a written English task, or a read-aloud or listen-and-repeat drill.
+  - Students are notified (in their language, under tests and assignments in their notification settings). It shows as "From your trainer" on their home screen and in their calendar until done.
+  - Tapping it opens the practice ready to go: the JAM topic at the top of Speaking practice, the writing task, or the drill.
+  - The student's own attempt at that practice between the task opening and its due date counts, so there's nothing extra to hand in and practising first doesn't double the work.
+  - Staff see how many have done each task and the average score. A task's page lists who hasn't done it yet first, with each student's best score linked to the talk or answer.
+  - Students who haven't done a task due within a day get one reminder from the hourly job.
+  - JAM and writing tasks need AI feedback (the AI coach on the plan and the institution's AI switch), so they can't be set without it; drills always can.
+  - Deleting a task keeps the students' attempts.
+- Fixed a typo in the Phase 48 notes.
+
 **Institution console** (`/console`, desktop)
 - Overview: weekly active students, daily activity chart, readiness distribution, weakest skills, at-risk list, streak distribution, mastery for every skill. Filter by department, batch or section.
 - Students: sortable list with readiness, CSV export, and a full student view.
@@ -436,7 +447,7 @@ Code execution:
 - Production: run [Judge0](https://github.com/judge0/judge0) on its own network and set `EXECUTION_BACKEND=judge0` and `JUDGE0_URL`. Assessments get priority over duels and practice in the execution queue.
 - Where the code runs: by default (`EXECUTION_MODE=inline`) each API instance runs code itself, `EXECUTION_CONCURRENCY` at a time. With `EXECUTION_MODE=queue`, the API only queues runs, and you run one or more workers with `pnpm --filter @playcode/api worker` (same environment as the API; each runs `EXECUTION_CONCURRENCY` jobs at a time and stops cleanly on SIGTERM, finishing what it has started). Run at least one worker whenever the API is in queue mode: a run nobody picks up within 60 seconds is withdrawn and the student is asked to try again. Workers can use the local runner inside a locked-down container, or call Judge0.
 
-WhatsApp nudges: set `WHATSAPP_TOKEN` and `WHATSAPP_PHONE_ID` (WhatsApp Cloud API) and create approved templates named `playcode_streak_at_risk`, `playcode_assignment_due`, `playcode_test_open`, `playcode_duel_invite`, `playcode_announcement`, `playcode_placement`, `playcode_review_due`, `playcode_talent_invite`, `playcode_contest`, `playcode_squad`, `playcode_doubt`, `playcode_interview_slot`, `playcode_class_test`, `playcode_training` and `playcode_circular`, each with two body parameters (title, message). Students add their number on their profile or through the CSV import (fourth column).
+WhatsApp nudges: set `WHATSAPP_TOKEN` and `WHATSAPP_PHONE_ID` (WhatsApp Cloud API) and create approved templates named `playcode_streak_at_risk`, `playcode_assignment_due`, `playcode_test_open`, `playcode_duel_invite`, `playcode_announcement`, `playcode_placement`, `playcode_review_due`, `playcode_talent_invite`, `playcode_contest`, `playcode_squad`, `playcode_doubt`, `playcode_interview_slot`, `playcode_class_test`, `playcode_training`, `playcode_circular` and `playcode_practice_task`, each with two body parameters (title, message). Students add their number on their profile or through the CSV import (fourth column).
 
 Single sign-on: set `API_PUBLIC_URL` to the address browsers use for the API, and register `<API_PUBLIC_URL>/auth/sso/callback` as the redirect URI in Google Cloud or Microsoft Entra. The institution admin then enters the client ID and secret under Settings. Students sign in from `/login?org=<slug>`.
 
@@ -581,7 +592,7 @@ Other operations:
 - **A change of under 30 points counts as "about the same"**: each section's score is an estimate with a likely range of 30 to 40 points either way, so smaller moves can't be told apart from noise. The number is in `SCORE_CHANGE_MARGIN` in `packages/core/src/adaptive.ts`.
 - **Muting stops the phone, not the inbox**: a student who mutes practice reminders still finds them in Messages. Hiding them there as well would make Messages incomplete, and a student looking for "what was due" should find it.
 - **Quiet hours hold messages rather than drop them**: a message held overnight still matters at 7 am (a test that opened, an interview booked). Staff announcements and placement messages are held too, since the student chose quiet hours. If something is urgent the college still has phone calls.
-- **Quiet hours are on by default**: most students wouldn't think to set them,. The hourly job's reminders (a test just opened, an assignment due in a day) and messages staff send late can otherwise land at 2 am.
+- **Quiet hours are on by default**: most students wouldn't think to set them. The hourly job's reminders (a test just opened, an assignment due in a day) and messages staff send late can otherwise land at 2 am.
 - **Your week skips students who stopped practising a month ago**: a weekly "0 answers" to someone who has left is noise. The streak and review reminders are for bringing people back.
 - **Questions, skill names, mission titles and people's names stay as written**: the check covers the app's own words. Content is in English as in placement tests, and a skill called "Recursion" is what the student will meet in an interview.
 - **The translation check reads the code rather than the rendered pages**: rendering every screen in every state in both languages would miss states a walkthrough doesn't reach (an expired duel, a failed SQL query). Reading the source sees them all. What it can't see is text built far from the JSX (a label in a lookup table); those go through `t()` where they're shown, and the core test covers the shared labels.
@@ -590,6 +601,7 @@ Other operations:
 - **Under 30 words isn't marked**: a quarter of a minute of speech can't show structure or examples, and marking it would spend a daily try on nothing. The student still sees their delivery numbers and can try again.
 - **Speaking drills score what the speech recogniser understood, not pronunciation**: matching words is free, instant and works offline of any AI, and a word the recogniser caught is usually one a listener would too. It can't judge stress or intonation, and a noisy room or a poor microphone lowers the score; the page says so next to the missed words.
 - **The drill sentences have no numbers or contractions**: recognisers write "five" or "5", "don't" or "do not", and either would count as a miss against the sentence.
+- **A trainer's task is done by the student's ordinary attempt**, not a separate submission: the practice pages stay the same, a student who practised the topic before the trainer asked isn't made to repeat it in the window, and staff see the best attempt rather than the first. The window still applies, so a talk from last month doesn't count for this week's task.
 - **The SAML key pair is one per server**, from the environment, rather than one per institution: IdPs only need PlayCode's certificate, and rotating it is a deploy, not a per-college task.
 
 Not built yet: screen-reader testing by people who use them (the automated check covers WCAG rules it can test), PostgreSQL row-level security, languages beyond English, Hindi and Tamil, the staff console in anything but English, and native mobile apps (the web app is an installable PWA).
