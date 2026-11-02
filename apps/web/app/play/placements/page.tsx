@@ -7,6 +7,7 @@ import { fixedShare, formatLpa, INTERVIEW_FEEDBACK_DIMENSIONS, JOINING_STATUSES,
 import { Icon } from "@/components/Icon";
 import { ErrorBox, Loading } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
+import { translateReason } from "@/lib/reasons";
 import { intlLocale, useLocale, useT } from "@/lib/i18n";
 import { startAndOpen } from "@/lib/start";
 
@@ -445,7 +446,7 @@ function DriveCard({ drive, experiences, onChange }: { drive: Drive; experiences
       ) : (
         <ul className="small muted" style={{ margin: 0, paddingLeft: 18 }}>
           {drive.eligibility.reasons.map((r) => (
-            <li key={r}>{r}</li>
+            <li key={r}>{translateReason(r, t)}</li>
           ))}
         </ul>
       )}

@@ -9,6 +9,7 @@ import { api, errorMessage, useApi } from "@/lib/api";
 import { scoreMove } from "@playcode/core";
 import { ScoreTrend } from "@/components/ScoreTrend";
 import { BAND_TONE, duration } from "@/lib/aptitude";
+import { translateReason } from "@/lib/reasons";
 import { intlLocale, useLocale, useT } from "@/lib/i18n";
 
 interface Hub {
@@ -106,7 +107,7 @@ function DrivesForScore() {
           </div>
           {d.otherReasons.length > 0 && (
             <div className="small" style={{ color: "var(--bad-ink)" }}>
-              {t("Also stopping you:")} {d.otherReasons.join("; ")}
+              {t("Also stopping you:")} {d.otherReasons.map((r) => translateReason(r, t)).join("; ")}
             </div>
           )}
           {d.registered && <span className="small muted">{t("You've registered")}</span>}

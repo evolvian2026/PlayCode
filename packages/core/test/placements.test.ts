@@ -26,3 +26,31 @@ describe("placements", () => {
     expect(median([])).toBeNull();
   });
 });
+
+describe("eligibility reasons", () => {
+  it("each match a listed template, so the student app can translate them", async () => {
+    const { DEFAULT_PLACEMENT_POLICY, ELIGIBILITY_REASON_TEMPLATES } = await import("../src");
+    const patterns = ELIGIBILITY_REASON_TEMPLATES.map((t) => new RegExp(`^${t.split(/\{\w+\}/).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("(.+?)")}$`));
+    const strict = { unitIds: ["x"], minCgpa: 7, maxBacklogs: 0, min10th: 60, min12th: 60, graduationYears: [2027, 2028], minAttendancePct: 75, minAptitude: 500 };
+    const weak = { cgpa: 6, backlogs: 2, tenthPct: 50, twelfthPct: 50, graduationYear: 2026 };
+    const empty = { cgpa: null, backlogs: null, tenthPct: null, twelfthPct: null, graduationYear: null };
+    const policy = { ...DEFAULT_PLACEMENT_POLICY, tiers: true };
+    const seen = new Set<string>();
+    for (const record of [weak, empty, null])
+      for (const maxBacklogs of [0, 1, 3])
+        for (const extra of [
+          { inUnits: false, placed: true, attendancePct: 40, aptitude: null, noShows: 1 },
+          { inUnits: true, placed: false, attendancePct: 60, aptitude: 450, noShows: 3 },
+          { inUnits: true, placed: true, policy, offers: ["regular" as const], driveCtcRupees: 400_000 },
+          { inUnits: true, placed: true, policy, offers: ["super_dream" as const], driveCtcRupees: 400_000 },
+          { inUnits: true, placed: true, policy, offers: ["dream" as const, "regular" as const, "regular" as const], driveCtcRupees: 2_000_000 },
+          { inUnits: true, placed: true, policy: { ...policy, maxOffers: 1 }, offers: ["regular" as const], driveCtcRupees: 2_000_000 },
+        ])
+          for (const r of checkEligibility({ ...strict, maxBacklogs }, record, extra).reasons) {
+            expect(patterns.some((p) => p.test(r)), r).toBe(true);
+            seen.add(r);
+          }
+    // Enough variety that this would notice a reason dropped from the list.
+    expect(seen.size).toBeGreaterThan(15);
+  });
+});

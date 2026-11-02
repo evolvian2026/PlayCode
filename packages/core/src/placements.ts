@@ -79,6 +79,37 @@ export function higherTier(a: OfferTier, b: OfferTier): boolean {
 }
 
 /**
+ * Every reason checkEligibility can give, with its values as {placeholders}.
+ * The student app translates a reason by matching it to its template here,
+ * so a new or reworded reason must be listed (a test checks it).
+ */
+export const ELIGIBILITY_REASON_TEMPLATES = [
+  "Your branch or batch is not invited",
+  "Your graduation year is not on record",
+  "Open to the {years} batch only",
+  "Your CGPA is not on record",
+  "Needs a CGPA of {min} or more (yours is {yours})",
+  "Your backlogs are not on record",
+  "Needs no active backlogs",
+  "Allows at most {n} active backlog",
+  "Allows at most {n} active backlogs",
+  "Your class 10 marks are not on record",
+  "Needs {min}% or more in class 10",
+  "Your class 12 or diploma marks are not on record",
+  "Needs {min}% or more in class 12 or diploma",
+  "Needs {min}% attendance in placement training (yours is {yours}%)",
+  "Needs a PlayCode aptitude score from an official sitting at your college",
+  "Needs an aptitude score of {min} or more (yours is {yours})",
+  "You missed {n} drive you registered for. Talk to your placement cell.",
+  "You missed {n} drives you registered for. Talk to your placement cell.",
+  "You already hold {n} offer, the most the placement policy allows",
+  "You already hold {n} offers, the most the placement policy allows",
+  "You hold a Super dream offer, the highest tier",
+  "You hold a {tier} offer, so you can only sit for {tiers} drives",
+  "You already hold an offer, and this drive is for students without one",
+] as const;
+
+/**
  * `attendancePct` is the student's training attendance, or null when no
  * session has been held for them yet; a student can't fall short of training
  * that never happened. `offers` are the tiers of offers the student already
