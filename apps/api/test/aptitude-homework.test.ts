@@ -46,7 +46,7 @@ describe("aptitude homework", () => {
     hw = res.id;
     expect(res.invited).toBeGreaterThan(5);
     const [note] = await db.select().from(notifications).where(and(eq(notifications.userId, riyaId), like(notifications.title, "Aptitude homework:%")));
-    expect(note!.body).toContain("5 questions on time and work, speed, time and distance");
+    expect(note!.body).toContain("5 questions on Time and work, Speed, time and distance");
     expect((await t.get(riya, "/student/aptitude/homework")).body.homework).toContainEqual(expect.objectContaining({ id: hw, questions: 5, answered: 0, done: false }));
   });
 

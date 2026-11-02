@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gt, gte, lte, ne } from "drizzle-orm";
-import { hasInstitutionScope, PANEL_KINDS, PANEL_RECOMMENDATIONS, PANEL_RUBRIC, type PanelKind, type PanelRecommendation } from "@playcode/core";
+import { at, hasInstitutionScope, msg, PANEL_KINDS, PANEL_RECOMMENDATIONS, PANEL_RUBRIC, type PanelKind, type PanelRecommendation } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { interviewSlots, tenants, users, type PanelFeedback } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -20,8 +20,10 @@ const MAX_RUN = 12;
 type Slot = typeof interviewSlots.$inferSelect;
 type Ctx = { tenantId: string; userId: string; now: Date };
 
-const label = (s: Slot) => `${PANEL_KINDS[s.kind]} mock interview with ${s.interviewerName}`;
-const when = (d: Date, timeZone: string) => d.toLocaleString("en-IN", { timeZone, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+/** The kind of interview inside a sentence: "technical", "HR", "general". */
+const kindIn = (s: Slot) => msg(s.kind === "hr" ? "HR" : PANEL_KINDS[s.kind].toLowerCase());
+/** A slot's time, written in each student's language when the notification goes out. */
+const when = (d: Date, timeZone: string) => at(d, timeZone, { time: true, weekday: true });
 
 function slotView(s: Slot, student?: { name: string; rollNo: string | null } | null) {
   return {
@@ -111,7 +113,7 @@ export async function cancelSlot(db: Db, auth: AuthContext, id: string, now: Dat
     const tz = (await getTenant(db, s.tenantId)).timeZone;
     await notify(
       db,
-      [{ tenantId: s.tenantId, userId: s.bookedBy, template: "interview_slot", title: "Mock interview cancelled", body: `Your ${label(s).toLowerCase()} on ${when(s.startsAt, tz)} was cancelled. Book another slot.`, link: appLink("/play/panel"), dedupeKey: `slot-cancel:${s.id}` }],
+      [{ tenantId: s.tenantId, userId: s.bookedBy, template: "interview_slot", title: msg("Mock interview cancelled"), body: msg("Your {kind} mock interview with {name} on {when} was cancelled. Book another slot.", { kind: kindIn(s), name: s.interviewerName, when: when(s.startsAt, tz) }), link: appLink("/play/panel"), dedupeKey: `slot-cancel:${s.id}` }],
       now,
     );
   }
@@ -147,7 +149,7 @@ export async function recordFeedback(
   await db.update(interviewSlots).set({ status: "done", feedback, feedbackAt: now }).where(eq(interviewSlots.id, s.id));
   await notify(
     db,
-    [{ tenantId: s.tenantId, userId: s.bookedBy, template: "interview_slot", title: "Feedback from your mock interview", body: `${s.interviewerName}: ${PANEL_RECOMMENDATIONS[input.recommendation]}, ${input.overall}/5 overall.`, link: appLink("/play/panel"), dedupeKey: `slot-feedback:${s.id}` }],
+    [{ tenantId: s.tenantId, userId: s.bookedBy, template: "interview_slot", title: msg("Feedback from your mock interview"), body: msg("{name}: {verdict}, {n}/5 overall.", { name: s.interviewerName, verdict: msg(PANEL_RECOMMENDATIONS[input.recommendation]), n: input.overall }), link: appLink("/play/panel"), dedupeKey: `slot-feedback:${s.id}` }],
     now,
   );
   await audit(db, { tenantId: s.tenantId, actorId: auth.userId, action: "interview_slot.feedback", target: s.id });
@@ -218,8 +220,10 @@ export async function slotReminders(db: Db, now: Date) {
       tenantId: s.tenantId,
       userId: s.bookedBy!,
       template: "interview_slot" as const,
-      title: "Mock interview tomorrow",
-      body: `${label(s)}, ${when(s.startsAt, timeZone)}${s.location ? ` · ${s.location}` : ""}.`,
+      title: msg("Mock interview tomorrow"),
+      body: s.location
+        ? msg("{kind} mock interview with {name}, {when} · {place}.", { kind: msg(PANEL_KINDS[s.kind]), name: s.interviewerName, when: when(s.startsAt, timeZone), place: s.location })
+        : msg("{kind} mock interview with {name}, {when}.", { kind: msg(PANEL_KINDS[s.kind]), name: s.interviewerName, when: when(s.startsAt, timeZone) }),
       link: appLink("/play/panel"),
       dedupeKey: `slot-remind:${s.id}`,
     })),

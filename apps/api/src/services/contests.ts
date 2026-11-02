@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
-import { codeSimilarity, CONTEST_START_RATING, contestRatingChanges, contestState, ordinal, scoreboard, toStudentView, type Question, type StudentResponse, type Verdict } from "@playcode/core";
+import { at, codeSimilarity, CONTEST_START_RATING, contestRatingChanges, contestState, msg, ordinal, type Question, scoreboard, type StudentResponse, toStudentView, type Verdict } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { certificates, contestResults, contests, contestSubmissions, playerProfiles, questions, tenants, users } from "../db/schema";
 import { evaluate, tryRun, checkRunRate, type Evaluation } from "../execution";
@@ -98,15 +98,15 @@ export async function createContest(db: Db, args: { tenantId: string | null; act
     .insert(contests)
     .values({ tenantId: args.tenantId, ...args.input, problemIds, createdBy: args.actorId, createdAt: args.now })
     .returning();
-  const when = args.input.startsAt.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  const when = at(args.input.startsAt, "Asia/Kolkata", { time: true });
   await enqueue(
     db,
     (await participantIds(db, c!)).map((p) => ({
       tenantId: p.tenantId,
       userId: p.userId,
       template: "contest" as const,
-      title: `Coding contest: ${c!.title}`,
-      body: `${problemIds.length} problem${problemIds.length === 1 ? "" : "s"}, starts ${when}.`,
+      title: msg("Coding contest: {title}", { title: c!.title }),
+      body: msg(problemIds.length === 1 ? "{n} problem, starts {when}." : "{n} problems, starts {when}.", { n: problemIds.length, when }),
       link: appLink(`/play/contests/${c!.id}`),
       dedupeKey: `contest:${c!.id}:${p.userId}`,
     })),
@@ -464,8 +464,14 @@ export async function finalizeContests(db: Db, now: Date) {
             tenantId,
             userId: r.userId,
             template: "contest",
-            title: `Results: ${c.title}`,
-            body: `You placed ${ordinal(r.rank)} of ${rows.length} with ${r.solved} solved. Contest rating ${change.before} → ${change.after}.${certificateCode ? " You won a certificate." : ""}`,
+            title: msg("Results: {title}", { title: c.title }),
+            body: msg(certificateCode ? "You placed {rank} of {n} with {solved} solved. Contest rating {before} → {after}. You won a certificate." : "You placed {rank} of {n} with {solved} solved. Contest rating {before} → {after}.", {
+              rank: ordinal(r.rank),
+              n: rows.length,
+              solved: r.solved,
+              before: change.before,
+              after: change.after,
+            }),
             link: appLink(`/play/contests/${c.id}`),
             dedupeKey: `contest-result:${c.id}:${r.userId}`,
           });

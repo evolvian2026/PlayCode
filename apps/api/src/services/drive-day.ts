@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { DRIVE_AUDIENCES, deskOpen, inAudience, MAX_COORDINATORS, offerDetailsError, type DriveAudience, type OfferDetails } from "@playcode/core";
+import { at, deskOpen, DRIVE_AUDIENCES, type DriveAudience, inAudience, MAX_COORDINATORS, msg, type OfferDetails, offerDetailsError, verbatim } from "@playcode/core";
 import type { Db } from "../db/client";
 import { driveCheckIns, driveCoordinators, driveSchedules, driveSlots, driveUpdates, memberships, placementApplications, placementDrives, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -40,8 +40,8 @@ export async function postUpdate(db: Db, auth: Auth, driveId: string, input: { a
       tenantId: auth.tenantId,
       userId,
       template: "placement" as const,
-      title: `${drive.company}: update from the placement cell`,
-      body: body.length > 160 ? `${body.slice(0, 157)}...` : body,
+      title: msg("{company}: update from the placement cell", { company: drive.company }),
+      body: verbatim(body.length > 160 ? `${body.slice(0, 157)}...` : body),
       link: appLink("/play/placements"),
       dedupeKey: `drive-update:${u!.id}:${userId}`,
       sentBy: auth.userId,
@@ -118,7 +118,7 @@ export async function setCoordinators(db: Db, auth: Auth, driveId: string, userI
     if (ids.length) await tx.insert(driveCoordinators).values(ids.map((userId) => ({ driveId: drive.id, userId, tenantId: auth.tenantId, addedBy: auth.userId, createdAt: now })));
   });
   const tenant = await getTenant(db, auth.tenantId);
-  const day = new Date(`${drive.driveDate}T00:00:00Z`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  const day = at(drive.driveDate, tenant.timeZone, { weekday: true });
   await enqueue(
     db,
     ids
@@ -127,8 +127,8 @@ export async function setCoordinators(db: Db, auth: Auth, driveId: string, userI
         tenantId: tenant.id,
         userId,
         template: "placement" as const,
-        title: `You're a coordinator for the ${drive.company} drive`,
-        body: `On ${day}, check students in at the reporting desk from the Placements page. Thank you for helping!`,
+        title: msg("You're a coordinator for the {company} drive", { company: drive.company }),
+        body: msg("On {day}, check students in at the reporting desk from the Placements page. Thank you for helping!", { day }),
         link: appLink(`/play/desk?drive=${drive.id}`),
         dedupeKey: `drive-coordinator:${drive.id}:${userId}`,
         sentBy: auth.userId,

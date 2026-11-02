@@ -1,21 +1,5 @@
 import { and, desc, eq, gt, gte, inArray, lt, ne, sql } from "drizzle-orm";
-import {
-  checkEligibility,
-  DEFAULT_PLACEMENT_POLICY,
-  ENGAGEMENT_BANDS,
-  engagementBand,
-  formatLpa,
-  median,
-  OFFER_TIERS,
-  offerTier,
-  readinessBand,
-  type AcademicRecord,
-  type OfferTier,
-  type PlacementPolicy,
-  type CompanyType,
-  type EngagementBand,
-  type PlacementCriteria,
-} from "@playcode/core";
+import { type AcademicRecord, at, checkEligibility, type CompanyType, DEFAULT_PLACEMENT_POLICY, ENGAGEMENT_BANDS, type EngagementBand, engagementBand, formatLpa, median, msg, OFFER_TIERS, offerTier, type OfferTier, type PlacementCriteria, type PlacementPolicy, readinessBand } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { academicRecords, assessments, driveRoundTests, driveSchedules, driveSlots, memberships, packs, placementApplications, placementDrives, responses, tenants, users, type ApplicationStatus } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -253,15 +237,15 @@ export async function createDrive(db: Db, args: NewDrive & { tenantId: string; a
   await audit(db, { tenantId, actorId, action: "placements.drive_create", target: drive!.id, data: { company: args.company } });
   // Tell every eligible student, in the app and on WhatsApp where set up.
   const eligible = await eligibleStudents(db, drive!, now);
-  const deadline = args.registerBy.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: (await getTenant(db, tenantId)).timeZone });
+  const timeZone = (await getTenant(db, tenantId)).timeZone;
   await enqueue(
     db,
     eligible.map((userId) => ({
       tenantId,
       userId,
       template: "placement" as const,
-      title: `${args.company} is hiring: ${args.roleTitle}`,
-      body: `${formatLpa(args.ctcRupees)}. You are eligible. Register by ${deadline}.`,
+      title: msg("{company} is hiring: {role}", { company: args.company, role: args.roleTitle }),
+      body: msg("{ctc}. You are eligible. Register by {date}.", { ctc: formatLpa(args.ctcRupees), date: at(args.registerBy, timeZone) }),
       link: appLink("/play/placements"),
       dedupeKey: `placement-open:${drive!.id}:${userId}`,
       sentBy: actorId,
@@ -401,8 +385,8 @@ export async function updateApplications(db: Db, args: { tenantId: string; actor
         tenantId: args.tenantId,
         userId: a.userId,
         template: "placement",
-        title: `${drive.company}: you cleared ${drive.rounds[a.roundsCleared]}`,
-        body: next ? `Next round: ${next}. Practise to be ready.` : "You have cleared every round. The result comes next.",
+        title: msg("{company}: you cleared {round}", { company: drive.company, round: drive.rounds[a.roundsCleared] ?? "" }),
+        body: next ? msg("Next round: {round}. Practise to be ready.", { round: next }) : msg("You have cleared every round. The result comes next."),
         link: appLink("/play/placements"),
         dedupeKey: `placement-round:${drive.id}:${a.userId}:${a.roundsCleared + 1}`,
         sentBy: args.actorId,
@@ -419,8 +403,12 @@ export async function updateApplications(db: Db, args: { tenantId: string; actor
         tenantId: args.tenantId,
         userId: a.userId,
         template: "placement",
-        title: `Congratulations! ${drive.company} has made you an offer`,
-        body: `${drive.roleTitle}, ${formatLpa(args.ctcRupees ?? drive.ctcRupees)}. Accept or decline it in the app within ${policy.decisionDays} day${policy.decisionDays === 1 ? "" : "s"}.`,
+        title: msg("Congratulations! {company} has made you an offer", { company: drive.company }),
+        body: msg(policy.decisionDays === 1 ? "{role}, {ctc}. Accept or decline it in the app within {n} day." : "{role}, {ctc}. Accept or decline it in the app within {n} days.", {
+          role: drive.roleTitle,
+          ctc: formatLpa(args.ctcRupees ?? drive.ctcRupees),
+          n: policy.decisionDays,
+        }),
         link: appLink("/play/placements"),
         dedupeKey: `placement-offer:${drive.id}:${a.userId}`,
         sentBy: args.actorId,
@@ -623,8 +611,8 @@ export async function settleOffers(db: Db, now: Date) {
       tenantId: a.tenantId,
       userId: a.userId,
       template: "placement" as const,
-      title: `Answer your ${company} offer by tomorrow`,
-      body: "Accept or decline it in the app. If you don't answer, it's taken as accepted.",
+      title: msg("Answer your {company} offer by tomorrow", { company }),
+      body: msg("Accept or decline it in the app. If you don't answer, it's taken as accepted."),
       link: appLink("/play/placements"),
       dedupeKey: `offer-remind:${a.driveId}:${a.userId}`,
     })),
@@ -642,8 +630,8 @@ export async function settleOffers(db: Db, now: Date) {
         tenantId: a.tenantId,
         userId: a.userId,
         template: "placement",
-        title: decision === "accepted" ? `Your ${company} offer is taken as accepted` : `Your ${company} offer is taken as declined`,
-        body: decision === "accepted" ? "You didn't answer in time. Talk to your placement cell if that's wrong." : "You had already accepted another offer.",
+        title: decision === "accepted" ? msg("Your {company} offer is taken as accepted", { company }) : msg("Your {company} offer is taken as declined", { company }),
+        body: decision === "accepted" ? msg("You didn't answer in time. Talk to your placement cell if that's wrong.") : msg("You had already accepted another offer."),
         link: appLink("/play/placements"),
         dedupeKey: `offer-settled:${a.driveId}:${a.userId}`,
       },

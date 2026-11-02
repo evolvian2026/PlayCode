@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { assignSlots, type Panel } from "@playcode/core";
+import { assignSlots, at, msg, type Panel } from "@playcode/core";
 import type { Db } from "../db/client";
 import { driveSchedules, driveSlots, placementApplications, placementDrives, users, type SlotFeedback } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -23,7 +23,8 @@ export interface ScheduleInput {
   panels: Panel[];
 }
 
-const when = (d: Date, timeZone: string) => d.toLocaleString("en-IN", { timeZone, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+/** An interview's time, written in each student's language when the notification goes out. */
+const when = (d: Date, timeZone: string) => at(d, timeZone, { time: true, weekday: true });
 
 async function loadDrive(db: Db, tenantId: string, id: string) {
   const [d] = await db.select().from(placementDrives).where(and(eq(placementDrives.id, id), eq(placementDrives.tenantId, tenantId)));
@@ -63,8 +64,10 @@ export async function createSchedule(db: Db, auth: Auth, driveId: string, input:
         tenantId: auth.tenantId,
         userId: x.student.userId,
         template: "placement" as const,
-        title: `${drive.company} ${roundName}: ${when(x.startsAt, tenant.timeZone)}`,
-        body: `${p.name}${p.room ? `, ${p.room}` : ""}. Be there 10 minutes early with your resume and college ID.`,
+        title: msg("{company} {round}: {when}", { company: drive.company, round: roundName, when: when(x.startsAt, tenant.timeZone) }),
+        body: p.room
+          ? msg("{panel}, {room}. Be there 10 minutes early with your resume and college ID.", { panel: p.name, room: p.room })
+          : msg("{panel}. Be there 10 minutes early with your resume and college ID.", { panel: p.name }),
         link: appLink("/play/placements"),
         // A remade schedule tells everyone their new time.
         dedupeKey: `drive-slot:${schedule.id}:${x.student.userId}`,
@@ -119,8 +122,8 @@ export async function markSlot(db: Db, auth: Auth, driveId: string, scheduleId: 
         tenantId: auth.tenantId,
         userId,
         template: "placement",
-        title: `${drive.company}: you were marked absent`,
-        body: `You missed your ${drive.rounds[s.round] ?? "interview"} slot. If you had a reason, tell your placement cell: missing drives you registered for can stop you registering for new ones.`,
+        title: msg("{company}: you were marked absent", { company: drive.company }),
+        body: msg("You missed your {round} slot. If you had a reason, tell your placement cell: missing drives you registered for can stop you registering for new ones.", { round: drive.rounds[s.round] ?? msg("interview") }),
         link: appLink("/play/help"),
         dedupeKey: `drive-no-show:${s.id}:${userId}`,
         sentBy: auth.userId,
@@ -157,8 +160,8 @@ export async function saveFeedback(db: Db, auth: Auth, driveId: string, schedule
       tenantId: auth.tenantId,
       userId,
       template: "placement",
-      title: `Feedback from your ${drive.company} ${round}`,
-      body: feedback.workOn ? `To work on: ${feedback.workOn.slice(0, 140)}` : "See it on the Placements page.",
+      title: msg("Feedback from your {company} {round}", { company: drive.company, round }),
+      body: feedback.workOn ? msg("To work on: {note}", { note: feedback.workOn.slice(0, 140) }) : msg("See it on the Placements page."),
       link: appLink("/play/placements"),
       // A later correction to the feedback is a new message.
       dedupeKey: `slot-feedback:${s.id}:${userId}:${now.getTime()}`,

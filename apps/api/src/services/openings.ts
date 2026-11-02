@@ -1,5 +1,5 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { formatLpa, OPENING_KINDS, openingState, type OpeningKind, type OpeningResponse, type PlacementCriteria } from "@playcode/core";
+import { at, formatLpa, msg, OPENING_KINDS, type OpeningKind, type OpeningResponse, openingState, type PlacementCriteria } from "@playcode/core";
 import type { Db } from "../db/client";
 import { openingResponses, placementOpenings, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -51,15 +51,16 @@ export async function createOpening(db: Db, auth: Auth, input: OpeningInput, now
     .values({ tenantId: auth.tenantId, ...input, company: input.company.trim(), roleTitle: input.roleTitle.trim(), details: input.details.trim(), createdBy: auth.userId, createdAt: now })
     .returning();
   const eligible = await studentsEligible(db, auth.tenantId, input.criteria, { driveId: null, ctcRupees: ctcOf(input), now });
-  const by = new Date(`${input.closesOn}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
+  const by = at(input.closesOn, "Asia/Kolkata");
+  const details = [pay(input), input.location].filter(Boolean).join(", ");
   await enqueue(
     db,
     eligible.map((userId) => ({
       tenantId: auth.tenantId,
       userId,
       template: "placement" as const,
-      title: `${OPENING_KINDS[input.kind]}: ${input.company} ${input.roleTitle}`,
-      body: `${[pay(input), input.location].filter(Boolean).join(", ")}${pay(input) || input.location ? ". " : ""}You are eligible. Apply by ${by}.`,
+      title: msg("{kind}: {company} {role}", { kind: msg(OPENING_KINDS[input.kind]), company: input.company, role: input.roleTitle }),
+      body: details ? msg("{details}. You are eligible. Apply by {date}.", { details, date: by }) : msg("You are eligible. Apply by {date}.", { date: by }),
       link: appLink(`/play/openings?id=${o!.id}`),
       dedupeKey: `opening:${o!.id}:${userId}`,
       sentBy: auth.userId,

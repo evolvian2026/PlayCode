@@ -1,19 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { and, desc, eq, gt, gte, inArray, isNotNull, lte } from "drizzle-orm";
-import {
-  ADAPTIVE_SECTIONS,
-  APTITUDE_TEMPLATES,
-  compareScores,
-  estimateAbility,
-  generateQuestion,
-  nextLevel,
-  nextTemplate,
-  OFFICIAL_SCORE_MONTHS,
-  scaledScore,
-  SCORE_BANDS,
-  scoreBand,
-  scoreMove,
-} from "@playcode/core";
+import { ADAPTIVE_SECTIONS, APTITUDE_TEMPLATES, at, compareScores, estimateAbility, generateQuestion, msg, nextLevel, nextTemplate, OFFICIAL_SCORE_MONTHS, scaledScore, SCORE_BANDS, scoreBand, scoreMove } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { adaptiveAttempts, aptitudeDrillAnswers, aptitudeSittings, memberships, users, type AdaptiveItem, type AdaptiveSectionState } from "../db/schema";
 import { badRequest, conflict, notFound } from "../lib/errors";
@@ -367,15 +354,18 @@ export async function createSitting(db: Db, auth: AuthContext, input: SittingInp
   if (input.unitIds.some((u) => !scoped.has(u))) throw badRequest("Choose batches in your scope");
   const [row] = await db.insert(aptitudeSittings).values({ tenantId, title: input.title.trim(), unitIds: input.unitIds, opensAt: input.opensAt, closesAt: input.closesAt, createdBy: auth.userId, createdAt: now }).returning();
   const students = await invited(db, tenantId, input.unitIds);
-  const when = input.opensAt <= now ? "now" : input.opensAt.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  const closes = at(row!.closesAt, "Asia/Kolkata", { time: true });
   await enqueue(
     db,
     students.map((userId) => ({
       tenantId,
       userId,
       template: "placement" as const,
-      title: `Official aptitude test: ${row!.title}`,
-      body: `Opens ${when}, closes ${row!.closesAt.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" })}. You get one attempt; the score goes on your resume and counts for drives that ask for it.`,
+      title: msg("Official aptitude test: {title}", { title: row!.title }),
+      body:
+        input.opensAt <= now
+          ? msg("Opens now, closes {closes}. You get one attempt; the score goes on your resume and counts for drives that ask for it.", { closes })
+          : msg("Opens {opens}, closes {closes}. You get one attempt; the score goes on your resume and counts for drives that ask for it.", { opens: at(input.opensAt, "Asia/Kolkata", { time: true }), closes }),
       link: appLink("/play/aptitude"),
       dedupeKey: `sitting:${row!.id}:${userId}`,
       sentBy: auth.userId,

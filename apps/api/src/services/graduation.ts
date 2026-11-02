@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
-import { EXIT_ITEMS, EXIT_SURVEY_MIN_RESPONSES, exitSummary, GRADUATION_UNDO_DAYS, type ExitItem } from "@playcode/core";
+import { EXIT_ITEMS, EXIT_SURVEY_MIN_RESPONSES, type ExitItem, exitSummary, GRADUATION_UNDO_DAYS, msg } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { academicRecords, alumni, batchGraduations, graduateResponses, memberships, placementApplications, placementDrives, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -149,8 +149,8 @@ export async function graduateBatch(db: Db, auth: AuthContext, unitId: string, n
       tenantId,
       userId,
       template: "placement",
-      title: "Congratulations on graduating",
-      body: "Your account stays open to see and download your resume and records. Join the alumni list so juniors can ask you for advice, and tell us how training and placement went.",
+      title: msg("Congratulations on graduating"),
+      body: msg("Your account stays open to see and download your resume and records. Join the alumni list so juniors can ask you for advice, and tell us how training and placement went."),
       link: appLink("/play/graduated"),
       dedupeKey: `graduated:${unitId}:${userId}:${now.getTime()}`,
       sentBy: auth.userId,

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
-import { hasInstitutionScope, localDate, MAX_DOCUMENT_BYTES, safeFileName, sniffDocumentType } from "@playcode/core";
+import { at, hasInstitutionScope, localDate, MAX_DOCUMENT_BYTES, type Msg, msg, safeFileName, sniffDocumentType, verbatim } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { documentRequests, documentSubmissions, tenants, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -32,7 +32,7 @@ export interface RequestInput {
 const summary = (r: Row) => ({ id: r.id, title: r.title, instructions: r.instructions, unitIds: r.unitIds, dueOn: r.dueOn, createdAt: r.createdAt, closed: Boolean(r.closedAt) });
 const fileView = (s: Submission) => ({ fileName: s.fileName, contentType: s.contentType, sizeBytes: s.sizeBytes, status: s.status, reviewNote: s.reviewNote, submittedAt: s.submittedAt });
 
-function tell(db: DbOrTx, r: Row, userIds: string[], title: string, body: string, dedupe: (uid: string) => string) {
+function tell(db: DbOrTx, r: Row, userIds: string[], title: Msg, body: Msg, dedupe: (uid: string) => string) {
   return enqueue(db, userIds.map((userId) => ({ tenantId: r.tenantId, userId, template: "circular" as const, title, body, link: appLink("/play/documents"), dedupeKey: dedupe(userId) })));
 }
 
@@ -51,7 +51,15 @@ export async function createRequest(db: Db, auth: AuthContext, input: RequestInp
   else if (!hasInstitutionScope(auth.roles)) throw badRequest("Choose the batches or sections it is for");
   const [r] = await db.insert(documentRequests).values({ tenantId: auth.tenantId!, createdBy: auth.userId, ...input, createdAt: now }).returning();
   const audience = await audienceOf(db, r!);
-  await tell(db, r!, audience, `Upload: ${r!.title}`, `Upload it in the app by ${r!.dueOn}.${r!.instructions ? ` ${r!.instructions.slice(0, 120)}` : ""}`, (uid) => `document:${r!.id}:${uid}`);
+  const by = at(r!.dueOn, "Asia/Kolkata");
+  await tell(
+    db,
+    r!,
+    audience,
+    msg("Upload: {title}", { title: r!.title }),
+    r!.instructions ? msg("Upload it in the app by {date}. {instructions}", { date: by, instructions: r!.instructions.slice(0, 120) }) : msg("Upload it in the app by {date}.", { date: by }),
+    (uid) => `document:${r!.id}:${uid}`,
+  );
   void processOutbox(db, now).catch(() => {});
   await audit(db, { tenantId: r!.tenantId, actorId: auth.userId, action: "documents.request", target: r!.id, data: { students: audience.length } });
   return { ...summary(r!), audience: audience.length };
@@ -120,7 +128,7 @@ export async function reviewSubmission(db: Db, auth: AuthContext, id: string, us
     .set({ status: decision.verify ? "verified" : "rejected", reviewNote: decision.verify ? null : decision.note!.trim(), reviewedBy: auth.userId, reviewedAt: now })
     .where(and(eq(documentSubmissions.requestId, r.id), eq(documentSubmissions.userId, userId)));
   if (!decision.verify) {
-    await tell(db, r, [userId], `Upload again: ${r.title}`, decision.note!.trim(), (uid) => `document-rejected:${r.id}:${uid}:${s.submittedAt.getTime()}`);
+    await tell(db, r, [userId], msg("Upload again: {title}", { title: r.title }), verbatim(decision.note!.trim()), (uid) => `document-rejected:${r.id}:${uid}:${s.submittedAt.getTime()}`);
     void processOutbox(db, now).catch(() => {});
   }
   await audit(db, { tenantId: r.tenantId, actorId: auth.userId, action: decision.verify ? "documents.verify" : "documents.reject", target: r.id, data: { userId } });
@@ -133,7 +141,7 @@ export async function remindRequest(db: Db, auth: AuthContext, id: string, now: 
   if (r.closedAt) throw badRequest("This request is closed");
   if (r.lastRemindedAt && now.getTime() - r.lastRemindedAt.getTime() < REMIND_EVERY_MS) throw conflict("reminded", "Students were reminded less than 12 hours ago");
   const pending = await outstanding(db, r);
-  await tell(db, r, pending, `Reminder: upload ${r.title}`, `Please upload it in the app by ${r.dueOn}.`, (uid) => `document-remind:${r.id}:${now.getTime()}:${uid}`);
+  await tell(db, r, pending, msg("Reminder: upload {title}", { title: r.title }), msg("Please upload it in the app by {date}.", { date: at(r.dueOn, "Asia/Kolkata") }), (uid) => `document-remind:${r.id}:${now.getTime()}:${uid}`);
   await db.update(documentRequests).set({ lastRemindedAt: now }).where(eq(documentRequests.id, r.id));
   void processOutbox(db, now).catch(() => {});
   return { reminded: pending.length };
@@ -215,7 +223,7 @@ export async function documentReminders(db: Db, now: Date) {
   let sent = 0;
   for (const { r, timeZone } of rows) {
     if (r.dueOn !== localDate(new Date(now.getTime() + 86_400_000), timeZone)) continue;
-    sent += await tell(db, r, await outstanding(db, r), `Due tomorrow: ${r.title}`, "Please upload it in the app today.", (uid) => `document-due:${r.id}:${uid}`);
+    sent += await tell(db, r, await outstanding(db, r), msg("Due tomorrow: {title}", { title: r.title }), msg("Please upload it in the app today."), (uid) => `document-due:${r.id}:${uid}`);
   }
   return sent;
 }

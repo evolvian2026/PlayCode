@@ -45,3 +45,4 @@ export * from "./graduation";
 export * from "./aptitude-gen";
 export * from "./adaptive";
 export * from "./drive-prep";
+export * from "./i18n";

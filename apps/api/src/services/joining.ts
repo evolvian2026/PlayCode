@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { JOINING_STATUSES, joiningDelayed, STUDENT_JOINING_STATUSES, type JoiningStatus } from "@playcode/core";
+import { JOINING_STATUSES, joiningDelayed, type JoiningStatus, msg, STUDENT_JOINING_STATUSES } from "@playcode/core";
 import type { Db } from "../db/client";
 import { placementApplications, placementDrives, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -62,8 +62,8 @@ export async function setJoining(db: Db, auth: AuthContext, driveId: string, use
         tenantId: auth.tenantId!,
         userId,
         template: "placement",
-        title: `Your ${company} offer is recorded as withdrawn`,
-        body: "It no longer counts as an offer you hold, so you can register for drives again. Your placement cell is here to help.",
+        title: msg("Your {company} offer is recorded as withdrawn", { company }),
+        body: msg("It no longer counts as an offer you hold, so you can register for drives again. Your placement cell is here to help."),
         link: appLink("/play/placements"),
         dedupeKey: `offer-revoked:${driveId}:${userId}`,
         sentBy: auth.userId,
@@ -136,8 +136,8 @@ export async function joiningCheckIns(db: Db, now: Date) {
       tenantId: a.tenantId,
       userId: a.userId,
       template: "placement" as const,
-      title: `Any news from ${company}?`,
-      body: "Tell your placement cell whether you have your offer letter or a joining date. It takes a few seconds.",
+      title: msg("Any news from {company}?", { company }),
+      body: msg("Tell your placement cell whether you have your offer letter or a joining date. It takes a few seconds."),
       link: appLink("/play/placements"),
       dedupeKey: `joining-check:${a.driveId}:${a.userId}:${month}`,
     })),

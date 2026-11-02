@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, asc, eq, gt, gte, inArray, lte } from "drizzle-orm";
-import { attendancePct, CHECK_IN_CODE_SECONDS, CHECK_IN_GRACE_MINUTES, feedbackOpen, hasInstitutionScope, LATE_AFTER_MINUTES, meanRating, MIN_FEEDBACK_RESPONSES, TRAINING_KINDS, type FeedbackDimension, type TrainingKind } from "@playcode/core";
+import { at, attendancePct, CHECK_IN_CODE_SECONDS, CHECK_IN_GRACE_MINUTES, type FeedbackDimension, feedbackOpen, hasInstitutionScope, LATE_AFTER_MINUTES, meanRating, MIN_FEEDBACK_RESPONSES, msg, TRAINING_KINDS, type TrainingKind } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { tenants, trainingAttendance, trainingFeedback, trainingSessions, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -26,7 +26,8 @@ type Session = typeof trainingSessions.$inferSelect;
 type Ctx = { tenantId: string; userId: string; now: Date };
 
 const endOf = (s: Session) => new Date(s.startsAt.getTime() + s.durationMinutes * MIN);
-const when = (d: Date, timeZone: string) => d.toLocaleString("en-IN", { timeZone, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+/** A session's start, written in each student's language when the notification goes out. */
+const when = (d: Date, timeZone: string) => at(d, timeZone, { time: true, weekday: true });
 
 /** The room's code for a 30-second window: six digits from the session's secret. */
 export function checkInCode(secret: string, window: number) {
@@ -110,8 +111,8 @@ export async function createSession(db: Db, auth: AuthContext, input: SessionInp
     .returning();
   const tenant = await getTenant(db, s!.tenantId);
   await tell(db, s!, await invitedIds(db, s!), (uid) => ({
-    title: `Training: ${s!.title}`,
-    body: `${when(s!.startsAt, tenant.timeZone)} · ${s!.location} · with ${s!.trainer}. Attendance is taken in the room.`,
+    title: msg("Training: {title}", { title: s!.title }),
+    body: msg("{when} · {place} · with {trainer}. Attendance is taken in the room.", { when: when(s!.startsAt, tenant.timeZone), place: s!.location, trainer: s!.trainer }),
     dedupeKey: `training-new:${s!.id}:${uid}`,
   }));
   void processOutbox(db, now).catch(() => {});
@@ -251,7 +252,7 @@ export async function cancelSession(db: Db, auth: AuthContext, id: string, now: 
   if (endOf(s) <= now) throw conflict("session_over", "This session has already happened");
   const [updated] = await db.update(trainingSessions).set({ status: "cancelled" }).where(eq(trainingSessions.id, s.id)).returning();
   const tenant = await getTenant(db, s.tenantId);
-  await tell(db, s, await invitedIds(db, s), (uid) => ({ title: `Cancelled: ${s.title}`, body: `The training session on ${when(s.startsAt, tenant.timeZone)} won't take place.`, dedupeKey: `training-cancel:${s.id}:${uid}` }));
+  await tell(db, s, await invitedIds(db, s), (uid) => ({ title: msg("Cancelled: {title}", { title: s.title }), body: msg("The training session on {when} won't take place.", { when: when(s.startsAt, tenant.timeZone) }), dedupeKey: `training-cancel:${s.id}:${uid}` }));
   void processOutbox(db, now).catch(() => {});
   await audit(db, { tenantId: s.tenantId, actorId: auth.userId, action: "training.cancel", target: s.id });
   return summary(updated!, now);
@@ -377,7 +378,7 @@ export async function trainingReminders(db: Db, now: Date) {
     .where(and(eq(trainingSessions.status, "scheduled"), gt(trainingSessions.startsAt, now), lte(trainingSessions.startsAt, new Date(now.getTime() + REMIND_WITHIN_MS))));
   let sent = 0;
   for (const { s, timeZone } of soon) {
-    sent += await tell(db, s, await invitedIds(db, s), (uid) => ({ title: `Tomorrow: ${s.title}`, body: `${when(s.startsAt, timeZone)} · ${s.location}. Check in with the code shown in the room.`, dedupeKey: `training-remind:${s.id}:${uid}` }));
+    sent += await tell(db, s, await invitedIds(db, s), (uid) => ({ title: msg("Tomorrow: {title}", { title: s.title }), body: msg("{when} · {place}. Check in with the code shown in the room.", { when: when(s.startsAt, timeZone), place: s.location }), dedupeKey: `training-remind:${s.id}:${uid}` }));
   }
   // Sessions that ended in the last day: ask those who attended and haven't rated it.
   const recent = await db
@@ -390,7 +391,7 @@ export async function trainingReminders(db: Db, now: Date) {
       db.select({ id: trainingFeedback.userId }).from(trainingFeedback).where(eq(trainingFeedback.sessionId, s.id)),
     ]);
     const done = new Set(rated.map((r) => r.id));
-    sent += await tell(db, s, present.map((p) => p.id).filter((id) => !done.has(id)), (uid) => ({ title: `How was ${s.title}?`, body: "Rate it in under a minute. Trainers see the ratings only in aggregate, never who gave them.", dedupeKey: `training-feedback:${s.id}:${uid}` }));
+    sent += await tell(db, s, present.map((p) => p.id).filter((id) => !done.has(id)), (uid) => ({ title: msg("How was {title}?", { title: s.title }), body: msg("Rate it in under a minute. Trainers see the ratings only in aggregate, never who gave them."), dedupeKey: `training-feedback:${s.id}:${uid}` }));
   }
   return sent;
 }

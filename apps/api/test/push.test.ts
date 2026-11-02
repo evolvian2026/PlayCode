@@ -1,3 +1,4 @@
+import { msg } from "@playcode/core";
 import { eq } from "drizzle-orm";
 import webpush from "web-push";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -33,7 +34,7 @@ afterAll(async () => {
 
 async function notify(title: string) {
   const [u] = await db.select().from(users).where(eq(users.email, "student@demo.edu"));
-  await enqueue(db, [{ tenantId: u!.tenantId!, userId: u!.id, template: "announcement", title, body: "Details inside.", link: "http://localhost:3000/play", dedupeKey: `test:${title}` }]);
+  await enqueue(db, [{ tenantId: u!.tenantId!, userId: u!.id, template: "announcement", title: msg(title), body: msg("Details inside."), link: "http://localhost:3000/play", dedupeKey: `test:${title}` }]);
   return processOutbox(db, t.clock.now);
 }
 
@@ -77,7 +78,7 @@ describe("web push", () => {
     const [demo] = await db.select().from(tenants).where(eq(tenants.slug, "demo-tech"));
     await db.update(tenants).set({ settings: { ...demo!.settings, nudges: false } }).where(eq(tenants.id, demo!.id));
     const [u] = await db.select().from(users).where(eq(users.email, "student@demo.edu"));
-    await enqueue(db, [{ tenantId: demo!.id, userId: u!.id, template: "streak_at_risk", title: "Keep your streak", body: "x", dedupeKey: "test:streak" }]);
+    await enqueue(db, [{ tenantId: demo!.id, userId: u!.id, template: "streak_at_risk", title: msg("Keep your streak"), body: msg("x"), dedupeKey: "test:streak" }]);
     const before = sent.length;
     await processOutbox(db, t.clock.now);
     expect(sent.length).toBe(before);

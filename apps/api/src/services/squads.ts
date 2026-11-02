@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
-import { addDays, currentStreak, isoWeekKey, weekday } from "@playcode/core";
+import { addDays, currentStreak, isoWeekKey, msg, weekday } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { playerProfiles, responses, squadMembers, squads, tenants, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -168,8 +168,8 @@ export async function nudge(db: Db, ctx: Ctx, targetId: string) {
       tenantId: ctx.tenantId,
       userId: targetId,
       template: "squad",
-      title: `${first} nudged you`,
-      body: `${squad.name} needs your answers today. A few minutes keeps your streak and the squad's going.`,
+      title: msg("{name} nudged you", { name: first! }),
+      body: msg("{squad} needs your answers today. A few minutes keeps your streak and the squad's going.", { squad: squad.name }),
       link: appLink("/play/squad"),
       dedupeKey: `squad-nudge:${ctx.userId}:${targetId}:${today}`,
       sentBy: ctx.userId,
@@ -204,8 +204,8 @@ export async function squadReminders(db: Db, now: Date) {
     for (const userId of members) {
       items.push(
         reached
-          ? { tenantId: squad.tenantId, userId, template: "squad", title: `${squad.name} hit its goal`, body: `${answers} answers this week against a goal of ${squad.weeklyGoal}. The squad streak goes on.`, link: appLink("/play/squad"), dedupeKey: `squad-goal:${squad.id}:${week}:${userId}` }
-          : { tenantId: squad.tenantId, userId, template: "squad", title: `${squad.name} needs a push`, body: `${answers} of ${squad.weeklyGoal} answers so far this week, with the weekend left.`, link: appLink("/play/squad"), dedupeKey: `squad-behind:${squad.id}:${week}:${userId}` },
+          ? { tenantId: squad.tenantId, userId, template: "squad", title: msg("{squad} hit its goal", { squad: squad.name }), body: msg("{n} answers this week against a goal of {goal}. The squad streak goes on.", { n: answers, goal: squad.weeklyGoal }), link: appLink("/play/squad"), dedupeKey: `squad-goal:${squad.id}:${week}:${userId}` }
+          : { tenantId: squad.tenantId, userId, template: "squad", title: msg("{squad} needs a push", { squad: squad.name }), body: msg("{n} of {goal} answers so far this week, with the weekend left.", { n: answers, goal: squad.weeklyGoal }), link: appLink("/play/squad"), dedupeKey: `squad-behind:${squad.id}:${week}:${userId}` },
       );
     }
   }

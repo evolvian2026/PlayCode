@@ -1,19 +1,5 @@
 import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
-import {
-  DUEL_COUNTDOWN_MS,
-  DUEL_DAILY_XP_LIMIT,
-  DUEL_INVITE_TTL_MS,
-  DUEL_QUESTIONS,
-  DUEL_SECONDS,
-  duelOutcome,
-  duelRatings,
-  duelXp,
-  grade,
-  hashString,
-  shuffle,
-  toStudentView,
-  type StudentResponse,
-} from "@playcode/core";
+import { DUEL_COUNTDOWN_MS, DUEL_DAILY_XP_LIMIT, DUEL_INVITE_TTL_MS, DUEL_QUESTIONS, DUEL_SECONDS, duelOutcome, duelRatings, duelXp, grade, hashString, msg, shuffle, type StudentResponse, toStudentView } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { duelPlayers, duels, memberships, playerProfiles, questions, users } from "../db/schema";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
@@ -123,8 +109,8 @@ export async function createDuel(db: Db, ctx: StudentCtx, input: { opponentId?: 
         tenantId: ctx.tenantId,
         userId: result.opponentId,
         template: "duel_invite",
-        title: `${challenger?.name ?? "A classmate"} challenged you to a duel`,
-        body: "Accept within 2 minutes: 5 questions, 3 minutes.",
+        title: challenger ? msg("{name} challenged you to a duel", { name: challenger.name }) : msg("A classmate challenged you to a duel"),
+        body: msg("Accept within 2 minutes: 5 questions, 3 minutes."),
         link: appLink("/play/duels"),
         dedupeKey: `duel:${result.id}`,
       },

@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
-import { correctionError, HELP_CATEGORIES, RECORD_FIELDS, type HelpCategory, type RecordField } from "@playcode/core";
+import { correctionError, HELP_CATEGORIES, type HelpCategory, type Msg, msg, RECORD_FIELDS, type RecordField, verbatim } from "@playcode/core";
 import type { Db } from "../db/client";
 import { academicRecords, helpMessages, helpTickets, users, type RecordCorrection } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -140,7 +140,7 @@ export async function staffTicket(db: Db, auth: AuthContext, id: string) {
   return { ...(await thread(db, t)), student: s!, record: record ? { cgpa: record.cgpa, backlogs: record.backlogs, tenthPct: record.tenthPct, twelfthPct: record.twelfthPct, graduationYear: record.graduationYear } : null };
 }
 
-function tellStudent(db: Db, t: Ticket, title: string, body: string, key: string, sentBy: string) {
+function tellStudent(db: Db, t: Ticket, title: Msg, body: Msg, key: string, sentBy: string) {
   return enqueue(db, [{ tenantId: t.tenantId, userId: t.userId, template: "placement", title, body, link: appLink(`/play/help?id=${t.id}`), dedupeKey: key, sentBy }]);
 }
 
@@ -148,7 +148,7 @@ export async function staffReply(db: Db, auth: AuthContext, id: string, input: {
   const t = await loadForStaff(db, auth, id);
   await db.insert(helpMessages).values({ ticketId: t.id, authorId: auth.userId, fromStaff: true, body: input.body, createdAt: now });
   const [u] = await db.update(helpTickets).set({ status: input.close ? "closed" : "answered", updatedAt: now }).where(eq(helpTickets.id, t.id)).returning();
-  await tellStudent(db, t, `The placement cell answered: ${t.subject}`, input.body.slice(0, 160), `help:${t.id}:${now.getTime()}`, auth.userId);
+  await tellStudent(db, t, msg("The placement cell answered: {subject}", { subject: t.subject }), verbatim(input.body.slice(0, 160)), `help:${t.id}:${now.getTime()}`, auth.userId);
   void processOutbox(db, now).catch(() => {});
   return staffTicket(db, auth, u!.id);
 }
@@ -172,7 +172,14 @@ export async function decideCorrection(db: Db, auth: AuthContext, id: string, ap
     await tx.insert(helpMessages).values({ ticketId: t.id, authorId: auth.userId, fromStaff: true, body, createdAt: now });
     await audit(tx, { tenantId: t.tenantId, actorId: auth.userId, action: apply ? "placements.record_corrected" : "placements.record_correction_declined", target: t.userId, data: { field, from: current, to: apply ? proposed : current } });
   });
-  await tellStudent(db, t, apply ? `Your ${label} has been corrected` : `Your ${label} correction`, apply ? `It's now ${proposed}.` : (note ?? "").slice(0, 160), `help-correction:${t.id}`, auth.userId);
+  await tellStudent(
+    db,
+    t,
+    apply ? msg("Your {field} has been corrected", { field: msg(label) }) : msg("Your {field} correction", { field: msg(label) }),
+    apply ? msg("It's now {value}.", { value: String(proposed) }) : verbatim((note ?? "").slice(0, 160)),
+    `help-correction:${t.id}`,
+    auth.userId,
+  );
   void processOutbox(db, now).catch(() => {});
   return staffTicket(db, auth, t.id);
 }

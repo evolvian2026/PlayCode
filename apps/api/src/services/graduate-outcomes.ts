@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { GRADUATE_STATUSES, graduateStatus, median, OUTCOME_KINDS, type GraduateStatus, type OutcomeKind } from "@playcode/core";
+import { GRADUATE_STATUSES, graduateStatus, type GraduateStatus, median, msg, OUTCOME_KINDS, type OutcomeKind, verbatim } from "@playcode/core";
 import type { Db } from "../db/client";
 import { academicRecords, memberships, placementApplications, placementDrives, studentOutcomes, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -129,8 +129,8 @@ export async function reviewOutcome(db: Db, auth: AuthContext, id: string, decis
       tenantId: o.tenantId,
       userId: o.userId,
       template: "placement",
-      title: decision.verify ? `${o.organisation}: verified by your placement cell` : `${o.organisation}: your placement cell needs more`,
-      body: decision.verify ? "It now counts in your batch's results. Congratulations!" : decision.note!.trim(),
+      title: decision.verify ? msg("{organisation}: verified by your placement cell", { organisation: o.organisation }) : msg("{organisation}: your placement cell needs more", { organisation: o.organisation }),
+      body: decision.verify ? msg("It now counts in your batch's results. Congratulations!") : verbatim(decision.note!.trim()),
       link: appLink("/play/outcomes"),
       dedupeKey: `outcome:${o.id}:${o.updatedAt.getTime()}:${decision.verify ? "verified" : "rejected"}`,
       sentBy: auth.userId,

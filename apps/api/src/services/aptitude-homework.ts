@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { and, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
-import { APTITUDE_TEMPLATES, generateQuestion } from "@playcode/core";
+import { APTITUDE_TEMPLATES, at, generateQuestion, msg } from "@playcode/core";
 import type { Db } from "../db/client";
 import { aptitudeHomework, aptitudeHomeworkWork, users, type HomeworkPart, type HomeworkQuestion } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -46,15 +46,15 @@ export async function createHomework(db: Db, auth: AuthContext, input: HomeworkI
   if (input.unitIds.some((u) => !scoped.includes(u))) throw badRequest("Choose batches or sections in your scope");
   const [row] = await db.insert(aptitudeHomework).values({ tenantId, title: input.title.trim(), unitIds: input.unitIds, parts: input.parts, dueAt: input.dueAt, createdBy: auth.userId, createdAt: now }).returning();
   const students = await invited(db, tenantId, input.unitIds);
-  const due = input.dueAt.toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  const due = at(input.dueAt, "Asia/Kolkata", { time: true, weekday: true });
   await enqueue(
     db,
     students.map((userId) => ({
       tenantId,
       userId,
       template: "assignment_due" as const,
-      title: `Aptitude homework: ${row!.title}`,
-      body: `${total} questions on ${[...new Set(input.parts.map((p) => label(p.template).toLowerCase()))].join(", ")}, due ${due}. Your numbers are your own, with the working after each answer.`,
+      title: msg("Aptitude homework: {title}", { title: row!.title }),
+      body: msg("{n} questions on {topics}, due {due}. Your numbers are your own, with the working after each answer.", { n: total, topics: [...new Set(input.parts.map((p) => label(p.template)))].map((l) => msg(l)), due }),
       link: appLink(`/play/aptitude/homework/${row!.id}`),
       dedupeKey: `apt-homework:${row!.id}:${userId}`,
       sentBy: auth.userId,
@@ -136,8 +136,8 @@ export async function homeworkReminders(db: Db, now: Date) {
         tenantId: h.tenantId,
         userId,
         template: "assignment_due" as const,
-        title: `Due tomorrow: ${h.title}`,
-        body: "Your aptitude homework is due within a day.",
+        title: msg("Due tomorrow: {title}", { title: h.title }),
+        body: msg("Your aptitude homework is due within a day."),
         link: appLink(`/play/aptitude/homework/${h.id}`),
         dedupeKey: `apt-homework-reminder:${h.id}:${userId}`,
       })),

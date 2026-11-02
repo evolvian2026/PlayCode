@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import { certificationPeriod, entryDatesError, entryPeriod, VERIFIABLE_KINDS, type ResumeEntryKind } from "@playcode/core";
+import { certificationPeriod, entryDatesError, entryPeriod, msg, type ResumeEntryKind, verbatim, VERIFIABLE_KINDS } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { resumeEntries, tenants, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -119,7 +119,7 @@ export async function verificationQueue(db: Db, auth: AuthContext, status: "requ
 export async function decideVerification(db: Db, auth: AuthContext, id: string, decision: { verify: boolean; note: string | null }, now: Date) {
   const [e] = await db.select().from(resumeEntries).where(and(eq(resumeEntries.id, id), eq(resumeEntries.tenantId, auth.tenantId!)));
   if (!e || !VERIFIABLE_KINDS.includes(e.kind) || !(await inScope(db, auth)).has(e.userId)) throw notFound("Entry");
-  const what = e.kind === "certification" ? `${e.title} certification` : `${e.organisation} internship`;
+  const what = e.kind === "certification" ? msg("{title} certification", { title: e.title }) : msg("{organisation} internship", { organisation: e.organisation });
   if (!decision.verify && !decision.note?.trim()) throw badRequest("Tell the student what you need to see");
   await db
     .update(resumeEntries)
@@ -131,8 +131,8 @@ export async function decideVerification(db: Db, auth: AuthContext, id: string, 
       tenantId: e.tenantId,
       userId: e.userId,
       template: "placement",
-      title: decision.verify ? `Your ${what} is verified` : `Your ${what}: more needed`,
-      body: decision.verify ? `It shows as verified by ${tenant!.name} on your resume.` : decision.note!.trim(),
+      title: decision.verify ? msg("Your {what} is verified", { what }) : msg("Your {what}: more needed", { what }),
+      body: decision.verify ? msg("It shows as verified by {college} on your resume.", { college: tenant!.name }) : verbatim(decision.note!.trim()),
       link: appLink("/play/resume"),
       dedupeKey: `${e.kind}:${e.id}:${e.updatedAt.getTime()}:${decision.verify ? "verified" : "rejected"}`,
       sentBy: auth.userId,

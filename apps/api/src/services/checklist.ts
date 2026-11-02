@@ -1,5 +1,5 @@
 import { and, eq, gte, inArray, isNull, ne } from "drizzle-orm";
-import { CHECKLIST_ATTENDANCE, CHECKLIST_ITEMS, CHECKLIST_READINESS, checklistProgress, SITTING_OUT_MIN_DRIVES, type ChecklistItem } from "@playcode/core";
+import { CHECKLIST_ATTENDANCE, CHECKLIST_ITEMS, CHECKLIST_READINESS, type ChecklistItem, checklistProgress, msg, SITTING_OUT_MIN_DRIVES } from "@playcode/core";
 import type { Db } from "../db/client";
 import { academicRecords, documentRequests, documentSubmissions, interviews, memberships, placementApplications, placementDrives, studentProfiles, users } from "../db/schema";
 import { badRequest, forbidden } from "../lib/errors";
@@ -145,8 +145,8 @@ export async function nudge(db: Db, auth: AuthContext, input: { userIds: string[
         tenantId,
         userId: id,
         template: "placement",
-        title: missing.length === 1 ? `One thing left before placements: ${CHECKLIST_ITEMS[missing[0]!].label.toLowerCase()}` : `${missing.length} things left before placements`,
-        body: missing.map((k) => CHECKLIST_ITEMS[k].label).join(", "),
+        title: missing.length === 1 ? msg("One thing left before placements: {item}", { item: msg(CHECKLIST_ITEMS[missing[0]!].label) }) : msg("{n} things left before placements", { n: missing.length }),
+        body: msg("{items}", { items: missing.map((k) => msg(CHECKLIST_ITEMS[k].label)) }),
         link: appLink("/play/placements"),
         dedupeKey: `checklist:${id}:${today}`,
         sentBy: auth.userId,
@@ -158,8 +158,8 @@ export async function nudge(db: Db, auth: AuthContext, input: { userIds: string[
         tenantId,
         userId: id,
         template: "placement",
-        title: "Drives you're eligible for are going by",
-        body: "You haven't registered for any drive yet. Have a look at what's open, or tell your placement cell if something is stopping you.",
+        title: msg("Drives you're eligible for are going by"),
+        body: msg("You haven't registered for any drive yet. Have a look at what's open, or tell your placement cell if something is stopping you."),
         link: appLink("/play/placements"),
         dedupeKey: `sitting-out:${id}:${today}`,
         sentBy: auth.userId,

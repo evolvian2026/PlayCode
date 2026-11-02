@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm";
-import { addDays, agreeMode, firstCommonWindow, localDate, PEER_NO_SHOW_LIMIT, PEER_RATINGS, PEER_SLOTS, PEER_TRACKS, peerQuestions, zonedTime, type PeerMode, type PeerRating, type PeerTrack, type PeerWindow } from "@playcode/core";
+import { addDays, agreeMode, at, firstCommonWindow, localDate, msg, PEER_NO_SHOW_LIMIT, PEER_RATINGS, PEER_SLOTS, PEER_TRACKS, type PeerMode, peerQuestions, type PeerRating, type PeerTrack, type PeerWindow, verbatim, zonedTime } from "@playcode/core";
 import type { Db } from "../db/client";
 import { peerFeedback, peerRequests, peerSessions, users } from "../db/schema";
 import { badRequest, conflict, notFound } from "../lib/errors";
@@ -80,15 +80,15 @@ async function tryMatch(db: Db, req: Request, now: Date) {
     if (!session) continue;
     const people = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, [a.userId, b.userId]));
     const name = (id: string) => people.find((p) => p.id === id)?.name ?? "a classmate";
-    const when = session.startsAt.toLocaleString("en-IN", { timeZone: tz, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+    const when = at(session.startsAt, tz, { time: true, weekday: true });
     await enqueue(
       db,
       [a.userId, b.userId].map((userId) => ({
         tenantId: req.tenantId,
         userId,
         template: "placement" as const,
-        title: `Practice partner found: ${name(userId === a.userId ? b.userId : a.userId)}`,
-        body: `${PEER_TRACKS[req.track]} mock interview, ${when}, ${mode === "online" ? "online" : "on campus"}. Your questions are ready in the app.`,
+        title: msg("Practice partner found: {name}", { name: name(userId === a.userId ? b.userId : a.userId) }),
+        body: msg(mode === "online" ? "{track} mock interview, {when}, online. Your questions are ready in the app." : "{track} mock interview, {when}, on campus. Your questions are ready in the app.", { track: msg(PEER_TRACKS[req.track]), when }),
         link: appLink("/play/peer"),
         dedupeKey: `peer-match:${session.id}:${userId}`,
       })),
@@ -147,7 +147,7 @@ export async function cancelSession(db: Db, ctx: Ctx, id: string) {
   await db.update(peerSessions).set({ status: "cancelled", cancelledBy: ctx.userId }).where(eq(peerSessions.id, s.id));
   const partner = s.aId === ctx.userId ? s.bId : s.aId;
   const [me] = await db.select({ name: users.name }).from(users).where(eq(users.id, ctx.userId));
-  await enqueue(db, [{ tenantId: s.tenantId, userId: partner, template: "placement", title: `${me?.name ?? "Your partner"} called off your practice session`, body: "Ask for a new partner whenever you're ready.", link: appLink("/play/peer"), dedupeKey: `peer-cancel:${s.id}` }]);
+  await enqueue(db, [{ tenantId: s.tenantId, userId: partner, template: "placement", title: me ? msg("{name} called off your practice session", { name: me.name }) : msg("Your partner called off your practice session"), body: msg("Ask for a new partner whenever you're ready."), link: appLink("/play/peer"), dedupeKey: `peer-cancel:${s.id}` }]);
   void processOutbox(db, ctx.now).catch(() => {});
   return myPeer(db, ctx);
 }
@@ -244,7 +244,7 @@ export async function peerJob(db: Db, now: Date) {
     const tz = (await getTenant(db, r.tenantId)).timeZone;
     if (r.windows.every((w) => startOf(w, tz).getTime() < now.getTime() + LEAD)) {
       await db.update(peerRequests).set({ status: "expired" }).where(eq(peerRequests.id, r.id));
-      await enqueue(db, [{ tenantId: r.tenantId, userId: r.userId, template: "placement", title: "No practice partner this time", body: "Nobody else was free at those times. Try again with a few more slots.", link: appLink("/play/peer"), dedupeKey: `peer-expired:${r.id}` }]);
+      await enqueue(db, [{ tenantId: r.tenantId, userId: r.userId, template: "placement", title: msg("No practice partner this time"), body: msg("Nobody else was free at those times. Try again with a few more slots."), link: appLink("/play/peer"), dedupeKey: `peer-expired:${r.id}` }]);
       expired++;
     }
   }
@@ -255,7 +255,7 @@ export async function peerJob(db: Db, now: Date) {
   for (const s of soon) {
     await enqueue(
       db,
-      [s.aId, s.bId].map((userId) => ({ tenantId: s.tenantId, userId, template: "placement" as const, title: `Practice interview in under an hour`, body: s.mode === "online" ? "Join from the app when it's time." : s.place, link: appLink("/play/peer"), dedupeKey: `peer-remind:${s.id}:${userId}` })),
+      [s.aId, s.bId].map((userId) => ({ tenantId: s.tenantId, userId, template: "placement" as const, title: msg("Practice interview in under an hour"), body: s.mode === "online" ? msg("Join from the app when it's time.") : verbatim(s.place), link: appLink("/play/peer"), dedupeKey: `peer-remind:${s.id}:${userId}` })),
     );
     await db.update(peerSessions).set({ remindedAt: now }).where(eq(peerSessions.id, s.id));
   }

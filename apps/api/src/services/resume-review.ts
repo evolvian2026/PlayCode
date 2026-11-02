@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import { RESUME_SECTIONS, resumeChecks, resumeScore, REVIEW_VERDICTS, type ResumeSection, type ReviewVerdict } from "@playcode/core";
+import { msg, RESUME_SECTIONS, resumeChecks, resumeScore, type ResumeSection, REVIEW_VERDICTS, type ReviewVerdict, verbatim } from "@playcode/core";
 import type { Db } from "../db/client";
 import { resumeComments, resumeReviews, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -167,8 +167,11 @@ export async function submitReview(db: Db, auth: AuthContext, id: string, input:
       tenantId: r.tenantId,
       userId: r.userId,
       template: "placement",
-      title: input.verdict === "ready" ? "Your resume is ready to send" : `Your resume review: ${comments.length} thing${comments.length === 1 ? "" : "s"} to change`,
-      body: input.summary.trim().slice(0, 160) || (input.verdict === "ready" ? "Good work." : "See the comments on your resume page."),
+      title:
+        input.verdict === "ready"
+          ? msg("Your resume is ready to send")
+          : msg(comments.length === 1 ? "Your resume review: {n} thing to change" : "Your resume review: {n} things to change", { n: comments.length }),
+      body: input.summary.trim() ? verbatim(input.summary.trim().slice(0, 160)) : input.verdict === "ready" ? msg("Good work.") : msg("See the comments on your resume page."),
       link: appLink("/play/resume"),
       dedupeKey: `resume-review:${r.id}`,
       sentBy: auth.userId,

@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { describeAnswer } from "@playcode/core";
+import { describeAnswer, msg, verbatim } from "@playcode/core";
 import type { Db } from "../db/client";
 import { doubts, questions, responses, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -124,8 +124,8 @@ export async function answerDoubt(db: Db, auth: AuthContext, id: string, input: 
       tenantId: d.tenantId,
       userId: d.userId,
       template: "doubt",
-      title: `${staff!.name} answered your doubt`,
-      body: input.answer.length > 140 ? `${input.answer.slice(0, 137)}...` : input.answer,
+      title: msg("{name} answered your doubt", { name: staff!.name }),
+      body: verbatim(input.answer.length > 140 ? `${input.answer.slice(0, 137)}...` : input.answer),
       link: appLink("/play/doubts"),
       dedupeKey: `doubt:${d.id}`,
       sentBy: auth.userId,

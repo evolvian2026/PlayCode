@@ -41,7 +41,7 @@ describe("document collection", () => {
     expect(res.status).toBe(200);
     id = res.body.id;
     const note = (await db.select().from(notifications).where(eq(notifications.userId, riyaId))).find((n) => n.title === "Upload: Semester 1-6 marksheets");
-    expect(note!.body).toContain("by 2026-10-24");
+    expect(note!.body).toContain("by 24 Oct");
     expect((await t.get(riya, "/student/documents")).body).toMatchObject({ todo: 1, requests: [expect.objectContaining({ id, file: null })] });
     expect((await t.get(kavya, "/student/documents")).body.requests).toEqual([]);
   });

@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
-import { localDate, masteryFromRating, type CompanyType } from "@playcode/core";
+import { type CompanyType, localDate, masteryFromRating, msg } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { academicRecords, drives, memberships, orgUnits, playerProfiles, skillRatings, studentProfiles, talentInvites, tenants, users, type TalentInviteStatus } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -252,8 +252,8 @@ export async function sendInvite(db: Db, ctx: Ctx, input: { userId: string; role
       tenantId: student.institutionId,
       userId: input.userId,
       template: "talent_invite",
-      title: `${company.name} invited you to apply`,
-      body: `${input.roleTitle}. Open PlayCode to read their message and accept or decline.`,
+      title: msg("{company} invited you to apply", { company: company.name }),
+      body: msg("{role}. Open PlayCode to read their message and accept or decline.", { role: input.roleTitle }),
       link: appLink("/play/talent"),
       dedupeKey: `talent:${invite!.id}`,
     },

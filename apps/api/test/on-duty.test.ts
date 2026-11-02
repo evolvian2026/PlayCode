@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { at, msg, render } from "@playcode/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "../src/db/client";
 import { driveCheckIns, notifications, placementDrives, users } from "../src/db/schema";
@@ -107,8 +108,11 @@ describe("on duty", () => {
     const done = await t.post(tpo, "/console/on-duty/decide", { ids: queue.map((r: { id: string }) => r.id), approve: true });
     expect(done.body.decided).toBe(queue.length);
     expect((await t.get(tpo, "/console/on-duty/queue")).body.requests).toEqual([]);
-    const [note] = await db.select().from(notifications).where(and(eq(notifications.userId, riyaId), eq(notifications.title, `On duty approved for ${mine.date}`)));
+    // The day is written the student's way ("Mon, 16 Nov"), not as 2026-11-16.
+    const day = render(msg("{d}", { d: at(mine.date, "Asia/Kolkata", { weekday: true }) }), "en");
+    const [note] = await db.select().from(notifications).where(and(eq(notifications.userId, riyaId), eq(notifications.title, `On duty approved for ${day}`)));
     expect(note).toBeDefined();
+    expect(note!.title).not.toContain(mine.date);
     expect((await t.get(riya, "/student/on-duty")).body.upcoming[0]).toMatchObject({ status: "approved", canCancel: true });
   });
 

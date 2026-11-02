@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { describeAnswer, QUESTION_TYPE_LABELS } from "@playcode/core";
+import { describeAnswer, msg, QUESTION_TYPE_LABELS } from "@playcode/core";
 import type { Db } from "../db/client";
 import { paperResults, questionPapers, questions, skills, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -137,8 +137,8 @@ export async function saveResults(db: Db, auth: AuthContext, paperId: string, en
       tenantId: paper.tenantId,
       userId,
       template: "class_test" as const,
-      title: `Class test result: ${paper.title}`,
-      body: "Your marks are in. See each question, your answer and the right one.",
+      title: msg("Class test result: {title}", { title: paper.title }),
+      body: msg("Your marks are in. See each question, your answer and the right one."),
       link: appLink("/play/class-tests"),
       dedupeKey: `class-test:${paper.id}:${userId}`,
       sentBy: auth.userId,

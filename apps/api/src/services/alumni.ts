@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { INTRO_PURPOSES, MAX_PENDING_INTROS, type IntroPurpose } from "@playcode/core";
+import { INTRO_PURPOSES, type IntroPurpose, MAX_PENDING_INTROS, msg, verbatim } from "@playcode/core";
 import type { Db } from "../db/client";
 import { alumni, alumniIntros, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -147,8 +147,8 @@ export async function decideIntro(db: Db, auth: Auth, id: string, input: { send:
       tenantId: auth.tenantId,
       userId: i.userId,
       template: "placement",
-      title: input.send ? `Your introduction to ${a.name} has been sent` : `Your introduction to ${a.name}`,
-      body: input.send ? `${a.name} has your note and resume. If they can help, they'll write to you by email.` : input.note!.trim().slice(0, 160),
+      title: input.send ? msg("Your introduction to {name} has been sent", { name: a.name }) : msg("Your introduction to {name}", { name: a.name }),
+      body: input.send ? msg("{name} has your note and resume. If they can help, they'll write to you by email.", { name: a.name }) : verbatim(input.note!.trim().slice(0, 160)),
       link: appLink("/play/alumni"),
       dedupeKey: `alumni-intro:${i.id}`,
       sentBy: auth.userId,

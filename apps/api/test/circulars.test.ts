@@ -45,7 +45,7 @@ describe("circulars", () => {
     expect(res.body.audience).toBeGreaterThan(20);
     sectionOnly = (await t.post(faculty, "/console/circulars", { title: "Extra quant class", body: "There's an extra quant class on Saturday at 10 in room 204.", unitIds: [unitA] })).body.id;
     expect((await inbox("student@demo.edu")).map((n) => n.title)).toEqual(expect.arrayContaining(["Circular: TCS drive: what to bring", "Circular: Extra quant class"]));
-    expect((await inbox("student@demo.edu")).find((n) => n.title.includes("TCS"))!.body).toContain("acknowledge it by 2026-10-24");
+    expect((await inbox("student@demo.edu")).find((n) => n.title.includes("TCS"))!.body).toContain("acknowledge it by 24 Oct.");
     expect((await inbox("kavya.singh8@demo.edu")).map((n) => n.title)).toEqual(["Circular: TCS drive: what to bring"]);
   });
 

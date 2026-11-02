@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import PDFDocument from "pdfkit";
-import { addDays, DRIVE_ROUND_DAYS, localDate, ON_DUTY_DAYS_AHEAD, ON_DUTY_DAYS_BACK, ON_DUTY_PARTS, onDutyDateError, onDutyRef, partsOverlap, type OnDutyPart, type OnDutyReason } from "@playcode/core";
+import { addDays, at, DRIVE_ROUND_DAYS, localDate, msg, ON_DUTY_DAYS_AHEAD, ON_DUTY_DAYS_BACK, ON_DUTY_PARTS, onDutyDateError, type OnDutyPart, type OnDutyReason, onDutyRef, partsOverlap, verbatim } from "@playcode/core";
 import type { Db } from "../db/client";
 import { driveCheckIns, memberships, onDutyRequests, openingResponses, placementApplications, placementDrives, placementOpenings, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -228,8 +228,8 @@ export async function decideOnDuty(db: Db, auth: AuthContext, ids: string[], dec
       tenantId: r.tenantId,
       userId: r.userId,
       template: "placement",
-      title: decision.approve ? `On duty approved for ${r.date}` : `On duty not approved for ${r.date}`,
-      body: decision.approve ? `${r.purpose}. Download the letter for your class teacher if they ask for it.` : decision.note!.trim(),
+      title: decision.approve ? msg("On duty approved for {date}", { date: at(r.date, "Asia/Kolkata", { weekday: true }) }) : msg("On duty not approved for {date}", { date: at(r.date, "Asia/Kolkata", { weekday: true }) }),
+      body: decision.approve ? msg("{purpose}. Download the letter for your class teacher if they ask for it.", { purpose: r.purpose }) : verbatim(decision.note!.trim()),
       link: appLink("/play/on-duty"),
       dedupeKey: `on-duty:${r.id}:${decision.approve ? "approved" : "rejected"}`,
       sentBy: auth.userId,

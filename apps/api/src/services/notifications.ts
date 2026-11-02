@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { planHas } from "@playcode/core";
+import { isLocale, planHas, render, type Msg } from "@playcode/core";
 import { env } from "../env";
 import type { Db, DbOrTx } from "../db/client";
 import { notifications, tenants, users, type NotificationTemplate } from "../db/schema";
@@ -9,14 +9,15 @@ import { pushTo } from "./push";
 // Notification outbox. Every notification shows in the student's in-app
 // inbox; students with a phone number and WhatsApp configured also get a
 // WhatsApp message. A dedupe key makes each nudge idempotent, so the hourly
-// job can re-run safely.
+// job can re-run safely. Titles and bodies are messages (see msg() in
+// @playcode/core), written in each recipient's language as they're queued.
 
 export interface NewNotification {
   tenantId: string;
   userId: string;
   template: NotificationTemplate;
-  title: string;
-  body: string;
+  title: Msg;
+  body: Msg;
   link?: string;
   dedupeKey: string;
   sentBy?: string;
@@ -26,8 +27,9 @@ export interface NewNotification {
 export async function enqueue(db: DbOrTx, items: NewNotification[]): Promise<number> {
   if (items.length === 0) return 0;
   const userIds = [...new Set(items.map((i) => i.userId))];
-  const people = await db.select({ id: users.id, phone: users.phone, prefs: users.notifyPrefs }).from(users).where(inArray(users.id, userIds));
+  const people = await db.select({ id: users.id, phone: users.phone, prefs: users.notifyPrefs, locale: users.locale }).from(users).where(inArray(users.id, userIds));
   const whatsapp = new Map(people.map((p) => [p.id, Boolean(p.phone) && p.prefs.whatsapp !== false]));
+  const localeOf = new Map(people.map((p) => [p.id, isLocale(p.locale) ? p.locale : ("en" as const)]));
   // WhatsApp delivery is a plan feature; in-app messages always go out.
   const tenantIds = [...new Set(items.map((i) => i.tenantId))];
   const whatsappTenants = new Set((await db.select({ id: tenants.id, plan: tenants.plan }).from(tenants).where(inArray(tenants.id, tenantIds))).filter((t) => planHas(t.plan, "whatsapp")).map((t) => t.id));
@@ -39,6 +41,8 @@ export async function enqueue(db: DbOrTx, items: NewNotification[]): Promise<num
       .values(
         items.slice(i, i + 500).map((n) => ({
           ...n,
+          title: render(n.title, localeOf.get(n.userId) ?? "en"),
+          body: render(n.body, localeOf.get(n.userId) ?? "en"),
           link: n.link ?? null,
           sentBy: n.sentBy ?? null,
           channel: whatsapp.get(n.userId) && whatsappTenants.has(n.tenantId) && whatsappConfigured() ? ("whatsapp" as const) : ("none" as const),

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, gt, inArray, isNotNull, lte, sql } from "drizzle-orm";
-import { addDays, dueForReview, isoWeekKey, localDate, masteryFromRating } from "@playcode/core";
+import { addDays, dueForReview, isoWeekKey, localDate, masteryFromRating, msg, verbatim } from "@playcode/core";
 import type { Db } from "../db/client";
 import { assessmentAttempts, assessments, assignments, playerProfiles, questions, sessions, skillRatings, tenants, users } from "../db/schema";
 import { readinessFor } from "./analytics";
@@ -43,8 +43,8 @@ export async function runNudges(db: Db, now: Date, opts: { tenantId?: string; ig
           tenantId: tenant.id,
           userId: p.userId,
           template: "streak_at_risk",
-          title: `Keep your ${p.days}-day streak`,
-          body: "One question today keeps it alive. The daily challenge takes two minutes.",
+          title: msg("Keep your {n}-day streak", { n: p.days }),
+          body: msg("One question today keeps it alive. The daily challenge takes two minutes."),
           link: appLink("/play"),
           dedupeKey: `streak:${p.userId}:${today}`,
         });
@@ -70,8 +70,8 @@ export async function runNudges(db: Db, now: Date, opts: { tenantId?: string; ig
           tenantId: tenant.id,
           userId,
           template: "review_due",
-          title: `${due.length} skills are fading`,
-          body: "A five-minute review keeps them ready for placement tests.",
+          title: msg("{n} skills are fading", { n: due.length }),
+          body: msg("A five-minute review keeps them ready for placement tests."),
           link: appLink("/play"),
           dedupeKey: `review:${userId}:${isoWeekKey(today)}`,
         });
@@ -91,7 +91,7 @@ export async function runNudges(db: Db, now: Date, opts: { tenantId?: string; ig
         (await db.select({ userId: sessions.userId }).from(sessions).where(and(eq(sessions.assignmentId, a.id), isNotNull(sessions.finishedAt)))).map((s) => s.userId),
       );
       for (const userId of targeted.filter((u) => !done.has(u))) {
-        items.push({ tenantId: tenant.id, userId, template: "assignment_due", title: `Due soon: ${a.title}`, body: "This assignment closes within 24 hours.", link: appLink("/play"), dedupeKey: `assignment:${a.id}:${userId}` });
+        items.push({ tenantId: tenant.id, userId, template: "assignment_due", title: msg("Due soon: {title}", { title: a.title }), body: msg("This assignment closes within 24 hours."), link: appLink("/play"), dedupeKey: `assignment:${a.id}:${userId}` });
         summary.assignment++;
       }
     }
@@ -105,7 +105,7 @@ export async function runNudges(db: Db, now: Date, opts: { tenantId?: string; ig
       const targeted = await studentIdsInUnits(db, tenant.id, descendants(units, a.orgUnitIds));
       const started = new Set((await db.select({ userId: assessmentAttempts.userId }).from(assessmentAttempts).where(eq(assessmentAttempts.assessmentId, a.id))).map((s) => s.userId));
       for (const userId of targeted.filter((u) => !started.has(u))) {
-        items.push({ tenantId: tenant.id, userId, template: "test_open", title: `Test open: ${a.title}`, body: `${a.durationMinutes} minutes. Start before it closes.`, link: appLink(`/play/tests/${a.id}`), dedupeKey: `test:${a.id}:${userId}` });
+        items.push({ tenantId: tenant.id, userId, template: "test_open", title: msg("Test open: {title}", { title: a.title }), body: msg("{n} minutes. Start before it closes.", { n: a.durationMinutes }), link: appLink(`/play/tests/${a.id}`), dedupeKey: `test:${a.id}:${userId}` });
         summary.test++;
       }
     }
@@ -146,8 +146,8 @@ export async function sendAnnouncement(db: Db, args: { tenantId: string; actorId
       tenantId: args.tenantId,
       userId,
       template: "announcement" as const,
-      title: args.title,
-      body: args.message,
+      title: verbatim(args.title),
+      body: verbatim(args.message),
       link: appLink("/play"),
       dedupeKey: `announce:${batch}:${userId}`,
       sentBy: args.actorId,

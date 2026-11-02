@@ -55,6 +55,17 @@ export function timeAgo(iso: string | null): string {
   return `${Math.round(h / 24)} d ago`;
 }
 
+/** "5 minutes ago", "yesterday", in the reader's language. */
+export function relativeTime(iso: string, intl: string): string {
+  const ms = new Date(iso).getTime() - Date.now();
+  const rtf = new Intl.RelativeTimeFormat(intl, { numeric: "auto" });
+  const min = Math.round(ms / 60_000);
+  if (Math.abs(min) < 60) return rtf.format(Math.min(-1, min), "minute");
+  const h = Math.round(min / 60);
+  if (Math.abs(h) < 24) return rtf.format(h, "hour");
+  return rtf.format(Math.round(h / 24), "day");
+}
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }

@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { DRIVE_PREP_ORDER, DRIVE_PREP_STEPS, drivePrepProgress, isWeekday, type DrivePrep } from "@playcode/core";
+import { DRIVE_PREP_ORDER, DRIVE_PREP_STEPS, type DrivePrep, drivePrepProgress, isWeekday, msg } from "@playcode/core";
 import type { Db } from "../db/client";
 import { certificates, interviewExperiences, interviews, onDutyRequests, packs, placementApplications, placementDrives, users } from "../db/schema";
 import { notFound } from "../lib/errors";
@@ -123,8 +123,11 @@ export async function remindDrivePrep(db: Db, tenantId: string, driveId: string,
         tenantId,
         userId: s.id,
         template: "placement" as const,
-        title: s.missing.length === 1 ? `One step left before ${drive.company}: ${DRIVE_PREP_STEPS[s.missing[0]!].label.toLowerCase()}` : `${s.missing.length} steps left before the ${drive.company} drive`,
-        body: s.missing.map((k) => DRIVE_PREP_STEPS[k].label).join(", "),
+        title:
+          s.missing.length === 1
+            ? msg("One step left before {company}: {step}", { company: drive.company, step: msg(DRIVE_PREP_STEPS[s.missing[0]!].label) })
+            : msg("{n} steps left before the {company} drive", { n: s.missing.length, company: drive.company }),
+        body: msg("{steps}", { steps: s.missing.map((k) => msg(DRIVE_PREP_STEPS[k].label)) }),
         link: appLink(`/play/placements/${drive.id}/prep`),
         dedupeKey: `drive-prep:${drive.id}:${s.id}:${today}`,
         sentBy: actorId,

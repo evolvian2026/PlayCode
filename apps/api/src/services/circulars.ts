@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
-import { hasInstitutionScope, localDate } from "@playcode/core";
+import { at, hasInstitutionScope, localDate, type Msg, msg, verbatim } from "@playcode/core";
 import type { Db, DbOrTx } from "../db/client";
 import { circularAcks, circulars, tenants, users } from "../db/schema";
 import { audit } from "../lib/audit";
@@ -46,7 +46,7 @@ async function loadForStaff(db: Db, auth: AuthContext, id: string) {
   return c;
 }
 
-function tell(db: DbOrTx, c: Row, userIds: string[], title: string, body: string, dedupe: (uid: string) => string) {
+function tell(db: DbOrTx, c: Row, userIds: string[], title: Msg, body: Msg, dedupe: (uid: string) => string) {
   return enqueue(db, userIds.map((userId) => ({ tenantId: c.tenantId, userId, template: "circular" as const, title, body, link: appLink("/play/circulars"), dedupeKey: dedupe(userId) })));
 }
 
@@ -65,7 +65,9 @@ export async function createCircular(db: Db, auth: AuthContext, input: CircularI
     .values({ tenantId: auth.tenantId!, createdBy: auth.userId, title: input.title, body: input.body, unitIds: input.unitIds, requireAck: input.requireAck, ackBy: input.requireAck ? input.ackBy : null, createdAt: now })
     .returning();
   const audience = await audienceOf(db, c!);
-  await tell(db, c!, audience, `Circular: ${c!.title}`, c!.requireAck ? `${excerpt(c!.body)} Please acknowledge it${c!.ackBy ? ` by ${c!.ackBy}` : ""}.` : excerpt(c!.body), (uid) => `circular:${c!.id}:${uid}`);
+  // The circular's own words go as written; only the request to acknowledge is translated.
+  const ask = c!.requireAck ? (c!.ackBy ? msg("Please acknowledge it by {date}.", { date: at(c!.ackBy, "Asia/Kolkata") }) : msg("Please acknowledge it.")) : null;
+  await tell(db, c!, audience, msg("Circular: {title}", { title: c!.title }), ask ? msg("{text} {ask}", { text: excerpt(c!.body), ask }) : verbatim(excerpt(c!.body)), (uid) => `circular:${c!.id}:${uid}`);
   void processOutbox(db, now).catch(() => {});
   await audit(db, { tenantId: c!.tenantId, actorId: auth.userId, action: "circular.create", target: c!.id, data: { students: audience.length } });
   return { ...summary(c!), audience: audience.length };
@@ -109,7 +111,14 @@ export async function remindCircular(db: Db, auth: AuthContext, id: string, now:
   if (c.lastRemindedAt && now.getTime() - c.lastRemindedAt.getTime() < REMIND_EVERY_MS) throw conflict("reminded", "Students were reminded less than 12 hours ago");
   const done = new Set((await db.select({ userId: circularAcks.userId }).from(circularAcks).where(eq(circularAcks.circularId, c.id))).map((a) => a.userId));
   const pending = (await audienceOf(db, c)).filter((u) => !done.has(u));
-  await tell(db, c, pending, `Reminder: ${c.title}`, `Please read and acknowledge this circular${c.ackBy ? ` by ${c.ackBy}` : ""}.`, (uid) => `circular-remind:${c.id}:${now.getTime()}:${uid}`);
+  await tell(
+    db,
+    c,
+    pending,
+    msg("Reminder: {title}", { title: c.title }),
+    c.ackBy ? msg("Please read and acknowledge this circular by {date}.", { date: at(c.ackBy, "Asia/Kolkata") }) : msg("Please read and acknowledge this circular."),
+    (uid) => `circular-remind:${c.id}:${now.getTime()}:${uid}`,
+  );
   await db.update(circulars).set({ lastRemindedAt: now }).where(eq(circulars.id, c.id));
   void processOutbox(db, now).catch(() => {});
   return { reminded: pending.length };
@@ -168,7 +177,7 @@ export async function circularReminders(db: Db, now: Date) {
     const tomorrow = localDate(new Date(now.getTime() + 86_400_000), timeZone);
     if (c.ackBy !== tomorrow) continue;
     const done = new Set((await db.select({ userId: circularAcks.userId }).from(circularAcks).where(eq(circularAcks.circularId, c.id))).map((a) => a.userId));
-    sent += await tell(db, c, (await audienceOf(db, c)).filter((u) => !done.has(u)), `Due tomorrow: ${c.title}`, "Please read and acknowledge this circular.", (uid) => `circular-due:${c.id}:${uid}`);
+    sent += await tell(db, c, (await audienceOf(db, c)).filter((u) => !done.has(u)), msg("Due tomorrow: {title}", { title: c.title }), msg("Please read and acknowledge this circular."), (uid) => `circular-due:${c.id}:${uid}`);
   }
   return sent;
 }

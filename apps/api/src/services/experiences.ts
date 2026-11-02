@@ -1,3 +1,4 @@
+import { msg, verbatim } from "@playcode/core";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { interviewExperiences, placementApplications, placementDrives, users, type ExperienceRound } from "../db/schema";
@@ -150,8 +151,8 @@ export async function reviewExperience(db: Db, auth: { tenantId: string; userId:
       tenantId: e.tenantId,
       userId: e.userId,
       template: "placement",
-      title: decision.publish ? `Your ${drive!.company} interview experience is live` : `Please revise your ${drive!.company} interview experience`,
-      body: decision.publish ? "Thank you: juniors and batchmates can read it now." : decision.note!.trim(),
+      title: decision.publish ? msg("Your {company} interview experience is live", { company: drive!.company }) : msg("Please revise your {company} interview experience", { company: drive!.company }),
+      body: decision.publish ? msg("Thank you: juniors and batchmates can read it now.") : verbatim(decision.note!.trim()),
       link: appLink("/play/experiences?write=1"),
       // One message per decision on each version, so a later change of mind still reaches the author.
       dedupeKey: `experience:${e.id}:${e.updatedAt.getTime()}:${decision.publish ? "live" : "revise"}`,
