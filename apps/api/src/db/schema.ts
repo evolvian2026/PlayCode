@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Answer, BenchmarkValues, DataTable, InterviewContext, InterviewTrack, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, ExitItem, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, OnDutyPart, OnDutyReason, OnDutyStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
+import type { Answer, BenchmarkValues, DataTable, InterviewContext, InterviewTrack, NotifyPrefs, GdSpeaker, GdParticipation, TrainingKind, OutcomeKind, GuardianRelation, PlacementPolicy, Panel, DocumentType, HelpCategory, RecordField, ResumeEntryKind, InterviewFeedbackDimension, CompanyStage, InteractionKind, OpeningKind, OpeningResponse, JoiningStatus, DriveAudience, OfferDetails, RecruiterDimension, ReturnIntention, ResumeSection, ReviewVerdict, ExitItem, IntroPurpose, PeerTrack, PeerMode, PeerWindow, PeerRating, OnDutyPart, OnDutyReason, OnDutyStatus, LiveStatus, PlanDay, Verdict, CodeLanguage, CompanyType, Delivery, DisplayPrefs, Division, PlacementCriteria, QuestionBody, QuestionType, Role, StudentResponse } from "@playcode/core";
 
 // Every tenant-owned table carries tenant_id. Rows with tenant_id = null in
 // content tables (skills, questions, packs) are global PlayCode content.
@@ -90,7 +90,7 @@ export const users = pgTable(
     rollNo: text("roll_no"),
     /** E.164 phone number for WhatsApp nudges (optional). */
     phone: text("phone"),
-    notifyPrefs: jsonb("notify_prefs").$type<{ whatsapp?: boolean; push?: boolean }>().notNull().default({}),
+    notifyPrefs: jsonb("notify_prefs").$type<NotifyPrefs>().notNull().default({}),
     /** Interface language: "en", "hi" or "ta". */
     locale: text("locale").$type<"en" | "hi" | "ta">().notNull().default("en"),
     /** Text size, font, motion and contrast (packages/core display.ts). */
@@ -809,7 +809,7 @@ export const contestSubmissions = pgTable(
 
 // ---------- Notifications ----------
 
-export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest" | "squad" | "doubt" | "interview_slot" | "class_test" | "training" | "circular";
+export type NotificationTemplate = "streak_at_risk" | "assignment_due" | "test_open" | "duel_invite" | "announcement" | "placement" | "review_due" | "talent_invite" | "contest" | "squad" | "doubt" | "interview_slot" | "class_test" | "training" | "circular" | "weekly_summary";
 
 export const notifications = pgTable(
   "notifications",
@@ -832,6 +832,8 @@ export const notifications = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }),
     /** When it went out as a web push notification (null: not pushed). */
     pushedAt: timestamp("pushed_at", { withTimezone: true }),
+    /** Held for the student's quiet hours: push and WhatsApp wait until then (the inbox has it already). */
+    deliverAfter: timestamp("deliver_after", { withTimezone: true }),
   },
   (t) => [index("notifications_user_idx").on(t.userId, t.createdAt), index("notifications_status_idx").on(t.status)],
 );

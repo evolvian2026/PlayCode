@@ -1,0 +1,1 @@
+ALTER TABLE "notifications" ADD COLUMN "deliver_after" timestamp with time zone;

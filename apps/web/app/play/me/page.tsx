@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { DIVISION_LABELS } from "@playcode/core";
+import { DEFAULT_QUIET_HOURS, DIVISION_LABELS, NOTIFY_CATEGORIES, NOTIFY_ORDER, type NotifyCategory, type QuietHours } from "@playcode/core";
 import { signOut, useMe } from "@/components/Auth";
 import { DisplayCard } from "@/components/DisplayCard";
 import { GuardianCard } from "@/components/GuardianCard";
@@ -69,44 +69,109 @@ function LanguageCard() {
   );
 }
 
-function WhatsAppSettings() {
+type Settings = { phone: string | null; whatsapp: boolean; muted: NotifyCategory[]; quiet: QuietHours | null };
+
+const HOURS = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, "0")}:00`);
+
+function NotificationSettings() {
   const t = useT();
   const [phone, setPhone] = useState("");
-  const [enabled, setEnabled] = useState(true);
+  const [s, setS] = useState<Settings | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   useEffect(() => {
-    void api<{ phone: string | null; whatsapp: boolean }>("/student/settings").then((r) => {
+    void api<Settings>("/student/settings").then((r) => {
       setPhone(r.phone ?? "");
-      setEnabled(r.whatsapp);
+      setS(r);
     });
   }, []);
-  async function save(next: { phone?: string | null; whatsapp?: boolean }) {
+  async function save(next: Partial<Settings>) {
     try {
-      const r = await api<{ phone: string | null; whatsapp: boolean }>("/student/settings", { method: "PUT", body: next });
+      const r = await api<Settings>("/student/settings", { method: "PUT", body: next });
       setPhone(r.phone ?? "");
-      setEnabled(r.whatsapp);
+      setS(r);
       setMsg(t("Saved"));
     } catch (e) {
       setMsg(errorMessage(e));
     }
   }
+  if (!s) return null;
+  const quiet = s.quiet ?? DEFAULT_QUIET_HOURS;
   return (
     <div className="card stack">
-      <h2 style={{ margin: 0 }}>{t("Reminders")}</h2>
+      <h2 style={{ margin: 0 }}>{t("Notifications")}</h2>
       <p className="muted small" style={{ margin: 0 }}>
-        {t("Streak, assignment and test reminders always appear in Messages. Add a number to get them on WhatsApp too.")}
+        {t("Everything appears in Messages. Choose what also reaches your phone, on WhatsApp and as notifications.")}
       </p>
       <div className="row">
-        <input aria-label="WhatsApp number" placeholder="+91 98765 43210" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <input aria-label={t("WhatsApp number")} placeholder="+91 98765 43210" value={phone} onChange={(e) => setPhone(e.target.value)} />
         <button className="btn small" onClick={() => save({ phone: phone.trim() || null })}>
           {t("Save")}
         </button>
       </div>
       <label className="row" style={{ fontWeight: 500, gap: 8 }}>
-        <input type="checkbox" checked={enabled} onChange={(e) => save({ whatsapp: e.target.checked })} style={{ width: "auto" }} />
+        <input type="checkbox" checked={s.whatsapp} onChange={(e) => save({ whatsapp: e.target.checked })} style={{ width: "auto" }} />
         {t("Send me WhatsApp reminders")}
       </label>
-      {msg && <span className="small muted">{msg}</span>}
+      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
+        <legend className="small" style={{ fontWeight: 600, marginBottom: 6 }}>
+          {t("What reaches your phone")}
+        </legend>
+        {NOTIFY_ORDER.map((c) => {
+          const info = NOTIFY_CATEGORIES[c];
+          const on = info.locked || !s.muted.includes(c);
+          return (
+            <label key={c} className="row" style={{ gap: 8, alignItems: "flex-start" }}>
+              <input
+                type="checkbox"
+                checked={on}
+                disabled={info.locked}
+                onChange={(e) => save({ muted: e.target.checked ? s.muted.filter((m) => m !== c) : [...s.muted, c] })}
+                style={{ width: "auto", marginTop: 3 }}
+              />
+              <span>
+                <b>{t(info.label)}</b>
+                <span className="muted small" style={{ display: "block" }}>
+                  {t(info.detail)}
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </fieldset>
+      <label className="row" style={{ fontWeight: 500, gap: 8 }}>
+        <input type="checkbox" checked={s.quiet !== null} onChange={(e) => save({ quiet: e.target.checked ? DEFAULT_QUIET_HOURS : null })} style={{ width: "auto" }} />
+        {t("Quiet hours: hold phone notifications overnight")}
+      </label>
+      {s.quiet && (
+        <div className="row" style={{ gap: 8 }}>
+          <label className="row small" style={{ gap: 6 }}>
+            {t("From")}
+            <select value={quiet.from} onChange={(e) => save({ quiet: { ...quiet, from: e.target.value } })} style={{ width: "auto" }}>
+              {HOURS.map((h) => (
+                <option key={h}>{h}</option>
+              ))}
+            </select>
+          </label>
+          <label className="row small" style={{ gap: 6 }}>
+            {t("Until")}
+            <select value={quiet.to} onChange={(e) => save({ quiet: { ...quiet, to: e.target.value } })} style={{ width: "auto" }}>
+              {HOURS.map((h) => (
+                <option key={h}>{h}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      {s.quiet && (
+        <p className="muted small" style={{ margin: 0 }}>
+          {t("Anything that arrives in quiet hours reaches your phone at {to}. Messages still shows it straight away.", { to: quiet.to })}
+        </p>
+      )}
+      {msg && (
+        <span className="small muted" role="status">
+          {msg}
+        </span>
+      )}
     </div>
   );
 }
@@ -298,7 +363,7 @@ export default function MePage() {
 
       <PushCard />
 
-      <WhatsAppSettings />
+      <NotificationSettings />
 
       <PrivacyCard />
 

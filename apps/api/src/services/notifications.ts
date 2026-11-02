@@ -1,5 +1,5 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { isLocale, planHas, render, type Msg } from "@playcode/core";
+import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { isLocale, planHas, quietHoursOf, quietUntil, reachesPhone, render, type Msg } from "@playcode/core";
 import { env } from "../env";
 import type { Db, DbOrTx } from "../db/client";
 import { notifications, tenants, users, type NotificationTemplate } from "../db/schema";
@@ -89,22 +89,35 @@ export async function sendWhatsApp(phone: string, template: string, params: stri
   if (!res.ok) throw new Error(`WhatsApp API ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
 
-/** Deliver pending notifications. Run every minute (pnpm notify:send) or after enqueueing. */
+/**
+ * Deliver pending notifications by push and WhatsApp. Run every minute (pnpm
+ * notify:send) or after enqueueing. The inbox already has them; what reaches
+ * the phone follows the student's settings: kinds they muted stay in the
+ * inbox, and during their quiet hours a message waits until the hours end.
+ */
 export async function processOutbox(db: Db, now: Date, limit = 200, fetchImpl: typeof fetch = fetch) {
   const pending = await db
-    .select({ n: notifications, phone: users.phone, prefs: users.notifyPrefs, nudgesOff: sql<boolean>`coalesce((${tenants.settings}->>'nudges')::boolean = false, false)` })
+    .select({ n: notifications, phone: users.phone, prefs: users.notifyPrefs, timeZone: tenants.timeZone, nudgesOff: sql<boolean>`coalesce((${tenants.settings}->>'nudges')::boolean = false, false)` })
     .from(notifications)
     .innerJoin(users, eq(users.id, notifications.userId))
     .innerJoin(tenants, eq(tenants.id, notifications.tenantId))
-    .where(eq(notifications.status, "pending"))
+    .where(and(eq(notifications.status, "pending"), or(isNull(notifications.deliverAfter), lte(notifications.deliverAfter, now))))
     .orderBy(asc(notifications.createdAt))
     .limit(limit);
-  const summary = { sent: 0, skipped: 0, failed: 0, pushed: 0 };
-  for (const { n, phone, prefs, nudgesOff } of pending) {
+  const summary = { sent: 0, skipped: 0, failed: 0, pushed: 0, held: 0 };
+  for (const { n, phone, prefs, timeZone, nudgesOff } of pending) {
     let status: "sent" | "skipped" | "failed" = "skipped";
     let error: string | null = null;
-    // Messages from staff always go out; automatic nudges respect the institution's setting.
-    const allowed = !(nudgesOff && n.template !== "announcement" && n.template !== "placement");
+    // Messages from staff always go out; automatic nudges respect the institution's setting, and the student's own.
+    const allowed = !(nudgesOff && n.template !== "announcement" && n.template !== "placement") && reachesPhone(prefs, n.template);
+    if (allowed) {
+      const until = quietUntil(now, timeZone, quietHoursOf(prefs));
+      if (until) {
+        await db.update(notifications).set({ deliverAfter: until }).where(eq(notifications.id, n.id));
+        summary.held++;
+        continue;
+      }
+    }
     // Push to the student's devices too, unless they turned it off; it costs nothing to send.
     let pushedAt: Date | null = null;
     if (allowed && prefs.push !== false && (await pushTo(db, [n.userId], () => ({ title: n.title, body: n.body, link: n.link }), now)).size) {

@@ -1,3 +1,4 @@
+import { NOTIFY_CATEGORIES, NOTIFY_ORDER, quietHoursOf, type NotifyCategory } from "@playcode/core";
 import { desc, eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -139,23 +140,41 @@ export async function engageRoutes(app: FastifyInstance) {
   }));
   app.get("/student/notifications", { preHandler: requirePermission("practice.play") }, async (req) => inbox(db, req.auth.userId));
   app.post("/student/notifications/read", { preHandler: requirePermission("practice.play") }, async (req) => markRead(db, req.auth.userId, app.now()));
-  app.get("/student/settings", { preHandler: requirePermission("practice.play") }, async (req) => {
-    const [u] = await db.select({ phone: users.phone, prefs: users.notifyPrefs, locale: users.locale }).from(users).where(eq(users.id, req.auth.userId));
-    return { phone: u?.phone ?? null, whatsapp: u?.prefs.whatsapp !== false, locale: u?.locale ?? "en" };
-  });
+  // What the student sees: their channels, the kinds of message they muted, and their quiet hours.
+  const settingsOf = async (userId: string) => {
+    const [u] = await db.select({ phone: users.phone, prefs: users.notifyPrefs, locale: users.locale }).from(users).where(eq(users.id, userId));
+    const prefs = u?.prefs ?? {};
+    return { phone: u?.phone ?? null, whatsapp: prefs.whatsapp !== false, locale: u?.locale ?? "en", muted: prefs.muted ?? [], quiet: quietHoursOf(prefs) };
+  };
+  app.get("/student/settings", { preHandler: requirePermission("practice.play") }, async (req) => settingsOf(req.auth.userId));
   app.put("/student/settings", { preHandler: requirePermission("practice.play") }, async (req) => {
-    const body = parse(z.object({ phone: z.string().regex(/^\+?\d[\d\s-]{8,16}$/).nullable().optional(), whatsapp: z.boolean().optional(), locale: z.enum(["en", "hi", "ta"]).optional() }), req.body);
+    const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a time like 22:00");
+    const body = parse(
+      z.object({
+        phone: z.string().regex(/^\+?\d[\d\s-]{8,16}$/).nullable().optional(),
+        whatsapp: z.boolean().optional(),
+        locale: z.enum(["en", "hi", "ta"]).optional(),
+        // The placement cell's messages can't be muted.
+        muted: z.array(z.enum(NOTIFY_ORDER.filter((c) => !NOTIFY_CATEGORIES[c].locked) as [NotifyCategory, ...NotifyCategory[]])).max(5).optional(),
+        quiet: z.object({ from: time, to: time }).nullable().optional(),
+      }),
+      req.body,
+    );
     const set: Partial<typeof users.$inferInsert> = {};
     if (body.phone !== undefined) set.phone = body.phone ? body.phone.replace(/[^\d+]/g, "") : null;
-    if (body.whatsapp !== undefined) {
+    if (body.whatsapp !== undefined || body.muted !== undefined || body.quiet !== undefined) {
       const [cur] = await db.select({ prefs: users.notifyPrefs }).from(users).where(eq(users.id, req.auth.userId));
-      set.notifyPrefs = { ...cur?.prefs, whatsapp: body.whatsapp };
+      set.notifyPrefs = {
+        ...cur?.prefs,
+        ...(body.whatsapp !== undefined ? { whatsapp: body.whatsapp } : {}),
+        ...(body.muted !== undefined ? { muted: [...new Set(body.muted)] } : {}),
+        ...(body.quiet !== undefined ? { quiet: body.quiet } : {}),
+      };
     }
     if (body.locale) set.locale = body.locale;
     if (Object.keys(set).length) await db.update(users).set(set).where(eq(users.id, req.auth.userId));
     if (body.whatsapp !== undefined) await recordConsent(db, { tenantId: req.auth.tenantId, userId: req.auth.userId, purpose: "whatsapp", granted: body.whatsapp, source: "settings", now: app.now() });
-    const [u] = await db.select({ phone: users.phone, prefs: users.notifyPrefs, locale: users.locale }).from(users).where(eq(users.id, req.auth.userId));
-    return { phone: u?.phone ?? null, whatsapp: u?.prefs.whatsapp !== false, locale: u?.locale ?? "en" };
+    return settingsOf(req.auth.userId);
   });
 
   // ---------- Web push (any signed-in user, on each of their devices) ----------

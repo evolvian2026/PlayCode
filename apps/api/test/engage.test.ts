@@ -112,7 +112,7 @@ describe("nudges and notifications", () => {
 
   it("lets students manage WhatsApp and turns automatic nudges off per institution", async () => {
     const s = await student("CSE 2027 - B");
-    expect((await t.put(s, "/student/settings", { phone: "+91 90000 11111", whatsapp: false })).body).toEqual({ phone: "+919000011111", whatsapp: false, locale: "en" });
+    expect((await t.put(s, "/student/settings", { phone: "+91 90000 11111", whatsapp: false })).body).toEqual({ phone: "+919000011111", whatsapp: false, locale: "en", muted: [], quiet: { from: "22:00", to: "07:00" } });
     expect((await t.put(s, "/student/settings", { phone: "call me" })).status).toBe(400);
     // Interface language is saved on the account and comes back with /me.
     expect((await t.put(s, "/student/settings", { locale: "hi" })).body.locale).toBe("hi");
