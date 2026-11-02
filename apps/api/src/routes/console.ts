@@ -24,6 +24,7 @@ import { gdForStaff, gdsFor } from "../services/gd";
 import { writingFor, writingForStaff } from "../services/writing";
 import { jamFor, jamForStaff } from "../services/jam";
 import { drillsFor } from "../services/speaking-drills";
+import { introForStaff } from "../services/self-intro";
 import { createPracticeTask, deletePracticeTask, practiceTaskForStaff, practiceTasksForStaff } from "../services/practice-tasks";
 import { interviewForStaff, interviewsFor } from "../services/interviews";
 import { assertUnitsInScope, descendants, scopedUnitIds, studentIdsInUnits, tenantUnits } from "../services/scope";
@@ -248,6 +249,12 @@ export async function consoleRoutes(app: FastifyInstance) {
   });
 
   // A student's resume, for the placement cell sending CVs to companies.
+  app.get("/students/:id/intro", { preHandler: anyAnalytics }, async (req) => {
+    const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+    if (!(await resolveScope(req)).studentIds.includes(id)) throw notFound("Student");
+    return introForStaff(db, id);
+  });
+
   app.get("/students/:id/resume.pdf", { preHandler: anyAnalytics }, async (req, reply) => {
     const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
     if (!(await resolveScope(req)).studentIds.includes(id)) throw notFound("Student");

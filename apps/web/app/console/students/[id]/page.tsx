@@ -18,6 +18,37 @@ async function downloadResume(id: string, name: string) {
   a.click();
 }
 
+/** The student's "tell me about yourself" script and how their practice is going, for mentors and trainers. */
+function SelfIntro({ id }: { id: string }) {
+  const { data } = useApi<{ intro: { targetRole: string; script: string; seconds: number; draftedAt: string | null; updatedAt: string; practice: { runs: number; best: number | null; last: { coverage: number; seconds: number; wpm: number; hidden: boolean; at: string } | null } } | null }>(
+    `/console/students/${id}/intro`,
+  );
+  if (!data) return null;
+  const intro = data.intro;
+  return (
+    <div className="card stack">
+      <h2 style={{ margin: 0 }}>Self-introduction</h2>
+      {!intro ? (
+        <p className="muted small" style={{ margin: 0 }}>
+          Not written yet. Students find &quot;Tell me about yourself&quot; on their profile.
+        </p>
+      ) : (
+        <>
+          <div className="small muted">
+            {intro.targetRole ? `For ${intro.targetRole} roles · ` : ""}about {intro.seconds} seconds · {!intro.draftedAt ? "written by the student" : new Date(intro.updatedAt) > new Date(intro.draftedAt) ? "drafted from their profile, then edited" : "drafted from their profile"} · updated {timeAgo(intro.updatedAt)}
+          </div>
+          <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{intro.script}</p>
+          <div className="small">
+            {intro.practice.runs === 0
+              ? "Not practised aloud yet."
+              : `Practised ${intro.practice.runs} ${intro.practice.runs === 1 ? "time" : "times"}, best ${intro.practice.best}% of the script. Last: ${intro.practice.last!.coverage}% in ${intro.practice.last!.seconds} seconds at ${intro.practice.last!.wpm} words a minute${intro.practice.last!.hidden ? ", without looking" : ""}, ${timeAgo(intro.practice.last!.at)}.`}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function StudentPage() {
   const { id } = useParams<{ id: string }>();
   const { data, error, loading, reload } = useApi<StudentDetail>(`/console/students/${id}`);
@@ -113,6 +144,7 @@ export default function StudentPage() {
           </div>
         </div>
       )}
+      <SelfIntro id={id} />
       <div className="card stack">
         <h2 style={{ margin: 0 }}>Skill mastery</h2>
         <div className="table-wrap">

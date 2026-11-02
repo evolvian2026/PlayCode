@@ -1028,7 +1028,7 @@ export const erasureRequests = pgTable(
 
 // ---------- AI ----------
 
-export type AiFeature = "coach_hint" | "question_draft" | "snapshot_review" | "mock_interview" | "weekly_insights" | "code_review" | "group_discussion" | "writing_feedback" | "jam_feedback";
+export type AiFeature = "coach_hint" | "question_draft" | "snapshot_review" | "mock_interview" | "weekly_insights" | "code_review" | "group_discussion" | "writing_feedback" | "jam_feedback" | "intro_draft";
 
 /** Token use per call, for cost reporting per institution. */
 export const aiUsage = pgTable(
@@ -1835,6 +1835,27 @@ export const practiceTasks = pgTable(
   },
   (t) => [index("practice_tasks_tenant_idx").on(t.tenantId, t.closeAt)],
 );
+
+/** Practice runs of a self-introduction: counts and the latest and best, not the transcripts. */
+export interface IntroPracticeStats {
+  runs: number;
+  best: number | null;
+  last: { coverage: number; seconds: number; wpm: number; fillersPer100Words: number; hidden: boolean; at: string } | null;
+}
+
+/** A student's "tell me about yourself" script, one per student. */
+export const selfIntros = pgTable("self_intros", {
+  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  targetRole: text("target_role").notNull().default(""),
+  /** Anything else the student wants mentioned (a hobby, a result, why the role). */
+  extra: text("extra").notNull().default(""),
+  script: text("script").notNull().default(""),
+  /** When the AI last drafted the script; the student may have edited it since. */
+  draftedAt: timestamp("drafted_at", { withTimezone: true }),
+  practice: jsonb("practice").$type<IntroPracticeStats>().notNull().default({ runs: 0, best: null, last: null }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // ---------- Question papers ----------
 

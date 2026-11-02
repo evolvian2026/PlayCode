@@ -21,6 +21,7 @@ export * from "./speech";
 export * from "./jam";
 export * from "./speaking-drills";
 export * from "./practice-tasks";
+export * from "./self-intro";
 export * from "./benchmarks";
 export * from "./contest";
 export * from "./study-plan";

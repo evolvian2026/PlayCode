@@ -302,6 +302,14 @@ export default function MePage() {
         <Icon name="arrow" />
       </Link>
 
+      <Link href="/play/intro" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Tell me about yourself")}</b>
+          <div className="small muted">{tr("Your one-minute introduction for interviews: write or draft it, then practise saying it")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
       <Link href="/play/jam" className="card spread" style={{ color: "inherit" }}>
         <div>
           <b>{tr("Speaking practice")}</b>

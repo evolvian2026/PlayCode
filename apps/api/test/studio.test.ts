@@ -12,6 +12,7 @@ const fake: AiProvider = {
   gdScorecard: async () => { throw new Error("not used"); },
   writingFeedback: async () => { throw new Error("not used"); },
   jamFeedback: async () => { throw new Error("not used"); },
+  introDraft: async () => { throw new Error("not used"); },
   async coachHint() {
     throw new Error("not used");
   },

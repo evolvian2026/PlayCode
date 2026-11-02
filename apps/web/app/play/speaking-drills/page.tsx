@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { DRILL_BANDS, DRILL_KINDS, drillBand, matchDrill, pickDrillSentences, type DrillKind, type DrillMatch, type DrillSentence } from "@playcode/core";
 import { Icon } from "@/components/Icon";
+import { MatchedWords as Words } from "@/components/MatchedWords";
 import { Bar, ErrorBox, Loading, useDates } from "@/components/ui";
 import { api, errorMessage, useApi } from "@/lib/api";
 import { useT } from "@/lib/i18n";
@@ -27,28 +28,6 @@ interface Sitting {
 /** Longest a single answer may run before the microphone stops by itself. */
 const MAX_ANSWER_MS = 20_000;
 const tone = (n: number) => (n >= 85 ? "good" : n >= 60 ? "warn" : "bad");
-
-/** The sentence with missed words struck through. */
-function Words({ words }: { words: DrillMatch["words"] }) {
-  const t = useT();
-  return (
-    <span>
-      {words.map((w, i) => (
-        <span key={i}>
-          {i > 0 && " "}
-          {w.heard ? (
-            w.word
-          ) : (
-            <span style={{ color: "var(--bad-ink)", textDecoration: "line-through" }}>
-              {w.word}
-              <span className="sr-only"> {t("(missed)")}</span>
-            </span>
-          )}
-        </span>
-      ))}
-    </span>
-  );
-}
 
 function Result({ sitting, onAgain, onBack }: { sitting: Sitting; onAgain: () => void; onBack: () => void }) {
   const t = useT();

@@ -5,6 +5,7 @@ import { authenticate, parse, requirePermission, tenantOf } from "../lib/http";
 import { getMyJam, jamHome, submitJam } from "../services/jam";
 import { drillsHome, getMyDrill, submitDrill } from "../services/speaking-drills";
 import { myPracticeTasks } from "../services/practice-tasks";
+import { draftIntro, myIntro, practiseIntro, saveIntro } from "../services/self-intro";
 import { getMyWriting, submitWriting, writingHome } from "../services/writing";
 
 /** Written and spoken English practice in the student app. */
@@ -43,6 +44,18 @@ export async function writingRoutes(app: FastifyInstance) {
     );
     return submitJam(db, ctx(req), body);
   });
+
+  // "Tell me about yourself": the script, an AI draft from the profile, and spoken run-throughs.
+  const introFields = z.object({
+    targetRole: z.string().trim().max(80).default(""),
+    extra: z.string().trim().max(600).default(""),
+  });
+  app.get("/student/intro", async (req) => myIntro(db, ctx(req)));
+  app.put("/student/intro", async (req) => saveIntro(db, ctx(req), parse(introFields.extend({ script: z.string().trim().max(3000, "Keep it to about a minute") }), req.body)));
+  app.post("/student/intro/draft", async (req) => draftIntro(db, ctx(req), parse(introFields, req.body)));
+  app.post("/student/intro/practice", async (req) =>
+    practiseIntro(db, ctx(req), parse(z.object({ heard: z.string().max(4000), spokenMs: z.number().int().min(1000).max(240_000), hidden: z.boolean().default(false) }), req.body)),
+  );
 
   // Speaking and writing practice set by trainers, done through the pages above.
   app.get("/student/practice-tasks", async (req) => myPracticeTasks(db, ctx(req)));

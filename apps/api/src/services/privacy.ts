@@ -86,6 +86,7 @@ import {
   writingAttempts,
   jamAttempts,
   speakingDrills,
+  selfIntros,
   type ConsentPurpose,
 } from "../db/schema";
 import { ticketsForExport } from "./helpdesk";
@@ -270,6 +271,7 @@ export async function exportUserData(db: Db, userId: string, now: Date) {
     writing: await db.select({ task: writingAttempts.taskId, text: writingAttempts.text, words: writingAttempts.words, timeMs: writingAttempts.timeMs, feedback: writingAttempts.feedback, at: writingAttempts.createdAt }).from(writingAttempts).where(eq(writingAttempts.userId, userId)),
     speaking: await db.select({ topic: jamAttempts.topicId, transcript: jamAttempts.transcript, spokenMs: jamAttempts.spokenMs, words: jamAttempts.words, feedback: jamAttempts.feedback, at: jamAttempts.createdAt }).from(jamAttempts).where(eq(jamAttempts.userId, userId)),
     speakingDrills: await db.select({ kind: speakingDrills.kind, items: speakingDrills.items, accuracy: speakingDrills.accuracy, wpm: speakingDrills.wpm, at: speakingDrills.createdAt }).from(speakingDrills).where(eq(speakingDrills.userId, userId)),
+    selfIntroduction: (await db.select({ targetRole: selfIntros.targetRole, extra: selfIntros.extra, script: selfIntros.script, practice: selfIntros.practice, updatedAt: selfIntros.updatedAt }).from(selfIntros).where(eq(selfIntros.userId, userId)))[0] ?? null,
     notifications: await db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(notifications.createdAt),
     consents: (await consentState(db, userId)).history,
     erasureRequests: await db.select().from(erasureRequests).where(eq(erasureRequests.userId, userId)),
@@ -369,6 +371,7 @@ export async function resolveErasure(
     await tx.delete(writingAttempts).where(eq(writingAttempts.userId, user.id));
     await tx.delete(jamAttempts).where(eq(jamAttempts.userId, user.id));
     await tx.delete(speakingDrills).where(eq(speakingDrills.userId, user.id));
+    await tx.delete(selfIntros).where(eq(selfIntros.userId, user.id));
     await tx.delete(paperResults).where(eq(paperResults.userId, user.id));
     await tx.delete(interviewExperiences).where(eq(interviewExperiences.userId, user.id));
     await tx.delete(mentoringMeetings).where(eq(mentoringMeetings.studentId, user.id));

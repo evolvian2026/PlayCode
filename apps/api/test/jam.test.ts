@@ -25,6 +25,7 @@ const fake: AiProvider = {
   gdTurn: notUsed,
   gdScorecard: notUsed,
   writingFeedback: notUsed,
+  introDraft: notUsed,
   async jamFeedback(input) {
     calls.push(input);
     return {

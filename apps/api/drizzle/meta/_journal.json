@@ -526,6 +526,13 @@
       "when": 1793621655642,
       "tag": "0074_practice_tasks",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1793622695265,
+      "tag": "0075_self_intros",
+      "breakpoints": true
     }
   ]
 }
