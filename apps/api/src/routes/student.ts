@@ -214,7 +214,7 @@ export async function studentRoutes(app: FastifyInstance) {
     return takeHint(db, ctxOf(req), id, body.questionId);
   });
 
-  app.get("/coach", async (req) => ({ available: await coachAvailable(db, tenantOf(req)) }));
+  app.get("/coach", async (req) => ({ available: await coachAvailable(db, tenantOf(req), app.now()) }));
   app.post("/sessions/:id/questions/:questionId/review", async (req) => {
     const { id, questionId } = parse(z.object({ id: z.string().uuid(), questionId: z.string().max(100) }), req.params);
     return reviewMyCode(db, ctxOf(req), id, questionId);
