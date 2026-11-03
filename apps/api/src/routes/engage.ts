@@ -1,0 +1,213 @@
+import { NOTIFY_CATEGORIES, NOTIFY_ORDER, quietHoursOf, type NotifyCategory } from "@playcode/core";
+import { desc, eq, sql } from "drizzle-orm";
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { db } from "../db/client";
+import { competitions, notifications, tenants, users } from "../db/schema";
+import { audit } from "../lib/audit";
+import { badRequest, forbidden } from "../lib/errors";
+import { authenticate, parse, requireAny, requirePermission, tenantOf } from "../lib/http";
+import { competitionState, getCompetition, leaderboard, studentCompetitions, tenantCompetitions, unitNames } from "../services/competitions";
+import { inbox, markRead, processOutbox, whatsappConfigured } from "../services/notifications";
+import { audienceIds, runNudges, sendAnnouncement } from "../services/nudges";
+import { recordConsent } from "../services/privacy";
+import { pushConfigured, subscribe, subscriptionCount, unsubscribe, vapidPublicKey } from "../services/push";
+import { assertUnitsInScope, scopedUnitIds } from "../services/scope";
+import { getTenant, tenantToday } from "../services/tenant";
+
+const timeWindow = z.object({ startsAt: z.coerce.date(), endsAt: z.coerce.date() }).refine((w) => w.endsAt > w.startsAt, { message: "End must be after start" });
+
+/** Events, nudges and notifications: console, student and admin routes. */
+export async function engageRoutes(app: FastifyInstance) {
+  app.addHook("preHandler", authenticate);
+
+  // ---------- Console: events ----------
+  const staff = requireAny("analytics.institution", "analytics.department", "analytics.own_units");
+
+  app.get("/console/competitions", { preHandler: staff }, async (req) => {
+    const tenantId = tenantOf(req);
+    const now = app.now();
+    const rows = await tenantCompetitions(db, tenantId);
+    const names = await unitNames(db, rows.flatMap((r) => (r.scope === "sections" ? r.teamIds : [])));
+    return {
+      events: await Promise.all(
+        rows.map(async (c) => ({
+          id: c.id,
+          title: c.title,
+          description: c.description,
+          scope: c.scope,
+          startsAt: c.startsAt,
+          endsAt: c.endsAt,
+          state: competitionState(c, now),
+          teams: c.scope === "sections" ? c.teamIds.map((id) => names.get(id) ?? "Unknown") : [],
+          leaderboard: await leaderboard(db, c, now),
+        })),
+      ),
+    };
+  });
+
+  app.post("/console/competitions", { preHandler: requirePermission("events.manage") }, async (req) => {
+    const tenantId = tenantOf(req);
+    const body = parse(
+      z.object({ title: z.string().min(1).max(120), description: z.string().max(1000).default(""), unitIds: z.array(z.string().uuid()).min(2).max(50) }).and(timeWindow),
+      req.body,
+    );
+    await assertUnitsInScope(db, req.auth, body.unitIds);
+    const [created] = await db
+      .insert(competitions)
+      .values({ tenantId, title: body.title, description: body.description, scope: "sections", teamIds: body.unitIds, startsAt: body.startsAt, endsAt: body.endsAt, createdBy: req.auth.userId })
+      .returning();
+    await audit(db, { tenantId, actorId: req.auth.userId, action: "event.create", target: created!.id, data: { title: body.title } });
+    return { event: created };
+  });
+
+  app.get("/console/competitions/:id", { preHandler: staff }, async (req) => {
+    const tenantId = tenantOf(req);
+    const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+    const c = await getCompetition(db, tenantId, id);
+    return { event: { ...c, state: competitionState(c, app.now()) }, leaderboard: await leaderboard(db, c, app.now()) };
+  });
+
+  // ---------- Console: nudges ----------
+  const audienceSchema = z.object({
+    unitId: z.string().uuid().optional(),
+    audience: z.enum(["all", "inactive_7d", "at_risk", "assignment_pending"]),
+    assignmentId: z.string().uuid().optional(),
+  });
+
+  async function resolveAudience(req: Parameters<typeof tenantOf>[0], body: z.infer<typeof audienceSchema>) {
+    const tenantId = tenantOf(req);
+    const scoped = await scopedUnitIds(db, req.auth);
+    if (body.unitId && !scoped.includes(body.unitId)) throw forbidden("That batch or section is outside your scope");
+    if (body.audience === "assignment_pending" && !body.assignmentId) throw badRequest("Choose the assignment");
+    const tenant = await getTenant(db, tenantId);
+    const now = app.now();
+    return audienceIds(db, { tenantId, unitIds: body.unitId ? [body.unitId] : scoped, audience: body.audience, assignmentId: body.assignmentId, now, today: tenantToday(tenant, now) });
+  }
+
+  app.post("/console/nudges/preview", { preHandler: requirePermission("nudges.send") }, async (req) => {
+    const ids = await resolveAudience(req, parse(audienceSchema, req.body));
+    return { count: ids.length, whatsapp: whatsappConfigured() };
+  });
+
+  app.post("/console/nudges", { preHandler: requirePermission("nudges.send") }, async (req) => {
+    const body = parse(audienceSchema.and(z.object({ title: z.string().min(1).max(80), message: z.string().min(1).max(500) })), req.body);
+    const tenantId = tenantOf(req);
+    const ids = await resolveAudience(req, body);
+    if (ids.length === 0) throw badRequest("No students match that audience");
+    const sent = await sendAnnouncement(db, { tenantId, actorId: req.auth.userId, userIds: ids, title: body.title, message: body.message });
+    await audit(db, { tenantId, actorId: req.auth.userId, action: "nudge.send", data: { audience: body.audience, count: sent } });
+    void processOutbox(db, app.now()).catch((err) => req.log.error(err));
+    return { sent };
+  });
+
+  app.get("/console/nudges", { preHandler: requirePermission("nudges.send") }, async (req) => {
+    const tenantId = tenantOf(req);
+    const rows = await db
+      .select({
+        title: notifications.title,
+        template: notifications.template,
+        day: sql<string>`to_char(${notifications.createdAt}, 'YYYY-MM-DD')`,
+        sentBy: users.name,
+        total: sql<number>`count(*)::int`,
+        whatsapp: sql<number>`sum(case when ${notifications.status} = 'sent' then 1 else 0 end)::int`,
+        read: sql<number>`sum(case when ${notifications.readAt} is not null then 1 else 0 end)::int`,
+      })
+      .from(notifications)
+      .leftJoin(users, eq(users.id, notifications.sentBy))
+      .where(eq(notifications.tenantId, tenantId))
+      .groupBy(notifications.title, notifications.template, sql`3`, users.name)
+      .orderBy(desc(sql`3`))
+      .limit(50);
+    const [tenant] = await db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, tenantId));
+    return { history: rows, automaticNudges: tenant?.settings.nudges !== false, whatsapp: whatsappConfigured() };
+  });
+
+  app.put("/console/settings/nudges", { preHandler: requirePermission("tenant.settings") }, async (req) => {
+    const tenantId = tenantOf(req);
+    const { enabled } = parse(z.object({ enabled: z.boolean() }), req.body);
+    await db
+      .update(tenants)
+      .set({ settings: sql`${tenants.settings} || ${JSON.stringify({ nudges: enabled })}::jsonb` })
+      .where(eq(tenants.id, tenantId));
+    await audit(db, { tenantId, actorId: req.auth.userId, action: "settings.nudges", data: { enabled } });
+    return { enabled };
+  });
+
+  // ---------- Student ----------
+  app.get("/student/competitions", { preHandler: requirePermission("practice.play") }, async (req) => ({
+    events: await studentCompetitions(db, { userId: req.auth.userId, tenantId: tenantOf(req), now: app.now() }),
+  }));
+  app.get("/student/notifications", { preHandler: requirePermission("practice.play") }, async (req) => inbox(db, req.auth.userId));
+  app.post("/student/notifications/read", { preHandler: requirePermission("practice.play") }, async (req) => markRead(db, req.auth.userId, app.now()));
+  // What the student sees: their channels, the kinds of message they muted, and their quiet hours.
+  const settingsOf = async (userId: string) => {
+    const [u] = await db.select({ phone: users.phone, prefs: users.notifyPrefs, locale: users.locale }).from(users).where(eq(users.id, userId));
+    const prefs = u?.prefs ?? {};
+    return { phone: u?.phone ?? null, whatsapp: prefs.whatsapp !== false, locale: u?.locale ?? "en", muted: prefs.muted ?? [], quiet: quietHoursOf(prefs) };
+  };
+  app.get("/student/settings", { preHandler: requirePermission("practice.play") }, async (req) => settingsOf(req.auth.userId));
+  app.put("/student/settings", { preHandler: requirePermission("practice.play") }, async (req) => {
+    const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a time like 22:00");
+    const body = parse(
+      z.object({
+        phone: z.string().regex(/^\+?\d[\d\s-]{8,16}$/).nullable().optional(),
+        whatsapp: z.boolean().optional(),
+        locale: z.enum(["en", "hi", "ta"]).optional(),
+        // The placement cell's messages can't be muted.
+        muted: z.array(z.enum(NOTIFY_ORDER.filter((c) => !NOTIFY_CATEGORIES[c].locked) as [NotifyCategory, ...NotifyCategory[]])).max(5).optional(),
+        quiet: z.object({ from: time, to: time }).nullable().optional(),
+      }),
+      req.body,
+    );
+    const set: Partial<typeof users.$inferInsert> = {};
+    if (body.phone !== undefined) set.phone = body.phone ? body.phone.replace(/[^\d+]/g, "") : null;
+    if (body.whatsapp !== undefined || body.muted !== undefined || body.quiet !== undefined) {
+      const [cur] = await db.select({ prefs: users.notifyPrefs }).from(users).where(eq(users.id, req.auth.userId));
+      set.notifyPrefs = {
+        ...cur?.prefs,
+        ...(body.whatsapp !== undefined ? { whatsapp: body.whatsapp } : {}),
+        ...(body.muted !== undefined ? { muted: [...new Set(body.muted)] } : {}),
+        ...(body.quiet !== undefined ? { quiet: body.quiet } : {}),
+      };
+    }
+    if (body.locale) set.locale = body.locale;
+    if (Object.keys(set).length) await db.update(users).set(set).where(eq(users.id, req.auth.userId));
+    if (body.whatsapp !== undefined) await recordConsent(db, { tenantId: req.auth.tenantId, userId: req.auth.userId, purpose: "whatsapp", granted: body.whatsapp, source: "settings", now: app.now() });
+    return settingsOf(req.auth.userId);
+  });
+
+  // ---------- Web push (any signed-in user, on each of their devices) ----------
+  app.get("/push", async (req) => ({ available: pushConfigured(), publicKey: vapidPublicKey(), devices: await subscriptionCount(db, req.auth.userId) }));
+  app.post("/push/subscribe", async (req) => {
+    const body = parse(z.object({ endpoint: z.string().url().max(1000), keys: z.object({ p256dh: z.string().min(10).max(200), auth: z.string().min(8).max(100) }) }), req.body);
+    if (!pushConfigured()) throw badRequest("Push notifications are not set up on this server");
+    await subscribe(db, { userId: req.auth.userId, tenantId: req.auth.tenantId, endpoint: body.endpoint, p256dh: body.keys.p256dh, auth: body.keys.auth, userAgent: req.headers["user-agent"]?.slice(0, 300) ?? null });
+    return { ok: true, devices: await subscriptionCount(db, req.auth.userId) };
+  });
+  app.post("/push/unsubscribe", async (req) => {
+    const { endpoint } = parse(z.object({ endpoint: z.string().max(1000) }), req.body);
+    await unsubscribe(db, req.auth.userId, endpoint);
+    return { ok: true, devices: await subscriptionCount(db, req.auth.userId) };
+  });
+
+  // ---------- Admin ----------
+  app.post("/admin/competitions", { preHandler: requirePermission("tenants.manage") }, async (req) => {
+    if (!req.auth.roles.includes("super_admin")) throw forbidden("Only PlayCode admins run inter-college events");
+    const body = parse(z.object({ title: z.string().min(1).max(120), description: z.string().max(1000).default(""), tenantIds: z.array(z.string().uuid()).min(2).max(200) }).and(timeWindow), req.body);
+    const [created] = await db
+      .insert(competitions)
+      .values({ tenantId: null, title: body.title, description: body.description, scope: "colleges", teamIds: body.tenantIds, startsAt: body.startsAt, endsAt: body.endsAt, createdBy: req.auth.userId })
+      .returning();
+    return { event: created };
+  });
+
+  /** Hourly job: queue automatic nudges and deliver the outbox. */
+  app.post("/admin/nudges/run", { preHandler: requirePermission("nudges.send") }, async (req) => {
+    const body = parse(z.object({ ignoreQuietHours: z.boolean().optional() }), req.body ?? {});
+    const isSuper = req.auth.roles.includes("super_admin");
+    const queued = await runNudges(db, app.now(), { tenantId: isSuper ? undefined : tenantOf(req), ignoreQuietHours: body.ignoreQuietHours });
+    const delivered = await processOutbox(db, app.now());
+    return { queued, delivered };
+  });
+}

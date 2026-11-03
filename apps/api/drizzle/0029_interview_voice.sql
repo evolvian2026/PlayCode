@@ -1,0 +1,1 @@
+ALTER TABLE "interviews" ADD COLUMN "mode" text DEFAULT 'text' NOT NULL;

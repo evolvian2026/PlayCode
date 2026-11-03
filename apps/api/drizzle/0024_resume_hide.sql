@@ -1,0 +1,1 @@
+ALTER TABLE "student_profiles" ADD COLUMN "hide" jsonb DEFAULT '{}'::jsonb NOT NULL;

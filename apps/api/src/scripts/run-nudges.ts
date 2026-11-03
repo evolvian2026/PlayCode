@@ -1,0 +1,67 @@
+import { db, pool } from "../db/client";
+import { sendBillingNotices } from "../services/billing-mail";
+import { finalizeContests } from "../services/contests";
+import { finalizeExpiredMocks } from "../services/mocks";
+import { squadReminders } from "../services/squads";
+import { slotReminders } from "../services/interview-slots";
+import { trainingReminders } from "../services/training";
+import { recordJob } from "../services/jobs";
+import { processOutbox } from "../services/notifications";
+import { runNudges } from "../services/nudges";
+import { sendDueReports } from "../services/reports";
+import { sendGuardianReports } from "../services/guardians";
+import { settleOffers } from "../services/placements";
+import { joiningCheckIns } from "../services/joining";
+import { peerJob } from "../services/peer";
+import { weeklyDigests } from "../services/digest";
+import { finalizeAbandonedAdaptive } from "../services/adaptive";
+import { homeworkReminders } from "../services/aptitude-homework";
+import { circularReminders } from "../services/circulars";
+import { documentReminders } from "../services/documents";
+import { reviewPendingSnapshots } from "../services/snapshot-review";
+import { weeklySummaries } from "../services/weekly-summary";
+import { practiceTaskReminders } from "../services/practice-tasks";
+
+// Hourly job: queue automatic nudges (streaks, due assignments, open tests)
+// and deliver everything pending; also catch up on webcam snapshots of
+// level-3 tests that missed their AI review, email the weekly reports that
+// are due, send billing emails (new invoices, reminders, licence renewals),
+// publish results, ratings and certificates of contests that have ended, and
+// send parents last month's progress email in the first week of a month,
+// settle placement offers whose time to answer has passed, and remind students
+// of circulars to acknowledge and documents to upload by tomorrow, and on
+// Sunday evening send students their week in one note.
+// Usage: pnpm nudges:run
+const now = new Date();
+try {
+  console.log(
+    await recordJob(db, "nudges", now, async () => ({
+      queued: await runNudges(db, now),
+      weeklySummaries: await weeklySummaries(db, now),
+      practiceTaskReminders: await practiceTaskReminders(db, now),
+      contestsFinalized: (await finalizeContests(db, now)).finalized,
+      mocksFinalized: (await finalizeExpiredMocks(db, now)).finalized,
+      squadReminders: await squadReminders(db, now),
+      interviewReminders: await slotReminders(db, now),
+      trainingReminders: await trainingReminders(db, now),
+      delivered: await processOutbox(db, now, 5000),
+      snapshotsReviewed: await reviewPendingSnapshots(db, now),
+      reports: await sendDueReports(db, now),
+      billingEmails: await sendBillingNotices(db, now),
+      guardianEmails: await sendGuardianReports(db, now),
+      offers: await settleOffers(db, now),
+      joiningCheckIns: await joiningCheckIns(db, now),
+      peer: await peerJob(db, now),
+      weeklyDigests: await weeklyDigests(db, now),
+      adaptiveFinished: await finalizeAbandonedAdaptive(db, now),
+      homeworkReminders: await homeworkReminders(db, now),
+      circularReminders: await circularReminders(db, now),
+      documentReminders: await documentReminders(db, now),
+    })),
+  );
+} catch (err) {
+  console.error(err);
+  process.exitCode = 1;
+} finally {
+  await pool.end();
+}

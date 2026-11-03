@@ -1,0 +1,470 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { DEFAULT_QUIET_HOURS, DIVISION_LABELS, NOTIFY_CATEGORIES, NOTIFY_ORDER, type NotifyCategory, type QuietHours } from "@playcode/core";
+import { signOut, useMe } from "@/components/Auth";
+import { DisplayCard } from "@/components/DisplayCard";
+import { GuardianCard } from "@/components/GuardianCard";
+import { Icon } from "@/components/Icon";
+import { PrivacyCard } from "@/components/PrivacyCard";
+import { PushCard } from "@/components/PushCard";
+import { DevicesCard } from "@/components/SecurityPanel";
+import { Bar, ErrorBox, Loading, masteryTone, useDates } from "@/components/ui";
+import { api, errorMessage, useApi } from "@/lib/api";
+import { LOCALES, storeLocale, useLocale, useT, type Locale } from "@/lib/i18n";
+import type { StudentDetail } from "@/lib/types";
+
+function Certificates() {
+  const t = useT();
+  const dates = useDates();
+  const { data } = useApi<{ certificates: { code: string; title: string; scorePct: number; issuedAt: string; revokedAt: string | null }[] }>("/student/certificates");
+  if (!data?.certificates.length) return null;
+  return (
+    <div className="card stack">
+      <h2 style={{ margin: 0 }}>{t("Certificates")}</h2>
+      {data.certificates.map((c) => (
+        <div key={c.code} className="spread">
+          <div>
+            <b>{c.title}</b>
+            <div className="muted small">
+              {c.scorePct}% · {dates.day(c.issuedAt)} · {t("code {code}", { code: c.code })}
+            </div>
+          </div>
+          <Link href={`/verify/${c.code}`} className="btn small">
+            {t("View")}
+          </Link>
+        </div>
+      ))}
+      <p className="muted small" style={{ margin: 0 }}>
+        {t("Share the link with recruiters: it shows the certificate and proves it is genuine.")}
+      </p>
+    </div>
+  );
+}
+
+function LanguageCard() {
+  const t = useT();
+  const locale = useLocale();
+  const [busy, setBusy] = useState(false);
+  async function choose(next: Locale) {
+    setBusy(true);
+    await api("/student/settings", { method: "PUT", body: { locale: next } }).catch(() => {});
+    storeLocale(next);
+    window.location.reload();
+  }
+  return (
+    <div className="card stack">
+      {/* i18n-ignore: "Language" in English too, so someone who can't read the current language can find this card */}
+      <h2 style={{ margin: 0 }}>{t("Language")} / Language</h2>
+      <p className="muted small" style={{ margin: 0 }}>
+        {t("Choose the language for menus and buttons. Questions and code stay in English, as in placement tests.")}
+      </p>
+      <div className="row">
+        {LOCALES.map((l) => (
+          <button key={l.id} className={`btn small ${l.id === locale ? "primary" : ""}`} disabled={busy || l.id === locale} onClick={() => choose(l.id)} lang={l.id}>
+            {l.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type Settings = { phone: string | null; whatsapp: boolean; muted: NotifyCategory[]; quiet: QuietHours | null };
+
+const HOURS = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, "0")}:00`);
+
+function NotificationSettings() {
+  const t = useT();
+  const [phone, setPhone] = useState("");
+  const [s, setS] = useState<Settings | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    void api<Settings>("/student/settings").then((r) => {
+      setPhone(r.phone ?? "");
+      setS(r);
+    });
+  }, []);
+  async function save(next: Partial<Settings>) {
+    try {
+      const r = await api<Settings>("/student/settings", { method: "PUT", body: next });
+      setPhone(r.phone ?? "");
+      setS(r);
+      setMsg(t("Saved"));
+    } catch (e) {
+      setMsg(errorMessage(e));
+    }
+  }
+  if (!s) return null;
+  const quiet = s.quiet ?? DEFAULT_QUIET_HOURS;
+  return (
+    <div className="card stack">
+      <h2 style={{ margin: 0 }}>{t("Notifications")}</h2>
+      <p className="muted small" style={{ margin: 0 }}>
+        {t("Everything appears in Messages. Choose what also reaches your phone, on WhatsApp and as notifications.")}
+      </p>
+      <div className="row">
+        <input aria-label={t("WhatsApp number")} placeholder="+91 98765 43210" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <button className="btn small" onClick={() => save({ phone: phone.trim() || null })}>
+          {t("Save")}
+        </button>
+      </div>
+      <label className="row" style={{ fontWeight: 500, gap: 8 }}>
+        <input type="checkbox" checked={s.whatsapp} onChange={(e) => save({ whatsapp: e.target.checked })} style={{ width: "auto" }} />
+        {t("Send me WhatsApp reminders")}
+      </label>
+      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
+        <legend className="small" style={{ fontWeight: 600, marginBottom: 6 }}>
+          {t("What reaches your phone")}
+        </legend>
+        {NOTIFY_ORDER.map((c) => {
+          const info = NOTIFY_CATEGORIES[c];
+          const on = info.locked || !s.muted.includes(c);
+          return (
+            <label key={c} className="row" style={{ gap: 8, alignItems: "flex-start" }}>
+              <input
+                type="checkbox"
+                checked={on}
+                disabled={info.locked}
+                onChange={(e) => save({ muted: e.target.checked ? s.muted.filter((m) => m !== c) : [...s.muted, c] })}
+                style={{ width: "auto", marginTop: 3 }}
+              />
+              <span>
+                <b>{t(info.label)}</b>
+                <span className="muted small" style={{ display: "block" }}>
+                  {t(info.detail)}
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </fieldset>
+      <label className="row" style={{ fontWeight: 500, gap: 8 }}>
+        <input type="checkbox" checked={s.quiet !== null} onChange={(e) => save({ quiet: e.target.checked ? DEFAULT_QUIET_HOURS : null })} style={{ width: "auto" }} />
+        {t("Quiet hours: hold phone notifications overnight")}
+      </label>
+      {s.quiet && (
+        <div className="row" style={{ gap: 8 }}>
+          <label className="row small" style={{ gap: 6 }}>
+            {t("From")}
+            <select value={quiet.from} onChange={(e) => save({ quiet: { ...quiet, from: e.target.value } })} style={{ width: "auto" }}>
+              {HOURS.map((h) => (
+                <option key={h}>{h}</option>
+              ))}
+            </select>
+          </label>
+          <label className="row small" style={{ gap: 6 }}>
+            {t("Until")}
+            <select value={quiet.to} onChange={(e) => save({ quiet: { ...quiet, to: e.target.value } })} style={{ width: "auto" }}>
+              {HOURS.map((h) => (
+                <option key={h}>{h}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      {s.quiet && (
+        <p className="muted small" style={{ margin: 0 }}>
+          {t("Anything that arrives in quiet hours reaches your phone at {to}. Messages still shows it straight away.", { to: quiet.to })}
+        </p>
+      )}
+      {msg && (
+        <span className="small muted" role="status">
+          {msg}
+        </span>
+      )}
+    </div>
+  );
+}
+
+export default function MePage() {
+  const me = useMe();
+  const tr = useT();
+  const { data, error, loading, reload } = useApi<StudentDetail & { contest: { rating: number; contests: number } | null }>("/student/profile");
+  if (loading && !data) return <Loading />;
+  if (error || !data) return <ErrorBox message={error?.message ?? "Could not load"} onRetry={reload} />;
+
+  const topics = new Map<string, { name: string; skills: StudentDetail["skills"] }>();
+  for (const s of data.skills) {
+    const t = topics.get(s.topic) ?? topics.set(s.topic, { name: s.topicName, skills: [] }).get(s.topic)!;
+    t.skills.push(s);
+  }
+
+  return (
+    <div className="stack">
+      <div className="spread">
+        <div>
+          <h1 style={{ margin: 0 }}>{data.user.name}</h1>
+          <div className="muted small">
+            {data.user.rollNo ?? data.user.email} · {me.tenant?.name}
+          </div>
+        </div>
+        <button className="btn small ghost" onClick={signOut} aria-label={tr("Sign out")}>
+          <Icon name="logout" /> {tr("Sign out")}
+        </button>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        <div className="card tight center">
+          <div className="kpi">{data.level}</div>
+          <div className="muted small">{data.title}</div>
+        </div>
+        <div className="card tight center">
+          <div className="kpi stat-streak">{data.streak}</div>
+          <div className="muted small">{tr("day streak (best {n})", { n: data.longestStreak })}</div>
+        </div>
+        <div className="card tight center">
+          <div className="kpi">{data.correctAnswers}</div>
+          <div className="muted small">{tr("correct answers")}</div>
+        </div>
+      </div>
+
+      <Certificates />
+
+      <Link href="/play/resume" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("My resume")}</b>
+          <div className="small muted">{tr("A resume and public profile built from your verified PlayCode record")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/panel" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Mock interviews with people")}</b>
+          <div className="small muted">{tr("Book a practice interview with a teacher or an alumnus")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/mentor" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("My mentor")}</b>
+          <div className="small muted">{tr("Your faculty mentor and what you agreed to do")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/help" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Ask the placement cell")}</b>
+          <div className="small muted">{tr("Questions about your record, a drive or your documents")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/documents" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Documents")}</b>
+          <div className="small muted">{tr("Files your placement cell has asked for")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/circulars" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Circulars")}</b>
+          <div className="small muted">{tr("Notices from your placement cell and teachers.")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/calendar" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Calendar")}</b>
+          <div className="small muted">{tr("Everything dated in one place, and a link for your phone's calendar")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/training" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Training sessions")}</b>
+          <div className="small muted">{tr("Placement classes for your batch, and your attendance")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/class-tests" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Class tests")}</b>
+          <div className="small muted">{tr("Marks from tests on paper, with every question and answer")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/writing" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Written English")}</b>
+          <div className="small muted">{tr("Practise the email and essay tasks from placement tests, with feedback")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/intro" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Tell me about yourself")}</b>
+          <div className="small muted">{tr("Your one-minute introduction for interviews: write or draft it, then practise saying it")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/jam" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Speaking practice")}</b>
+          <div className="small muted">{tr("Speak for a minute on a topic (JAM) and get feedback on what you said and how")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/speaking-drills" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Speaking drills")}</b>
+          <div className="small muted">{tr("Read aloud and repeat sentences, scored like automated English tests")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/gd" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Group discussion")}</b>
+          <div className="small muted">{tr("Practise the GD round with AI participants and get a scorecard")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/doubts" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("My doubts")}</b>
+          <div className="small muted">{tr("Questions you asked your teachers, and their answers")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/squad" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Study squad")}</b>
+          <div className="small muted">{tr("Practise with classmates towards a weekly goal")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/offline" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Practise offline")}</b>
+          <div className="small muted">{tr("Download questions to answer with no signal; they're checked when you're back online")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/mocks" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Mock tests")}</b>
+          <div className="small muted">{tr("Full timed tests on the service and product company patterns")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/plan" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Study plan")}</b>
+          <div className="small muted">{tr("A day-by-day plan to your next placement test")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <Link href="/play/talent" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{tr("Get found by companies")}</b>
+          <div className="small muted">{tr("Join the talent pool and see invitations from companies")}</div>
+        </div>
+        <Icon name="arrow" />
+      </Link>
+
+      <LanguageCard />
+
+      <GuardianCard />
+      <DisplayCard />
+
+      <PushCard />
+
+      <NotificationSettings />
+
+      <PrivacyCard />
+
+      <DevicesCard />
+
+      {data.contest && (
+        <Link href="/play/contests" className="card spread" style={{ color: "inherit" }}>
+          <div>
+            <div className="muted small">{tr("Contest rating")}</div>
+            <span className="kpi">{data.contest.rating}</span>
+            <div className="small muted">{tr("from {n} rated contests", { n: data.contest.contests })}</div>
+          </div>
+          <Icon name="trophy" />
+        </Link>
+      )}
+
+      <div className="card stack">
+        <h2>{tr("Placement readiness")}</h2>
+        {data.readiness.map((r) => (
+          <div key={r.id}>
+            <div className="spread small">
+              <span style={{ fontWeight: 600 }}>{r.name}</span>
+              <span>{r.score}/100</span>
+            </div>
+            <Bar value={r.score} tone={masteryTone(r.score)} />
+          </div>
+        ))}
+        <p className="muted small" style={{ margin: 0 }}>
+          {tr("Based on your mastery of the topics each kind of company tests. Skills you have not practised in a month count for less.")}
+        </p>
+      </div>
+
+      <div className="card stack">
+        <div className="spread">
+          <h2 style={{ margin: 0 }}>{tr("Badges")}</h2>
+          <span className="muted small">{tr("{division} division", { division: tr(DIVISION_LABELS[data.division]) })}</span>
+        </div>
+        {data.badges.length === 0 ? (
+          <p className="muted">{tr("Answer your first question to earn a badge.")}</p>
+        ) : (
+          <div className="row wrap">
+            {data.badges.map((b) => (
+              <span key={b.code} className="pill accent" title={b.description}>
+                {b.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card stack">
+        <div className="spread">
+          <h2 style={{ margin: 0 }}>{tr("Skills")}</h2>
+          <span className="row small">
+            <Link href="/play/tests">{tr("Tests")}</Link>
+            <Link href="/play/mistakes">{tr("Mistake notebook ({n})", { n: data.openMistakes })}</Link>
+          </span>
+        </div>
+        {[...topics.values()].map((t) => (
+          <div key={t.name} className="stack" style={{ gap: 6 }}>
+            <div className="muted small" style={{ fontWeight: 700 }}>
+              {t.name}
+            </div>
+            {t.skills.map((s) => (
+              <div key={s.skillId}>
+                <div className="spread small">
+                  <span>{s.name}</span>
+                  <span className="muted">{s.attempts ? tr("{mastery}% · {acc}% right", { mastery: s.mastery, acc: s.accuracyPct ?? 0 }) : tr("not started")}</span>
+                </div>
+                <Bar value={s.mastery} tone={masteryTone(s.mastery)} />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,141 @@
+# Render Blueprint for PlayCode: the API and web app (always on, Singapore,
+# next to a Supabase project in Singapore), and the scheduled jobs as cron
+# jobs. Uploads go to a private Supabase Storage bucket, so every service sees
+# the same files and no disk is needed. Secrets marked `sync: false` are
+# entered in the Render dashboard (or by API) when the Blueprint is applied.
+# See "Deploying on Render and Supabase" in the README.
+
+envVarGroups:
+  - name: playcode-shared
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      # Supabase session pooler (IPv4, supports LISTEN for live events), port 5432.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATA_KEY
+        generateValue: true
+      - key: STORAGE_DRIVER
+        value: supabase
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: PUBLIC_APP_URL
+        sync: false
+      - key: API_PUBLIC_URL
+        sync: false
+      # Optional: AI features, email, push, WhatsApp and Judge0 (coding questions). Unset means hidden or unavailable.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SMTP_URL
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+
+services:
+  - type: web
+    name: playcode-api
+    runtime: node
+    region: singapore
+    plan: starter
+    branch: main
+    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    # Migrations, content and the storage bucket, before the new version takes traffic.
+    preDeployCommand: pnpm --filter @playcode/api db:deploy
+    startCommand: pnpm --filter @playcode/api start
+    healthCheckPath: /health/ready
+    envVars:
+      - fromGroup: playcode-shared
+      - key: CORS_ORIGIN
+        sync: false
+      - key: DATABASE_POOL_MAX
+        value: "6"
+      - key: METRICS_TOKEN
+        generateValue: true
+
+  - type: web
+    name: playcode-web
+    runtime: node
+    region: singapore
+    plan: starter
+    branch: main
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @playcode/web build
+    startCommand: pnpm --filter @playcode/web exec next start -p $PORT
+    healthCheckPath: /login
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      # The API's public address, built into the pages (and their Content Security Policy).
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+
+  # Scheduled jobs. Times are UTC; India is UTC+5:30.
+  - type: cron
+    name: playcode-hourly
+    runtime: node
+    region: singapore
+    plan: starter
+    branch: main
+    schedule: "7 * * * *"
+    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    startCommand: pnpm --filter @playcode/api nudges:run
+    envVars:
+      - fromGroup: playcode-shared
+      - key: DATABASE_POOL_MAX
+        value: "2"
+
+  - type: cron
+    name: playcode-webhooks
+    runtime: node
+    region: singapore
+    plan: starter
+    branch: main
+    # Retries of failed webhooks and LMS grades. Every 5 minutes rather than every minute: first sends happen at once anyway.
+    schedule: "*/5 * * * *"
+    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    startCommand: pnpm --filter @playcode/api webhooks:deliver
+    envVars:
+      - fromGroup: playcode-shared
+      - key: DATABASE_POOL_MAX
+        value: "2"
+
+  - type: cron
+    name: playcode-nightly
+    runtime: node
+    region: singapore
+    plan: starter
+    branch: main
+    # 02:00 India time: retention clean-up, then peer benchmark snapshots.
+    schedule: "30 20 * * *"
+    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    startCommand: pnpm --filter @playcode/api retention:run && pnpm --filter @playcode/api benchmarks:run
+    envVars:
+      - fromGroup: playcode-shared
+      - key: DATABASE_POOL_MAX
+        value: "2"
+
+  - type: cron
+    name: playcode-league-week
+    runtime: node
+    region: singapore
+    plan: starter
+    branch: main
+    # Monday 00:10 India time. Re-running is safe.
+    schedule: "40 18 * * 0"
+    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    startCommand: pnpm --filter @playcode/api league:close
+    envVars:
+      - fromGroup: playcode-shared
+      - key: DATABASE_POOL_MAX
+        value: "2"

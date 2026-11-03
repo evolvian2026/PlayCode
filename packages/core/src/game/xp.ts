@@ -36,6 +36,8 @@ export interface XpInput {
   playerRating: number;
   questionRating: number;
   repeatXpToday: number;
+  /** Scales the base XP: a full coding problem is worth more than a quick MCQ. */
+  weight?: number;
 }
 
 export interface XpResult {
@@ -46,7 +48,7 @@ export interface XpResult {
 
 export function computeXp(input: XpInput, rules: XpRules = DEFAULT_XP_RULES): XpResult {
   if (!input.correct) return { xp: 0, breakdown: [], countsAsRepeat: false };
-  const base = rules.baseByDifficulty[input.difficulty];
+  const base = rules.baseByDifficulty[input.difficulty] * (input.weight ?? 1);
   const breakdown: { label: string; value: number }[] = [{ label: "Correct", value: base }];
   let multiplier = 1;
   if (input.firstAttempt) {
@@ -79,9 +81,15 @@ export function computeXp(input: XpInput, rules: XpRules = DEFAULT_XP_RULES): Xp
   return { xp: Math.round(xp), breakdown, countsAsRepeat };
 }
 
-/** Expected solve time by difficulty, used for the speed bonus. */
-export function expectedTimeMs(difficulty: Difficulty): number {
-  return { 1: 45_000, 2: 75_000, 3: 120_000 }[difficulty];
+/** Expected solve time by difficulty, used for the speed bonus. Coding problems take longer. */
+export function expectedTimeMs(difficulty: Difficulty, isCoding = false): number {
+  const base = { 1: 45_000, 2: 75_000, 3: 120_000 }[difficulty];
+  return isCoding ? base * 8 : base;
+}
+
+/** XP weight per question type: coding 3x, SQL 2x, everything else 1x. */
+export function xpWeight(type: string): number {
+  return type === "write_code" ? 3 : type === "sql_query" ? 2 : 1;
 }
 
 // Levels: level n starts at 50 * n * (n - 1) XP, so level 2 = 100 XP, level 10 = 4,500 XP.

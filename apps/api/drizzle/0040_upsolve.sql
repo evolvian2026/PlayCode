@@ -1,0 +1,1 @@
+ALTER TABLE "contest_submissions" ADD COLUMN "upsolve" boolean DEFAULT false NOT NULL;

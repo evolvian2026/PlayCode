@@ -1,0 +1,483 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
+import { INTERVIEW_TRACK_LABELS, interviewDimensions, type InterviewTrack } from "@playcode/core";
+import { Bar, ErrorBox, Loading } from "@/components/ui";
+import { api, errorMessage, useApi } from "@/lib/api";
+import { intlLocale, useLocale, useT } from "@/lib/i18n";
+import { speak, speechInputSupported, speechOutputSupported, stopSpeaking, useDictation } from "@/lib/speech";
+import { startAndOpen } from "@/lib/start";
+
+type Track = InterviewTrack;
+type Mode = "text" | "voice";
+
+interface Delivery {
+  spokenAnswers: number;
+  wordsPerMinute: number;
+  fillersPer100Words: number;
+  pace: "slow" | "good" | "fast";
+  tips: string[];
+}
+
+interface Scorecard {
+  scores: Record<string, number>;
+  overall: number;
+  strengths: string[];
+  improvements: string[];
+  summary: string;
+  practise: { id: string; name: string }[];
+  prepare?: string[];
+  delivery?: Delivery | null;
+}
+
+interface Interview {
+  id: string;
+  track: Track;
+  mode: Mode;
+  status: "active" | "finished" | "abandoned";
+  focusSkills: { id: string; name: string }[];
+  company: string | null;
+  role: string | null;
+  projects: string[];
+  turns: { role: "interviewer" | "candidate"; text: string; at: string; voice?: { wpm: number; fillers: number } }[];
+  answersLeft: number;
+  scorecard: Scorecard | null;
+}
+
+interface Mine {
+  available: boolean;
+  reason: string | null;
+  weeklyLeft: number;
+  active: string | null;
+  interviews: { id: string; track: Track; mode: Mode; status: Interview["status"]; company: string | null; overall: number | null; answers: number; startedAt: string }[];
+  /** What the project round would ask about. */
+  projects: string[];
+  /** Drives the student registered for, to practise for. */
+  drives: { id: string; company: string; roleTitle: string; companyType: string; driveDate: string }[];
+}
+
+const TITLES: Record<Track, string> = { hr: "HR interview", product: "Product company interview", service: "Service company interview", project: "Project round" };
+const ABOUT: Record<Track, string> = {
+  service: "A short technical interview with an AI interviewer, about 15 minutes. It asks about the skills you are weakest in, follows up like a real panel, and ends with a scorecard.",
+  product: "A short technical interview with an AI interviewer, about 15 minutes. It asks about the skills you are weakest in, follows up like a real panel, and ends with a scorecard.",
+  hr: "A short HR round with an AI interviewer, about 15 minutes: introducing yourself, teamwork, a failure, your goals. It asks for real examples, follows up like a real panel, and ends with a scorecard on how well your answers tell a story.",
+  project: "\"Walk me through your project\": the interviewer asks about the projects and internships on your resume, digs into what you built yourself and why, and scores how well you explain them.",
+};
+
+function ScorecardView({ card, track }: { card: Scorecard; track: Track }) {
+  const t = useT();
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="card stack">
+      <div className="spread">
+        <h2 style={{ margin: 0 }}>{t("Your scorecard")}</h2>
+        <span className={`pill ${card.overall >= 4 ? "good" : card.overall === 3 ? "warn" : "bad"}`}>{t("Overall {n}/5", { n: card.overall })}</span>
+      </div>
+      <p style={{ margin: 0 }}>{card.summary}</p>
+      {interviewDimensions(track).map(([key, label]) => {
+        const n = card.scores[key] ?? 0;
+        return (
+          <div key={key}>
+            <div className="spread small">
+              <span>{t(label)}</span>
+              <b>{n}/5</b>
+            </div>
+            <Bar value={n * 20} tone={n >= 4 ? "good" : n === 3 ? "warn" : "bad"} label={t(label)} />
+          </div>
+        );
+      })}
+      <div>
+        <b className="small">{t("What went well")}</b>
+        <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+          {card.strengths.map((s) => (
+            <li key={s}>{s}</li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <b className="small">{t("To work on")}</b>
+        <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+          {card.improvements.map((s) => (
+            <li key={s}>{s}</li>
+          ))}
+        </ul>
+      </div>
+      {card.delivery && (
+        <div>
+          <b className="small">{t("How you spoke")}</b>
+          <div className="small">
+            {t("{wpm} words a minute ({pace}) · {fillers} filler words per 100", {
+              wpm: card.delivery.wordsPerMinute,
+              pace: t(card.delivery.pace === "good" ? "a good pace" : card.delivery.pace === "slow" ? "slow" : "fast"),
+              fillers: card.delivery.fillersPer100Words,
+            })}
+          </div>
+          <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+            {card.delivery.tips.map((s) => (
+              <li key={s}>{t(s)}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {card.prepare && card.prepare.length > 0 && (
+        <div>
+          <b className="small">{t(track === "project" ? "Prepare a better answer for" : "Prepare a better story for")}</b>
+          <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+            {card.prepare.map((q) => (
+              <li key={q}>{q}</li>
+            ))}
+          </ul>
+          <div className="small muted" style={{ marginTop: 4 }}>
+            {t(
+              track === "project"
+                ? "Answer each one out loud: what you built, why you chose it, and what you'd change now."
+                : "Tell each one as situation, task, action, result: the context, what you had to do, what you did yourself, and how it turned out.",
+            )}
+          </div>
+        </div>
+      )}
+      {card.practise.length > 0 && (
+        <div className="row wrap">
+          <span className="small muted">{t("Practise next:")}</span>
+          {card.practise.map((s) => (
+            <button key={s.id} className="btn small" onClick={async () => setError(await startAndOpen({ kind: "skill", skillId: s.id }, router.push))}>
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {error && <ErrorBox message={error} />}
+    </div>
+  );
+}
+
+function Conversation({ initial, onDone }: { initial: Interview; onDone: () => void }) {
+  const t = useT();
+  const [iv, setIv] = useState(initial);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState<"answer" | "finish" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const end = useRef<HTMLDivElement>(null);
+  useEffect(() => end.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [iv.turns.length, busy]);
+
+  // Voice: read each new question aloud, and dictate answers into the text box.
+  const voice = iv.mode === "voice";
+  const canDictate = voice && speechInputSupported();
+  const [readAloud, setReadAloud] = useState(voice && speechOutputSupported());
+  const dictation = useDictation();
+  const dictated = useRef("");
+  const lastTurn = iv.turns.at(-1);
+  const spokenTurns = useRef(new Set<number>());
+  useEffect(() => {
+    const index = iv.turns.length - 1;
+    if (!readAloud || iv.status !== "active" || lastTurn?.role !== "interviewer" || spokenTurns.current.has(index)) return;
+    spokenTurns.current.add(index);
+    speak(lastTurn.text);
+  }, [iv.turns.length, iv.status, lastTurn, readAloud]);
+  useEffect(() => () => stopSpeaking(), []);
+  useEffect(() => {
+    if (dictation.listening || dictation.text) {
+      setText(dictation.text);
+      dictated.current = dictation.text;
+    }
+  }, [dictation.text, dictation.listening]);
+
+  function toggleMic() {
+    if (dictation.listening) return dictation.stop();
+    stopSpeaking();
+    dictation.start(text);
+  }
+
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    const spokenMs = dictation.spokenMs();
+    if (dictation.listening) dictation.stop();
+    setBusy("answer");
+    setError(null);
+    const spoken = spokenMs >= 500 ? { durationMs: Math.min(600_000, Math.round(spokenMs)), edited: text.trim() !== dictated.current.trim() } : undefined;
+    try {
+      setIv(await api<Interview>(`/student/interviews/${iv.id}/answer`, { body: { text, ...(spoken ? { voice: spoken } : {}) } }));
+      setText("");
+      dictation.reset();
+      dictated.current = "";
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function finish() {
+    if (!window.confirm(t("End the interview now? With at least two answers you still get a scorecard."))) return;
+    setBusy("finish");
+    try {
+      setIv(await api<Interview>(`/student/interviews/${iv.id}/finish`, { body: {} }));
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="stack">
+      <div className="spread">
+        <div>
+          <h1 style={{ margin: 0 }}>{t(TITLES[iv.track])}</h1>
+          {iv.company && <div className="small">{t("Practice for {company} ({role})", { company: iv.company, role: iv.role ?? "" })}</div>}
+          {iv.projects.length > 0 && <div className="small muted">{t("About: {projects}", { projects: iv.projects.join(", ") })}</div>}
+          {iv.focusSkills.length > 0 && <div className="small muted">{t("Focus: {skills}", { skills: iv.focusSkills.map((s) => s.name).join(", ") })}</div>}
+          {voice && iv.status === "active" && speechOutputSupported() && (
+            <label className="row small" style={{ gap: 6, marginTop: 4 }}>
+              <input
+                type="checkbox"
+                checked={readAloud}
+                onChange={(e) => {
+                  setReadAloud(e.target.checked);
+                  if (!e.target.checked) stopSpeaking();
+                }}
+              />
+              {t("Read questions aloud")}
+            </label>
+          )}
+        </div>
+        {iv.status === "active" && (
+          <button className="btn ghost small" disabled={busy !== null} onClick={finish}>
+            {t("End")}
+          </button>
+        )}
+      </div>
+      <div className="stack" style={{ gap: 8 }}>
+        {iv.turns.map((turn, i) => (
+          <div
+            key={i}
+            className="card tight"
+            style={{
+              alignSelf: turn.role === "interviewer" ? "flex-start" : "flex-end",
+              maxWidth: "88%",
+              background: turn.role === "interviewer" ? "var(--surface)" : "var(--accent-soft)",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {turn.text}
+            {voice && turn.role === "interviewer" && speechOutputSupported() && (
+              <button type="button" className="btn ghost small" style={{ marginLeft: 6 }} aria-label={t("Hear again")} onClick={() => speak(turn.text)}>
+                {t("Hear again")}
+              </button>
+            )}
+            {turn.voice && <div className="small muted">{t("Spoken · {wpm} words a minute", { wpm: turn.voice.wpm })}</div>}
+          </div>
+        ))}
+        {busy === "answer" && <div className="small muted">{t("The interviewer is thinking...")}</div>}
+        {busy === "finish" && <div className="small muted">{t("Writing your scorecard...")}</div>}
+        <div ref={end} />
+      </div>
+      {iv.status === "active" ? (
+        <form className="stack" onSubmit={send} style={{ gap: 8 }}>
+          <textarea
+            aria-label={t("Your answer")}
+            rows={4}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            maxLength={4000}
+            placeholder={t(canDictate ? "Press Speak and answer out loud. You can fix the words before sending." : "Answer as you would in the room. Explain your thinking.")}
+            disabled={busy !== null || dictation.listening}
+          />
+          {voice && !canDictate && <div className="small muted">{t("This browser can't turn speech into text. Type your answers, or open PlayCode in Chrome or Edge.")}</div>}
+          {dictation.error && <ErrorBox message={t(dictation.error)} />}
+          {error && <ErrorBox message={error} />}
+          <div className="spread">
+            <span className="small muted" aria-live="polite">
+              {dictation.listening ? t("Listening...") : t("{n} answers left", { n: iv.answersLeft })}
+            </span>
+            <div className="row">
+              {canDictate && (
+                <button type="button" className={`btn ${dictation.listening ? "danger" : ""}`} disabled={busy !== null} aria-pressed={dictation.listening} onClick={toggleMic}>
+                  {t(dictation.listening ? "Stop" : "Speak")}
+                </button>
+              )}
+              <button className="btn primary" disabled={busy !== null || !text.trim()}>
+                {t("Send")}
+              </button>
+            </div>
+          </div>
+        </form>
+      ) : iv.scorecard ? (
+        <ScorecardView card={iv.scorecard} track={iv.track} />
+      ) : (
+        <div className="card muted">{t("This interview ended before there was enough to score.")}</div>
+      )}
+      {iv.status !== "active" && (
+        <button className="btn" style={{ alignSelf: "flex-start" }} onClick={onDone}>
+          {t("Back to interviews")}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function InterviewHome() {
+  const t = useT();
+  const locale = useLocale();
+  const router = useRouter();
+  const params = useSearchParams();
+  const openId = params.get("id");
+  const asked = params.get("track");
+  const [track, setTrack] = useState<Track>(asked === "product" || asked === "hr" || asked === "project" ? asked : "service");
+  // From a drive card: practise for that drive.
+  const [driveId, setDriveId] = useState<string>(params.get("drive") ?? "");
+  const [mode, setMode] = useState<Mode>("text");
+  const [voiceOk, setVoiceOk] = useState(false);
+  useEffect(() => setVoiceOk(speechInputSupported()), []);
+  const mine = useApi<Mine>("/student/interviews");
+  const current = useApi<Interview>(openId ? `/student/interviews/${openId}` : null);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function start() {
+    setStarting(true);
+    setError(null);
+    try {
+      const iv = await api<Interview>("/student/interviews", { body: { track, mode, driveId: track !== "project" && driveId ? driveId : null } });
+      router.push(`/play/interview?id=${iv.id}`);
+    } catch (e) {
+      setError(errorMessage(e));
+      setStarting(false);
+    }
+  }
+
+  if (openId) {
+    if (current.loading && !current.data) return <Loading />;
+    if (current.error || !current.data) return <ErrorBox message={current.error?.message ?? t("Could not load")} onRetry={current.reload} />;
+    return (
+      <Conversation
+        key={current.data.id}
+        initial={current.data}
+        onDone={() => {
+          router.push("/play/interview");
+          void mine.reload();
+        }}
+      />
+    );
+  }
+  if (mine.loading && !mine.data) return <Loading />;
+  if (mine.error || !mine.data) return <ErrorBox message={mine.error?.message ?? t("Could not load")} onRetry={mine.reload} />;
+  const d = mine.data;
+  const drive = d.drives.find((x) => x.id === driveId);
+  const needsProject = track === "project" && d.projects.length === 0;
+  return (
+    <div className="stack">
+      <h1 style={{ margin: 0 }}>{t("Mock interview")}</h1>
+      <div className="card stack">
+        <p style={{ margin: 0 }}>{t(ABOUT[track])}</p>
+        {d.active ? (
+          <button className="btn primary" onClick={() => router.push(`/play/interview?id=${d.active}`)}>
+            {t("Continue your interview")}
+          </button>
+        ) : !d.available ? (
+          <div className="small muted">{d.reason}</div>
+        ) : (
+          <>
+            <div className="row wrap" role="group" aria-label={t("Kind of interview")}>
+              {(["service", "product", "hr", "project"] as const).map((k) => (
+                <button key={k} className={`btn small ${track === k ? "primary" : ""}`} aria-pressed={track === k} onClick={() => setTrack(k)}>
+                  {t(INTERVIEW_TRACK_LABELS[k])}
+                </button>
+              ))}
+            </div>
+            {track === "project" ? (
+              d.projects.length ? (
+                <div className="small muted">{t("About: {projects}", { projects: d.projects.join(", ") })}</div>
+              ) : (
+                <div className="small">
+                  {t("Add a project or internship to your resume first: the project round asks about them.")}{" "}
+                  <Link href="/play/resume">{t("Go to your resume")}</Link>
+                </div>
+              )
+            ) : (
+              d.drives.length > 0 && (
+                <label className="stack small" style={{ gap: 4 }}>
+                  {t("Practise for a drive you registered for")}
+                  <select value={driveId} onChange={(e) => setDriveId(e.target.value)}>
+                    <option value="">{t("No, general practice")}</option>
+                    {d.drives.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.company} · {x.roleTitle}
+                      </option>
+                    ))}
+                  </select>
+                  {drive && (
+                    <span className="muted">
+                      {t(track === "hr" ? "The HR round as {company}'s panel would run it." : "Pitched as {company}'s panel, at a {kind} company's level, using what seniors reported of their interviews.", {
+                        company: drive.company,
+                        kind: t(drive.companyType === "product" ? "product" : "service"),
+                      })}
+                    </span>
+                  )}
+                </label>
+              )
+            )}
+            <div className="row wrap" role="group" aria-label={t("Answer by")}>
+              {(["text", "voice"] as const).map((m) => (
+                <button key={m} className={`btn small ${mode === m ? "primary" : ""}`} aria-pressed={mode === m} disabled={m === "voice" && !voiceOk} onClick={() => setMode(m)}>
+                  {t(m === "text" ? "Type answers" : "Speak answers")}
+                </button>
+              ))}
+            </div>
+            {mode === "voice" ? (
+              <div className="small muted">{t("Questions are read aloud and you answer out loud, as in a real interview. Your browser turns speech into text (Chrome and Edge use their speech service); PlayCode keeps only the text and how long you spoke.")}</div>
+            ) : (
+              !voiceOk && <div className="small muted">{t("Speaking answers needs Chrome, Edge or Safari.")}</div>
+            )}
+            <button className="btn primary" disabled={starting || d.weeklyLeft === 0 || needsProject} onClick={start}>
+              {starting ? t("Starting...") : t("Start interview")}
+            </button>
+            <div className="small muted">{d.weeklyLeft ? t("{n} interviews left this week", { n: d.weeklyLeft }) : t("You have used this week's interviews. Practise the skills from your scorecard meanwhile.")}</div>
+          </>
+        )}
+        {error && <ErrorBox message={error} />}
+      </div>
+      <Link href="/play/panel" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{t("Mock interviews with people")}</b>
+          <div className="small muted">{t("Book a practice interview with a teacher or an alumnus")}</div>
+        </div>
+        <span aria-hidden="true">→</span>
+      </Link>
+      <Link href="/play/gd" className="card spread" style={{ color: "inherit" }}>
+        <div>
+          <b>{t("Group discussion")}</b>
+          <div className="small muted">{t("Practise the GD round with AI participants and get a scorecard")}</div>
+        </div>
+        <span aria-hidden="true">→</span>
+      </Link>
+      {d.interviews.length > 0 && (
+        <div className="card stack">
+          <h2 style={{ margin: 0 }}>{t("Past interviews")}</h2>
+          {d.interviews.map((iv) => (
+            <button key={iv.id} className="spread" style={{ all: "unset", cursor: "pointer", display: "flex", justifyContent: "space-between" }} onClick={() => router.push(`/play/interview?id=${iv.id}`)}>
+              <span>
+                {t(INTERVIEW_TRACK_LABELS[iv.track])}
+                {iv.company ? ` · ${iv.company}` : ""}
+                {iv.mode === "voice" ? ` · ${t("spoken")}` : ""}{" "}
+                <span className="small muted">· {new Date(iv.startedAt).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short" })}</span>
+              </span>
+              {iv.overall ? <span className="pill">{iv.overall}/5</span> : <span className="small muted">{t(iv.status === "active" ? "In progress" : "Not scored")}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function InterviewPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <InterviewHome />
+    </Suspense>
+  );
+}
