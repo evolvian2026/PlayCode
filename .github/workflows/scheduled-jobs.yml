@@ -1,0 +1,78 @@
+# PlayCode's scheduled jobs on GitHub Actions, for Render's free plan, which
+# has no cron jobs (see "On Render's free plan" in the README). The same
+# commands and times as the cron jobs in render.yaml; times are UTC, India is
+# UTC+5:30. GitHub can start scheduled runs a few minutes late, and turns them
+# off after 60 days without a commit to the repository.
+# Without the secrets (a fork, or the paid Blueprint) it does nothing.
+
+name: Scheduled jobs
+
+on:
+  schedule:
+    - cron: "7 * * * *" # hourly: nudges
+    - cron: "*/5 * * * *" # webhook and LMS grade retries
+    - cron: "30 20 * * *" # 02:00 India: retention clean-up, then benchmarks
+    - cron: "40 18 * * 0" # Monday 00:10 India: close the league week
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Job to run
+        type: choice
+        options: [hourly, webhooks, nightly, league-week]
+
+jobs:
+  run:
+    name: ${{ inputs.job || github.event.schedule }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: scheduled-${{ inputs.job || github.event.schedule }}
+      cancel-in-progress: false
+    env:
+      NODE_ENV: production
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_POOL_MAX: "2"
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      DATA_KEY: ${{ secrets.DATA_KEY }}
+      STORAGE_DRIVER: supabase
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PUBLIC_APP_URL: ${{ secrets.PUBLIC_APP_URL }}
+      API_PUBLIC_URL: ${{ secrets.API_PUBLIC_URL }}
+      # Optional: unset means that channel is off, as on the API.
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      SMTP_URL: ${{ secrets.SMTP_URL }}
+      MAIL_FROM: ${{ secrets.MAIL_FROM || 'PlayCode <reports@playcode.local>' }}
+      VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+      VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+      VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT || 'mailto:support@playcode.dev' }}
+      WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
+      WHATSAPP_PHONE_ID: ${{ secrets.WHATSAPP_PHONE_ID }}
+    steps:
+      - id: pick
+        env:
+          JOB: ${{ inputs.job }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          case "${JOB:-$SCHEDULE}" in
+            hourly|"7 * * * *") cmd="pnpm --filter @playcode/api nudges:run" ;;
+            webhooks|"*/5 * * * *") cmd="pnpm --filter @playcode/api webhooks:deliver" ;;
+            nightly|"30 20 * * *") cmd="pnpm --filter @playcode/api retention:run && pnpm --filter @playcode/api benchmarks:run" ;;
+            league-week|"40 18 * * 0") cmd="pnpm --filter @playcode/api league:close" ;;
+            *) echo "Unknown job '${JOB:-$SCHEDULE}'"; exit 1 ;;
+          esac
+          echo "cmd=$cmd" >> "$GITHUB_OUTPUT"
+          if [ -n "$DATABASE_URL" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "::notice::DATABASE_URL is not set; nothing to run."; fi
+      - if: steps.pick.outputs.ok == 'true'
+        uses: actions/checkout@v4
+      - if: steps.pick.outputs.ok == 'true'
+        uses: pnpm/action-setup@v4
+      - if: steps.pick.outputs.ok == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - if: steps.pick.outputs.ok == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.pick.outputs.ok == 'true'
+        run: ${{ steps.pick.outputs.cmd }}

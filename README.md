@@ -540,6 +540,18 @@ Notes:
 - **Backups**: Supabase's daily backups come with its paid plans. On the free plan, run `ops/backup.sh` from a machine with `pg_dump`. Files in Supabase Storage aren't in the database dump.
 - **Branch**: the Blueprint deploys `main`. Until the first pull request is merged, services created by hand can point at the feature branch instead.
 
+### On Render's free plan
+
+For a demo or pilot, the API and the web app can run on Render's free instance type with Supabase's free plan. Free instances have no pre-deploy command, no shell and no cron jobs, so two GitHub Actions workflows take over those parts. Both do nothing until their secrets are set.
+
+- **Services**: create `playcode-api` and `playcode-web` by hand with the commands in `render.yaml`, the plan set to Free and **auto-deploy off**. Link the `playcode-shared` environment group to the API. Don't create the cron jobs.
+- **Deploys** (`.github/workflows/deploy.yml`): each push to `main` runs `db:deploy` against Supabase, then calls each service's deploy hook (Settings, Deploy Hook in the Render dashboard). Running the deploy before the new version starts keeps the order the pre-deploy command gives. It doesn't run on every start, because reloading content gives every question a new version, which clears cached AI hints and marks question reports out of date.
+- **First deploy**: before the workflow's secrets are set, start the API once with `pnpm --filter @playcode/api db:deploy && pnpm --filter @playcode/api start`, then set the start command back to `pnpm --filter @playcode/api start`.
+- **Scheduled jobs** (`.github/workflows/scheduled-jobs.yml`): the same four jobs at the same times. GitHub can start scheduled runs a few minutes late, and it turns them off after 60 days without a commit; re-enable them on the Actions tab. Each job can also be run by hand from there.
+- **Repository secrets** (Settings, Secrets and variables, Actions): `DATABASE_URL`, `JWT_SECRET`, `DATA_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PUBLIC_APP_URL` and `API_PUBLIC_URL`, with the same values as `playcode-shared`, plus `RENDER_DEPLOY_HOOK_API` and `RENDER_DEPLOY_HOOK_WEB`. Optional: `ANTHROPIC_API_KEY`, `SMTP_URL`, `MAIL_FROM`, the VAPID keys and the WhatsApp settings, for the channels that the jobs send through.
+- **First admin**: with no shell, run `admin:create` from a machine that can reach the database, with `DATABASE_URL` set (and `NODE_ENV`, `JWT_SECRET` and the Supabase values from `playcode-shared`).
+- **Trade-offs**: free instances stop after 15 minutes without traffic, and the next visit waits 30 to 60 seconds while they start; open live events end when they stop. Supabase's free plan pauses a project after a week without activity and has no daily backups. Move to Starter (the Blueprint as it is) before students rely on it.
+
 ## Choices that differ from the spec, and what comes next
 
 - **Fastify instead of NestJS**: lighter for a modular monolith of this size; modules live in `apps/api/src/routes` and `services`.

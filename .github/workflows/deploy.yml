@@ -1,0 +1,61 @@
+# Deploys to Render's free plan (see "On Render's free plan" in the README).
+# Free services have no pre-deploy command, so this workflow does that step:
+# migrations, content and the storage bucket first, then Render's deploy hooks
+# build and start the new version. The Render services have auto-deploy off.
+# Without the secrets (a fork, or the paid Blueprint) it does nothing.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Database, then Render
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_ENV: production
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_POOL_MAX: "2"
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      DATA_KEY: ${{ secrets.DATA_KEY }}
+      STORAGE_DRIVER: supabase
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      RENDER_DEPLOY_HOOK_API: ${{ secrets.RENDER_DEPLOY_HOOK_API }}
+      RENDER_DEPLOY_HOOK_WEB: ${{ secrets.RENDER_DEPLOY_HOOK_WEB }}
+    steps:
+      - id: configured
+        run: |
+          if [ -n "$DATABASE_URL" ] && [ -n "$RENDER_DEPLOY_HOOK_API" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Deploy secrets are not set; nothing to deploy."
+          fi
+      - if: steps.configured.outputs.ok == 'true'
+        uses: actions/checkout@v4
+      - if: steps.configured.outputs.ok == 'true'
+        uses: pnpm/action-setup@v4
+      - if: steps.configured.outputs.ok == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - if: steps.configured.outputs.ok == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.configured.outputs.ok == 'true'
+        name: Migrations, content and storage bucket
+        run: pnpm --filter @playcode/api db:deploy
+      - if: steps.configured.outputs.ok == 'true'
+        name: Deploy the API and the web app
+        run: |
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK_API" > /dev/null
+          if [ -n "$RENDER_DEPLOY_HOOK_WEB" ]; then curl -fsS -X POST "$RENDER_DEPLOY_HOOK_WEB" > /dev/null; fi
+          echo "Render deploys started"
